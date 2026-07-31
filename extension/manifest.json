@@ -6,10 +6,16 @@
   "permissions": [
     "storage",
     "tabs",
-    "scripting"
+    "scripting",
+    "cookies",
+    "alarms"
   ],
   "host_permissions": [
-    "https://labs.google/*"
+    "https://labs.google/*",
+    "https://google.com/*",
+    "https://*.google.com/*",
+    "http://127.0.0.1:*/*",
+    "http://localhost:*/*"
   ],
   "background": {
     "service_worker": "background.js"

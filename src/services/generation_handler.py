@@ -715,6 +715,28 @@ MODEL_CONFIG = {
 }
 
 
+for _duration in (4, 6, 8, 10):
+    for _base_key, _new_key in (("omni", f"omni_{_duration}s"), ("omni_portrait", f"omni_{_duration}s_portrait")):
+        _cfg = dict(MODEL_CONFIG[_base_key])
+        _cfg["model_key"] = f"abra_t2v_{_duration}s"
+        _cfg["reference_model_key"] = f"abra_r2v_{_duration}s"
+        _cfg["reference_duration"] = _duration
+        MODEL_CONFIG[_new_key] = _cfg
+
+
+def _estimate_video_credit_cost_for_log(model: str, model_config: Dict[str, Any]) -> int:
+    """Return Flow point cost for successful video request logging."""
+    if model_config.get("type") != "video":
+        return 0
+    model_text = f"{model} {model_config.get('model_key', '')}".lower()
+    if "veo_3_1" in model_text and "lite" in model_text:
+        return 10
+    if model_config.get("video_type") == "omni" or "abra_" in model_text:
+        duration = int(model_config.get("reference_duration") or 8)
+        return {4: 7, 6: 10, 8: 12, 10: 15}.get(duration, 12)
+    return 0
+
+
 def _make_t2v_config(
     model_key: str,
     aspect_ratio: str,
@@ -1268,6 +1290,9 @@ class GenerationHandler:
             "prompt": prompt_for_log,
             "has_images": images is not None and len(images) > 0,
         }
+        if generation_type == "video":
+            request_payload["video_duration_seconds"] = model_config.get("reference_duration")
+            request_payload["video_credit_cost"] = _estimate_video_credit_cost_for_log(model, model_config)
         debug_logger.log_info(f"[GENERATION] 开始生成 - 模型: {model}, 类型: {generation_type}, Prompt: {prompt[:50]}...")
 
         # 向用户展示开始信息
@@ -2257,6 +2282,8 @@ class GenerationHandler:
         consecutive_poll_errors = 0
         last_poll_error: Optional[Exception] = None
         max_consecutive_poll_errors = 3
+        successful_without_url_count = 0
+        max_successful_without_url_count = 40
 
         for attempt in range(max_attempts):
             await asyncio.sleep(poll_interval)
@@ -2294,6 +2321,22 @@ class GenerationHandler:
                         debug_logger.log_warning(
                             f"[VIDEO POLL] 获取视频URL失败: media={media_name}, error={redirect_error}"
                         )
+                        successful_without_url_count += 1
+                        await self._update_request_log_progress(
+                            request_log_state,
+                            token_id=token.id,
+                            status_text="video_waiting_url",
+                            progress=min(95, 45 + successful_without_url_count),
+                            response_extra={
+                                "upstream_status": status,
+                                "successful_without_url_count": successful_without_url_count,
+                            },
+                        )
+                        if stream and successful_without_url_count == 1:
+                            yield self._create_stream_chunk("视频已生成，正在等待上游返回下载地址...\n")
+                        if successful_without_url_count < max_successful_without_url_count:
+                            continue
+
                         await self._fail_video_task(checked_operations, error_msg)
                         self._mark_generation_failed(generation_result, error_msg)
                         yield self._create_error_response(error_msg, status_code=502)

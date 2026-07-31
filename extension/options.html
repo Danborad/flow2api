@@ -90,9 +90,24 @@
       <label for="apiKey">Flow2API API Key</label>
       <input id="apiKey" type="password" placeholder="管理后台里的 API Key">
 
+      <label for="refreshIntervalMinutes">自动刷新间隔（分钟）</label>
+      <input id="refreshIntervalMinutes" type="number" min="5" max="1440" step="1" placeholder="120">
+
+      <label for="autoImportEnabled" class="inline-label">
+        <input id="autoImportEnabled" type="checkbox">
+        定时自动导入当前 Google 账号
+      </label>
+
+      <label for="autoImportIntervalMinutes">自动导入间隔（分钟）</label>
+      <input id="autoImportIntervalMinutes" type="number" min="5" max="1440" step="1" placeholder="30">
+
+      <div class="hint" id="lastAutoImportStatus">自动导入状态：尚未运行</div>
+
       <button id="saveBtn" type="button">保存</button>
+      <button id="importBtn" type="button">导入当前 Google 账号</button>
       <div class="status" id="status"></div>
       <div class="hint">管理台 token 里填写同样的 <code>Route Key</code>，比如 9223 对 9223。后端会使用 API Key 校验 WebSocket 连接。</div>
+      <div class="hint">导入功能会读取当前 Chrome 中的 Labs Session Token 和 Google Cookies，并以 <code>protocol</code> 模式写入后台，默认开启 ST/AT 自动刷新。</div>
     </div>
   </div>
   <script src="options.js"></script>

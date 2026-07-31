@@ -13,7 +13,21 @@ from ..core.logger import debug_logger
 LABS_BASE = "https://labs.google/fx"
 SESSION_COOKIE_NAME = "__Secure-next-auth.session-token"
 IMPERSONATE = "chrome124"
-GOOGLE_COOKIE_NAMES = ("SID", "HSID", "SSID", "APISID", "SAPISID")
+GOOGLE_COOKIE_NAMES = (
+    "SID",
+    "HSID",
+    "SSID",
+    "APISID",
+    "SAPISID",
+    "__Secure-1PSID",
+    "__Secure-3PSID",
+    "__Secure-1PAPISID",
+    "__Secure-3PAPISID",
+    "__Secure-1PSIDTS",
+    "__Secure-3PSIDTS",
+    "__Secure-1PSIDCC",
+    "__Secure-3PSIDCC",
+)
 
 
 def _parse_google_cookies(raw: str) -> Dict[str, str]:
@@ -199,7 +213,7 @@ class ProtocolLogin:
         if not any(name in google_cookies for name in GOOGLE_COOKIE_NAMES):
             return {
                 "success": False,
-                "error": "未找到有效的 Google cookie（需要 SID/HSID/SSID/APISID/SAPISID 中至少一个）",
+                "error": "未找到有效的 Google cookie（需要 SID/SAPISID 或 __Secure-*PSID/__Secure-*PAPISID 等登录 Cookie）",
             }
 
         session_kwargs: Dict[str, Any] = {"impersonate": IMPERSONATE, "trust_env": False}

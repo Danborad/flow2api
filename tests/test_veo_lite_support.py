@@ -20,6 +20,64 @@ def _make_image_bytes(size: tuple[int, int], color: str = "white") -> bytes:
 
 
 class VeoLiteModelResolverTests(unittest.TestCase):
+    def test_resolve_nano_banana_pro_alias_with_image_options(self):
+        request = types.SimpleNamespace(
+            generationConfig=types.SimpleNamespace(
+                imageConfig={"aspectRatio": "3:4", "imageSize": "4K"}
+            )
+        )
+
+        resolved = resolve_model_name(
+            "nano-banana-pro",
+            request=request,
+            model_config=MODEL_CONFIG,
+        )
+
+        self.assertEqual(resolved, "gemini-3.0-pro-image-three-four-4k")
+
+    def test_resolve_nano_banana_2_alias_with_openai_size_and_quality(self):
+        request = types.SimpleNamespace(
+            __pydantic_extra__={"size": "1024x1024", "quality": "high"}
+        )
+
+        resolved = resolve_model_name(
+            "nano-banana-2",
+            request=request,
+            model_config=MODEL_CONFIG,
+        )
+
+        self.assertEqual(resolved, "gemini-3.1-flash-image-square-4k")
+
+    def test_resolve_friendly_veo_alias_with_duration_resolution_and_aspect(self):
+        request = types.SimpleNamespace(
+            generationConfig=types.SimpleNamespace(
+                aspectRatio="portrait",
+                imageSize="1080p",
+                durationSeconds=6,
+            )
+        )
+
+        resolved = resolve_model_name(
+            "veo",
+            request=request,
+            model_config=MODEL_CONFIG,
+        )
+
+        self.assertEqual(resolved, "veo_3_1_t2v_portrait_6s_1080p")
+
+    def test_resolve_friendly_i2v_fast_alias_with_duration(self):
+        request = types.SimpleNamespace(
+            generationConfig=types.SimpleNamespace(aspectRatio="9:16", duration="4s")
+        )
+
+        resolved = resolve_model_name(
+            "veo-i2v-fast",
+            request=request,
+            model_config=MODEL_CONFIG,
+        )
+
+        self.assertEqual(resolved, "veo_3_1_i2v_s_fast_portrait_4s_fl")
+
     def test_resolve_t2v_lite_alias_to_portrait_variant(self):
         request = types.SimpleNamespace(
             generationConfig=types.SimpleNamespace(aspectRatio="portrait")

@@ -26,6 +26,30 @@ IMAGE_BASE_MODELS = {
     "gemini-3.1-flash-image": "gemini-3.1-flash-image",
     # Imagen 4.0 (IMAGEN_3_5)
     "imagen-4.0-generate-preview": "imagen-4.0-generate-preview",
+    # Friendly public aliases
+    "nano-banana-pro": "gemini-3.0-pro-image",
+    "nanobanana-pro": "gemini-3.0-pro-image",
+    "Nano Banana Pro": "gemini-3.0-pro-image",
+    "nano-banana-2": "gemini-3.1-flash-image",
+    "nano-banana2": "gemini-3.1-flash-image",
+    "nanobanana2": "gemini-3.1-flash-image",
+    "Nano Banana 2": "gemini-3.1-flash-image",
+    "Nano Banana2": "gemini-3.1-flash-image",
+    "imagen": "imagen-4.0-generate-preview",
+    "Imagen 4": "imagen-4.0-generate-preview",
+}
+
+IMAGE_ALIAS_DISPLAY_NAMES = {
+    "nano-banana-pro": "Nano Banana Pro",
+    "nanobanana-pro": "Nano Banana Pro",
+    "Nano Banana Pro": "Nano Banana Pro",
+    "nano-banana-2": "Nano Banana 2",
+    "nano-banana2": "Nano Banana 2",
+    "nanobanana2": "Nano Banana 2",
+    "Nano Banana 2": "Nano Banana 2",
+    "Nano Banana2": "Nano Banana 2",
+    "imagen": "Imagen",
+    "Imagen 4": "Imagen 4",
 }
 
 # ──────────────────────────────────────────────
@@ -265,6 +289,22 @@ VIDEO_BASE_MODELS = {
         "landscape": "omni",
         "portrait": "omni_portrait",
     },
+    "omni_4s": {
+        "landscape": "omni_4s",
+        "portrait": "omni_4s_portrait",
+    },
+    "omni_6s": {
+        "landscape": "omni_6s",
+        "portrait": "omni_6s_portrait",
+    },
+    "omni_8s": {
+        "landscape": "omni_8s",
+        "portrait": "omni_8s_portrait",
+    },
+    "omni_10s": {
+        "landscape": "omni_10s",
+        "portrait": "omni_10s_portrait",
+    },
     # I2V models
     "veo_3_1_i2v_s_fast_fl": {
         "landscape": "veo_3_1_i2v_s_fast_fl",
@@ -403,7 +443,60 @@ VIDEO_BASE_MODELS = {
 }
 
 
-def _extract_generation_params(request) -> Tuple[Optional[str], Optional[str]]:
+FRIENDLY_VIDEO_ALIASES = {
+    # Text to video
+    "veo": "veo_3_1_t2v",
+    "veo-fast": "veo_3_1_t2v_fast",
+    "veo-lite": "veo_3_1_t2v_lite",
+    "Omni Flash": "omni",
+    "Veo 3.1 - Quality": "veo_3_1_t2v",
+    "Veo 3.1 - Fast": "veo_3_1_t2v_fast",
+    "Veo 3.1 - Lite": "veo_3_1_t2v_lite",
+    "veo-ultra": "veo_3_1_t2v_fast_ultra",
+    "veo-relaxed": "veo_3_1_t2v_fast_ultra_relaxed",
+    # Image to video / first-last-frame video
+    "veo-i2v": "veo_3_1_i2v_s",
+    "veo-i2v-fast": "veo_3_1_i2v_s_fast_fl",
+    "veo-i2v-lite": "veo_3_1_i2v_lite",
+    "veo-interpolate": "veo_3_1_interpolation_lite",
+    "veo-i2v-ultra": "veo_3_1_i2v_s_fast_ultra_fl",
+    "veo-i2v-relaxed": "veo_3_1_i2v_s_fast_ultra_relaxed",
+    # Reference images to video / extend
+    "veo-r2v": "veo_3_1_r2v_fast",
+    "veo-r2v-ultra": "veo_3_1_r2v_fast_ultra",
+    "veo-r2v-relaxed": "veo_3_1_r2v_fast_ultra_relaxed",
+    "veo-extend": "veo_3_1_extend",
+}
+
+VIDEO_ALIAS_DISPLAY_NAMES = {
+    "veo": "Veo 3.1 Quality T2V",
+    "veo-fast": "Veo 3.1 Fast T2V",
+    "veo-lite": "Veo 3.1 Lite T2V",
+    "Omni Flash": "Omni Flash",
+    "Veo 3.1 - Quality": "Veo 3.1 - Quality",
+    "Veo 3.1 - Fast": "Veo 3.1 - Fast",
+    "Veo 3.1 - Lite": "Veo 3.1 - Lite",
+    "veo-ultra": "Veo 3.1 Fast Ultra T2V",
+    "veo-relaxed": "Veo 3.1 Fast Ultra Relaxed T2V",
+    "veo-i2v": "Veo 3.1 I2V",
+    "veo-i2v-fast": "Veo 3.1 Fast I2V",
+    "veo-i2v-lite": "Veo 3.1 Lite I2V",
+    "veo-interpolate": "Veo 3.1 First/Last Frame Lite",
+    "veo-i2v-ultra": "Veo 3.1 Fast Ultra I2V",
+    "veo-i2v-relaxed": "Veo 3.1 Fast Ultra Relaxed I2V",
+    "veo-r2v": "Veo 3.1 R2V",
+    "veo-r2v-ultra": "Veo 3.1 R2V Ultra",
+    "veo-r2v-relaxed": "Veo 3.1 R2V Ultra Relaxed",
+    "veo-extend": "Veo 3.1 Extend",
+}
+
+VIDEO_ALIASES_ALLOW_DURATION = {
+    "Omni Flash",
+    "omni-flash",
+}
+
+
+def _extract_generation_params(request) -> Tuple[Optional[str], Optional[str], Optional[int]]:
     """从请求中提取 aspectRatio 和 imageSize 参数。
 
     优先级：
@@ -412,7 +505,7 @@ def _extract_generation_params(request) -> Tuple[Optional[str], Optional[str]]:
     3. OpenAI 风格字段（size/quality）兼容：可在 generationConfig/imageConfig 或顶层 extra 中出现
 
     Returns:
-        (aspect_ratio, image_size) 归一化后的值
+        (aspect_ratio, image_size, duration_seconds) 归一化后的值
     """
     def _normalize_str(value: Any) -> Optional[str]:
         if not isinstance(value, str):
@@ -483,6 +576,23 @@ def _extract_generation_params(request) -> Tuple[Optional[str], Optional[str]]:
             return mapped or None
         return token.lower()
 
+    def _normalize_duration(value: Any) -> Optional[int]:
+        if value is None:
+            return None
+        if isinstance(value, (int, float)):
+            duration = int(value)
+        elif isinstance(value, str):
+            token = value.strip().lower().replace("秒", "s").replace("seconds", "s").replace("second", "s")
+            if token.endswith("s"):
+                token = token[:-1]
+            if not token.isdigit():
+                return None
+            duration = int(token)
+        else:
+            return None
+
+        return duration if duration in (4, 6, 8, 10) else None
+
     def _aspect_from_openai_size(value: Any) -> Optional[str]:
         raw = _normalize_str(value)
         if not raw:
@@ -537,6 +647,7 @@ def _extract_generation_params(request) -> Tuple[Optional[str], Optional[str]]:
 
     aspect_ratio: Optional[str] = None
     image_size: Optional[str] = None
+    duration_seconds: Optional[int] = None
 
     # 1) 优先从 request.generationConfig 解析
     gen_config = getattr(request, "generationConfig", None)
@@ -556,6 +667,10 @@ def _extract_generation_params(request) -> Tuple[Optional[str], Optional[str]]:
             image_size = _normalize_image_size(
                 _read_value(gen_config, "imageSize", "image_size")
             )
+        if duration_seconds is None:
+            duration_seconds = _normalize_duration(
+                _read_value(gen_config, "durationSeconds", "duration_seconds", "duration")
+            )
 
         if not aspect_ratio:
             aspect_ratio = _aspect_from_openai_size(_read_value(gen_config, "size"))
@@ -563,7 +678,7 @@ def _extract_generation_params(request) -> Tuple[Optional[str], Optional[str]]:
             image_size = _image_size_from_openai_quality(_read_value(gen_config, "quality"))
 
     # 2) 顶层没有时，再尝试从 extra fields (Pydantic extra="allow") 中透传的 generationConfig
-    if (aspect_ratio is None or image_size is None) and hasattr(request, "__pydantic_extra__"):
+    if (aspect_ratio is None or image_size is None or duration_seconds is None) and hasattr(request, "__pydantic_extra__"):
         extra = request.__pydantic_extra__ or {}
         gen_config_raw = extra.get("generationConfig")
         if not isinstance(gen_config_raw, dict):
@@ -590,6 +705,12 @@ def _extract_generation_params(request) -> Tuple[Optional[str], Optional[str]]:
                 image_size = _normalize_image_size(
                     gen_config_raw.get("imageSize") or gen_config_raw.get("image_size")
                 )
+            if duration_seconds is None:
+                duration_seconds = _normalize_duration(
+                    gen_config_raw.get("durationSeconds")
+                    or gen_config_raw.get("duration_seconds")
+                    or gen_config_raw.get("duration")
+                )
 
             if aspect_ratio is None:
                 aspect_ratio = _aspect_from_openai_size(gen_config_raw.get("size"))
@@ -597,7 +718,7 @@ def _extract_generation_params(request) -> Tuple[Optional[str], Optional[str]]:
                 image_size = _image_size_from_openai_quality(gen_config_raw.get("quality"))
 
     # 3) OpenAI 风格 size/quality（顶层 extra）兼容
-    if (aspect_ratio is None or image_size is None) and hasattr(request, "__pydantic_extra__"):
+    if (aspect_ratio is None or image_size is None or duration_seconds is None) and hasattr(request, "__pydantic_extra__"):
         extra = request.__pydantic_extra__ or {}
         if aspect_ratio is None:
             aspect_ratio = _aspect_from_openai_size(extra.get("size"))
@@ -609,8 +730,98 @@ def _extract_generation_params(request) -> Tuple[Optional[str], Optional[str]]:
             aspect_ratio = _normalize_aspect_ratio(extra.get("aspect_ratio") or extra.get("aspectRatio"))
         if image_size is None:
             image_size = _normalize_image_size(extra.get("image_size") or extra.get("imageSize"))
+        if duration_seconds is None:
+            duration_seconds = _normalize_duration(
+                extra.get("durationSeconds") or extra.get("duration_seconds") or extra.get("duration")
+            )
 
-    return aspect_ratio, image_size
+    return aspect_ratio, image_size, duration_seconds
+
+
+def _count_input_images(request: Any) -> int:
+    """Best-effort count of input images from OpenAI/Gemini style requests."""
+    if request is None:
+        return 0
+
+    count = 0
+
+    messages = getattr(request, "messages", None) or []
+    if isinstance(messages, list):
+        for message in messages:
+            content = getattr(message, "content", None)
+            if isinstance(message, dict):
+                content = message.get("content")
+            if isinstance(content, list):
+                for item in content:
+                    if isinstance(item, dict) and item.get("type") == "image_url":
+                        count += 1
+
+    contents = getattr(request, "contents", None) or []
+    if isinstance(contents, list):
+        for content in contents:
+            parts = getattr(content, "parts", None)
+            if isinstance(content, dict):
+                parts = content.get("parts")
+            if isinstance(parts, list):
+                for part in parts:
+                    if isinstance(part, dict):
+                        if part.get("inlineData") or part.get("fileData"):
+                            count += 1
+                        continue
+                    if getattr(part, "inlineData", None) is not None or getattr(part, "fileData", None) is not None:
+                        count += 1
+
+    direct_image = getattr(request, "image", None)
+    if direct_image:
+        count += 1
+
+    return count
+
+
+def _resolve_friendly_video_alias(model: str, request=None) -> Optional[str]:
+    if model not in FRIENDLY_VIDEO_ALIASES:
+        return None
+
+    aspect_ratio, image_size, duration_seconds = (
+        _extract_generation_params(request) if request else (None, None, None)
+    )
+    image_count = _count_input_images(request)
+
+    if model == "Omni Flash":
+        base = "omni"
+    elif model == "Veo 3.1 - Fast":
+        base = "veo_3_1_t2v_fast"
+        if image_count == 1:
+            base = "veo_3_1_i2v_s_fast_fl"
+        elif image_count == 2:
+            base = "veo_3_1_i2v_s_fast_fl"
+        elif image_count >= 3:
+            base = "veo_3_1_r2v_fast"
+    elif model == "Veo 3.1 - Lite":
+        base = "veo_3_1_t2v_lite"
+        if image_count == 1:
+            base = "veo_3_1_i2v_lite"
+        elif image_count >= 2:
+            base = "veo_3_1_interpolation_lite"
+    elif model == "Veo 3.1 - Quality":
+        base = "veo_3_1_t2v"
+        if image_count >= 1:
+            base = "veo_3_1_i2v_s"
+    else:
+        base = FRIENDLY_VIDEO_ALIASES.get(model)
+
+    candidate = base
+    if model in VIDEO_ALIASES_ALLOW_DURATION and duration_seconds in (4, 6, 8, 10):
+        duration_candidate = f"{candidate}_{duration_seconds}s"
+        if duration_candidate in VIDEO_BASE_MODELS:
+            candidate = duration_candidate
+
+    if image_size in ("4k", "1080p"):
+        resolution_candidate = f"{candidate}_{image_size}"
+        if resolution_candidate in VIDEO_BASE_MODELS:
+            candidate = resolution_candidate
+
+    return candidate
 
 
 def resolve_model_name(
@@ -633,8 +844,8 @@ def resolve_model_name(
     # ────── 图片模型解析 ──────
     if model in IMAGE_BASE_MODELS:
         base = IMAGE_BASE_MODELS[model]
-        aspect_ratio, image_size = (
-            _extract_generation_params(request) if request else (None, None)
+        aspect_ratio, image_size, _duration_seconds = (
+            _extract_generation_params(request) if request else (None, None, None)
         )
 
         if not aspect_ratio:
@@ -681,9 +892,16 @@ def resolve_model_name(
         return resolved
 
     # ────── 视频模型解析 ──────
+    friendly_video_alias = _resolve_friendly_video_alias(model, request)
+    if friendly_video_alias:
+        debug_logger.log_info(
+            f"[MODEL_RESOLVER] 视频短别名转换: {model} → {friendly_video_alias}"
+        )
+        model = friendly_video_alias
+
     if model in VIDEO_BASE_MODELS:
-        aspect_ratio, image_size = (
-            _extract_generation_params(request) if request else (None, None)
+        aspect_ratio, image_size, _duration_seconds = (
+            _extract_generation_params(request) if request else (None, None, None)
         )
 
         if not aspect_ratio:
@@ -727,7 +945,8 @@ def get_base_model_aliases() -> Dict[str, str]:
     for alias, base in IMAGE_BASE_MODELS.items():
         aspects = MODEL_SUPPORTED_ASPECTS.get(base, [])
         sizes = MODEL_SUPPORTED_SIZES.get(base, [])
-        desc_parts = [f"aspects: {', '.join(aspects)}"]
+        display_name = IMAGE_ALIAS_DISPLAY_NAMES.get(alias, alias)
+        desc_parts = [f"{display_name}; aspects: {', '.join(aspects)}"]
         if sizes:
             desc_parts.append(f"sizes: {', '.join(sizes)}")
         aliases[alias] = f"Image generation (alias) - {'; '.join(desc_parts)}"
@@ -735,6 +954,39 @@ def get_base_model_aliases() -> Dict[str, str]:
     for alias in VIDEO_BASE_MODELS:
         aliases[alias] = (
             "Video generation (alias) - supports landscape/portrait via generationConfig"
+        )
+
+    for alias, base in FRIENDLY_VIDEO_ALIASES.items():
+        display_name = VIDEO_ALIAS_DISPLAY_NAMES.get(alias, alias)
+        aliases[alias] = (
+            f"Video generation (friendly alias) - {display_name}; base: {base}; "
+            "supports aspectRatio landscape/portrait, durationSeconds 4/6 where available, "
+            "and imageSize 1080p/4k where available"
+        )
+
+    return aliases
+
+
+def get_friendly_model_aliases() -> Dict[str, str]:
+    """Return the compact public model list that client apps should display."""
+    aliases: Dict[str, str] = {}
+
+    for alias in ("Nano Banana Pro", "Nano Banana 2", "Imagen 4"):
+        base = IMAGE_BASE_MODELS[alias]
+        aspects = MODEL_SUPPORTED_ASPECTS.get(base, [])
+        sizes = MODEL_SUPPORTED_SIZES.get(base, [])
+        display_name = IMAGE_ALIAS_DISPLAY_NAMES.get(alias, alias)
+        desc_parts = [f"{display_name}; aspects: {', '.join(aspects)}"]
+        if sizes:
+            desc_parts.append(f"sizes: {', '.join(sizes)}")
+        aliases[alias] = f"Image generation - {'; '.join(desc_parts)}"
+
+    for alias in ("Omni Flash", "Veo 3.1 - Lite", "Veo 3.1 - Fast", "Veo 3.1 - Quality"):
+        base = FRIENDLY_VIDEO_ALIASES[alias]
+        display_name = VIDEO_ALIAS_DISPLAY_NAMES.get(alias, alias)
+        aliases[alias] = (
+            f"Video generation - {display_name}; base: {base}; "
+            "use generationConfig for aspectRatio, durationSeconds, and imageSize"
         )
 
     return aliases

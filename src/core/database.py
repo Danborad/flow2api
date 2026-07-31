@@ -2,6 +2,7 @@
 import asyncio
 import aiosqlite
 import json
+import re
 from contextlib import asynccontextmanager
 from datetime import date, datetime
 from typing import Optional, List, Dict, Any
@@ -36,6 +37,58 @@ class Database:
     def _current_stats_date(self) -> str:
         """Return the logical date used by daily token statistics."""
         return date.today().isoformat()
+
+    @staticmethod
+    def _normalize_video_duration(value: Any) -> Optional[int]:
+        if value is None:
+            return None
+        try:
+            if isinstance(value, (int, float)):
+                duration = int(value)
+            else:
+                token = str(value).strip().lower().rstrip("s")
+                duration = int(float(token))
+        except Exception:
+            return None
+        return duration if duration in (4, 6, 8, 10) else None
+
+    @classmethod
+    def _estimate_video_credit_cost(cls, request_body: Any) -> int:
+        """Estimate Flow video point cost from stored request log metadata."""
+        if not request_body:
+            return 0
+        try:
+            payload = json.loads(request_body) if isinstance(request_body, str) else dict(request_body)
+        except Exception:
+            return 0
+
+        explicit_cost = payload.get("video_credit_cost")
+        try:
+            if explicit_cost is not None:
+                return max(0, int(explicit_cost))
+        except Exception:
+            pass
+
+        model = str(payload.get("original_model") or payload.get("model") or "").lower()
+        if not model:
+            return 0
+
+        if "veo_3_1" in model and "lite" in model:
+            return 10
+
+        if "omni" in model or "abra_" in model:
+            duration = cls._normalize_video_duration(
+                payload.get("video_duration_seconds")
+                or payload.get("duration_seconds")
+                or payload.get("durationSeconds")
+                or payload.get("duration")
+            )
+            if duration is None:
+                duration_match = re.search(r"(?:^|_)(4|6|8|10)s(?:_|$)", model)
+                duration = int(duration_match.group(1)) if duration_match else 8
+            return {4: 7, 6: 10, 8: 12, 10: 15}.get(duration, 12)
+
+        return 0
 
     @asynccontextmanager
     async def _connect(self, *, write: bool = False):
@@ -1029,7 +1082,8 @@ class Database:
             token_cursor = await db.execute("""
                 SELECT
                     COUNT(*) AS total_tokens,
-                    COALESCE(SUM(CASE WHEN is_active = 1 THEN 1 ELSE 0 END), 0) AS active_tokens
+                    COALESCE(SUM(CASE WHEN is_active = 1 THEN 1 ELSE 0 END), 0) AS active_tokens,
+                    COALESCE(SUM(CASE WHEN is_active = 1 THEN credits ELSE 0 END), 0) AS active_credits
                 FROM tokens
             """)
             token_row = await token_cursor.fetchone()
@@ -1049,14 +1103,31 @@ class Database:
             token_data = dict(token_row) if token_row else {}
             stats_data = dict(stats_row) if stats_row else {}
 
+            video_logs_cursor = await db.execute("""
+                SELECT request_body, created_at
+                FROM request_logs
+                WHERE operation = 'generate_video' AND status_code = 200
+            """)
+            total_video_credits = 0
+            today_video_credits = 0
+            for row in await video_logs_cursor.fetchall():
+                cost = self._estimate_video_credit_cost(row[0])
+                total_video_credits += cost
+                created_at = str(row[1] or "")
+                if created_at.startswith(today):
+                    today_video_credits += cost
+
             return {
                 "total_tokens": int(token_data.get("total_tokens") or 0),
                 "active_tokens": int(token_data.get("active_tokens") or 0),
+                "active_credits": int(token_data.get("active_credits") or 0),
                 "total_images": int(stats_data.get("total_images") or 0),
                 "total_videos": int(stats_data.get("total_videos") or 0),
+                "total_video_credits": int(total_video_credits),
                 "total_errors": int(stats_data.get("total_errors") or 0),
                 "today_images": int(stats_data.get("today_images") or 0),
                 "today_videos": int(stats_data.get("today_videos") or 0),
+                "today_video_credits": int(today_video_credits),
                 "today_errors": int(stats_data.get("today_errors") or 0)
             }
 

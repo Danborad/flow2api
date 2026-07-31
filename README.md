@@ -166,6 +166,8 @@ Prometheus 可直接抓 `/metrics`。如果部署到 Kubernetes，建议只在�
 
 ## 📋 支持的模型
 
+> 更推荐给外部应用使用公开模型名：`Nano Banana Pro`、`Nano Banana 2`、`Imagen 4`、`Omni Flash`、`Veo 3.1 - Lite/Fast/Quality`。其中视频模型会根据输入图片数量自动切换到 `T2V / I2V / interpolation / R2V` 链路；只有 `Omni Flash` 读取视频时长参数。详见 [短模型名调用规范](docs/model-aliases.md)。下面的长模型 ID 仍然兼容。
+
 ### 图片生成
 
 | 模型名称 | 说明| 尺寸 |
@@ -581,4 +583,3 @@ curl -X POST "http://localhost:8000/v1/chat/completions" \
 ## Star History
 
 [![Star History Chart](https://api.star-history.com/svg?repos=TheSmallHanCat/flow2api&type=date&legend=top-left)](https://www.star-history.com/#TheSmallHanCat/flow2api&type=date&legend=top-left)
-

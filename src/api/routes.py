@@ -1,6 +1,7 @@
 """API routes for OpenAI-compatible and Gemini generateContent endpoints."""
 
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 import base64
 import json
@@ -11,10 +12,11 @@ from urllib.parse import urlparse
 from curl_cffi.requests import AsyncSession
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, WebSocket, WebSocketDisconnect
 from fastapi.responses import JSONResponse, StreamingResponse
+from pydantic import BaseModel
 
 from ..core.auth import AuthManager, verify_api_key_flexible
 from ..core.logger import debug_logger
-from ..core.model_resolver import get_base_model_aliases, resolve_model_name
+from ..core.model_resolver import get_base_model_aliases, get_friendly_model_aliases, resolve_model_name
 from ..core.models import (
     ChatCompletionRequest,
     ChatMessage,
@@ -71,6 +73,15 @@ GEMINI_STATUS_MAP = {
 generation_handler: GenerationHandler = None
 
 
+class PluginAccountImportRequest(BaseModel):
+    """Current browser account credentials imported by the local extension."""
+
+    session_token: str
+    google_cookies: str = ""
+    extension_route_key: Optional[str] = None
+    refresh_interval_minutes: int = 120
+
+
 @dataclass
 class NormalizedGenerationRequest:
     """Internal request shape shared by OpenAI and Gemini entrypoints."""
@@ -109,6 +120,17 @@ def _get_openai_model_catalog() -> List[Dict[str, str]]:
     return [
         {
             "id": model_id,
+            "description": description,
+        }
+        for model_id, description in get_friendly_model_aliases().items()
+    ]
+
+
+def _get_internal_openai_model_catalog() -> List[Dict[str, str]]:
+    """Collect internal model list entries for debugging/backward compatibility."""
+    return [
+        {
+            "id": model_id,
             "description": _build_model_description(model_config),
         }
         for model_id, model_config in MODEL_CONFIG.items()
@@ -117,10 +139,12 @@ def _get_openai_model_catalog() -> List[Dict[str, str]]:
 
 def _get_gemini_model_catalog() -> Dict[str, str]:
     """Collect Gemini-compatible model metadata for /models endpoints."""
-    catalog: Dict[str, str] = {}
+    return dict(get_friendly_model_aliases())
 
-    for alias_id, description in get_base_model_aliases().items():
-        catalog[alias_id] = description
+
+def _get_internal_gemini_model_catalog() -> Dict[str, str]:
+    """Collect full Gemini-compatible model metadata including internal long IDs."""
+    catalog: Dict[str, str] = dict(get_base_model_aliases())
 
     for model_id, model_config in MODEL_CONFIG.items():
         catalog.setdefault(model_id, _build_model_description(model_config))
@@ -790,7 +814,7 @@ async def _iterate_gemini_stream(
 
 @router.get("/v1/models")
 async def list_models(api_key: str = Depends(verify_api_key_flexible)):
-    """List available models."""
+    """List compact public models for client apps."""
     models = [
         {
             "id": model["id"],
@@ -799,6 +823,127 @@ async def list_models(api_key: str = Depends(verify_api_key_flexible)):
             "description": model["description"],
         }
         for model in _get_openai_model_catalog()
+    ]
+
+    return {"object": "list", "data": models}
+
+
+@router.post("/api/plugin/import-current-account")
+async def import_current_browser_account(
+    request: PluginAccountImportRequest,
+    api_key: str = Depends(verify_api_key_flexible),
+):
+    """Import the currently signed-in browser account from the local extension.
+
+    This endpoint intentionally uses the normal Flow2API API key instead of an
+    admin session so the extension service worker can refresh browser cookies on
+    a schedule without storing the admin password.
+    """
+    handler = _ensure_generation_handler()
+    session_token = (request.session_token or "").strip()
+    if not session_token:
+        raise HTTPException(status_code=400, detail="session_token is required")
+
+    try:
+        result = await handler.token_manager.flow_client.st_to_at(session_token)
+        access_token = result["access_token"]
+        user_info = result.get("user", {}) or {}
+        email = user_info.get("email") or ""
+        expires = result.get("expires")
+        if not email:
+            raise HTTPException(status_code=400, detail="无法从 Session Token 获取邮箱")
+
+        at_expires = None
+        if expires:
+            try:
+                at_expires = datetime.fromisoformat(str(expires).replace("Z", "+00:00"))
+            except Exception:
+                at_expires = None
+        if at_expires:
+            now = datetime.now(timezone.utc)
+            aware_expires = at_expires if at_expires.tzinfo else at_expires.replace(tzinfo=timezone.utc)
+            if aware_expires <= now:
+                raise HTTPException(status_code=400, detail="导入的 Labs Session Token 已过期，请重新打开 Flow 页面后再导入")
+
+        existing_by_email = {}
+        for existing_token in await handler.token_manager.get_all_tokens():
+            if existing_token.email and existing_token.email not in existing_by_email:
+                existing_by_email[existing_token.email] = existing_token
+
+        existing = existing_by_email.get(email)
+        common_kwargs = dict(
+            extension_route_key=(request.extension_route_key or "").strip() or None,
+            protocol_mode="protocol",
+            google_cookies=(request.google_cookies or "").strip(),
+            auto_refresh_enabled=True,
+            refresh_interval_minutes=request.refresh_interval_minutes,
+        )
+
+        added = 0
+        updated = 0
+        token_id = None
+        if existing:
+            await handler.token_manager.update_token(
+                token_id=existing.id,
+                st=session_token,
+                at=access_token,
+                at_expires=at_expires,
+                **common_kwargs,
+            )
+            token_id = existing.id
+            updated = 1
+        else:
+            new_token = await handler.token_manager.add_token(
+                st=session_token,
+                image_enabled=True,
+                video_enabled=True,
+                image_concurrency=-1,
+                video_concurrency=-1,
+                **common_kwargs,
+            )
+            token_id = new_token.id
+            added = 1
+
+        update_fields: Dict[str, Any] = {
+            "last_st_refresh_result": "插件已导入当前浏览器账号信息",
+        }
+        try:
+            credits_result = await handler.token_manager.flow_client.get_credits(access_token)
+            update_fields["credits"] = credits_result.get("credits", 0)
+            update_fields["user_paygate_tier"] = credits_result.get("userPaygateTier")
+        except Exception as credit_error:
+            debug_logger.log_warning(f"[PLUGIN_IMPORT] 获取账号余额失败: {credit_error}")
+
+        if token_id is not None:
+            await handler.token_manager.db.update_token(token_id, **update_fields)
+
+        return {
+            "success": True,
+            "added": added,
+            "updated": updated,
+            "email": email,
+            "token_id": token_id,
+            "expires": expires,
+            "message": f"导入完成: 新增 {added} 个, 更新 {updated} 个",
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        debug_logger.log_error(f"[PLUGIN_IMPORT] 导入当前浏览器账号失败: {e}")
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.get("/v1/models/internal")
+async def list_internal_models(api_key: str = Depends(verify_api_key_flexible)):
+    """List all internal long model IDs for debugging."""
+    models = [
+        {
+            "id": model["id"],
+            "object": "model",
+            "owned_by": "flow2api",
+            "description": model["description"],
+        }
+        for model in _get_internal_openai_model_catalog()
     ]
 
     return {"object": "list", "data": models}
@@ -825,8 +970,21 @@ async def list_model_aliases(api_key: str = Depends(verify_api_key_flexible)):
 @router.get("/v1beta/models")
 @router.get("/models")
 async def list_gemini_models(api_key: str = Depends(verify_api_key_flexible)):
-    """List available models using Gemini-compatible response shape."""
+    """List compact public models using Gemini-compatible response shape."""
     catalog = _get_gemini_model_catalog()
+    return {
+        "models": [
+            _build_gemini_model_resource(model_id, description)
+            for model_id, description in catalog.items()
+        ]
+    }
+
+
+@router.get("/v1beta/models/internal")
+@router.get("/models/internal")
+async def list_internal_gemini_models(api_key: str = Depends(verify_api_key_flexible)):
+    """List all internal long model IDs using Gemini-compatible response shape."""
+    catalog = _get_internal_gemini_model_catalog()
     return {
         "models": [
             _build_gemini_model_resource(model_id, description)
