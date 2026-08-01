@@ -1,3 +1,4 @@
+import base64
 import types
 import unittest
 from io import BytesIO
@@ -5,8 +6,8 @@ from unittest.mock import AsyncMock, patch
 
 from PIL import Image
 
-from src.api.routes import _normalize_openai_request
-from src.core.models import ChatCompletionRequest, ChatMessage
+from src.api.routes import _normalize_gemini_request, _normalize_openai_request
+from src.core.models import ChatCompletionRequest, ChatMessage, GeminiGenerateContentRequest
 from src.core.model_resolver import resolve_model_name
 from src.services.flow_client import FlowClient
 from src.services.generation_handler import MODEL_CONFIG, GenerationHandler
@@ -77,6 +78,23 @@ class VeoLiteModelResolverTests(unittest.TestCase):
         )
 
         self.assertEqual(resolved, "veo_3_1_i2v_s_fast_portrait_4s_fl")
+
+    def test_public_veo_alias_ignores_duration(self):
+        request = types.SimpleNamespace(
+            generationConfig=types.SimpleNamespace(
+                aspectRatio="16:9",
+                durationSeconds=4,
+            ),
+            messages=[],
+        )
+
+        resolved = resolve_model_name(
+            "Veo 3.1 - Fast",
+            request=request,
+            model_config=MODEL_CONFIG,
+        )
+
+        self.assertEqual(resolved, "veo_3_1_t2v_fast_landscape")
 
     def test_resolve_t2v_lite_alias_to_portrait_variant(self):
         request = types.SimpleNamespace(
@@ -394,6 +412,56 @@ class RouteNormalizationTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(normalized.model, "gemini-3.0-pro-image-portrait")
         self.assertEqual(len(normalized.images), 1)
+
+    async def test_openai_and_gemini_reference_image_use_same_lite_i2v_route(self):
+        encoded_image = base64.b64encode(_make_image_bytes((1600, 900))).decode()
+        openai_request = ChatCompletionRequest.model_validate(
+            {
+                "model": "Veo 3.1 - Lite",
+                "messages": [
+                    {
+                        "role": "user",
+                        "content": [
+                            {"type": "text", "text": "让图片动起来"},
+                            {
+                                "type": "image_url",
+                                "image_url": {
+                                    "url": f"data:image/png;base64,{encoded_image}"
+                                },
+                            },
+                        ],
+                    }
+                ],
+                "generationConfig": {"aspectRatio": "9:16"},
+            }
+        )
+        gemini_request = GeminiGenerateContentRequest.model_validate(
+            {
+                "contents": [
+                    {
+                        "role": "user",
+                        "parts": [
+                            {"text": "让图片动起来"},
+                            {
+                                "inlineData": {
+                                    "mimeType": "image/png",
+                                    "data": encoded_image,
+                                }
+                            },
+                        ],
+                    }
+                ],
+                "generationConfig": {"aspectRatio": "9:16"},
+            }
+        )
+
+        openai_normalized = await _normalize_openai_request(openai_request)
+        gemini_normalized = await _normalize_gemini_request(
+            "Veo 3.1 - Lite", gemini_request
+        )
+
+        self.assertEqual(openai_normalized.model, "veo_3_1_i2v_lite_portrait")
+        self.assertEqual(gemini_normalized.model, openai_normalized.model)
 
     async def test_check_video_status_uses_media_payload_and_normalizes_response(self):
         captured = {}

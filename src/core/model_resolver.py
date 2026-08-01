@@ -493,6 +493,16 @@ VIDEO_ALIAS_DISPLAY_NAMES = {
 VIDEO_ALIASES_ALLOW_DURATION = {
     "Omni Flash",
     "omni-flash",
+    "veo",
+    "veo-fast",
+    "veo-lite",
+    "veo-i2v",
+    "veo-i2v-fast",
+    "veo-i2v-lite",
+    "veo-interpolate",
+    "veo-r2v",
+    "veo-r2v-ultra",
+    "veo-r2v-relaxed",
 }
 
 
@@ -778,7 +788,7 @@ def _count_input_images(request: Any) -> int:
     return count
 
 
-def _resolve_friendly_video_alias(model: str, request=None) -> Optional[str]:
+def _resolve_friendly_video_alias(model: str, request=None, images: Any = None) -> Optional[str]:
     if model not in FRIENDLY_VIDEO_ALIASES:
         return None
 
@@ -786,6 +796,8 @@ def _resolve_friendly_video_alias(model: str, request=None) -> Optional[str]:
         _extract_generation_params(request) if request else (None, None, None)
     )
     image_count = _count_input_images(request)
+    if isinstance(images, (list, tuple)):
+        image_count = max(image_count, len(images))
 
     if model == "Omni Flash":
         base = "omni"
@@ -812,7 +824,10 @@ def _resolve_friendly_video_alias(model: str, request=None) -> Optional[str]:
 
     candidate = base
     if model in VIDEO_ALIASES_ALLOW_DURATION and duration_seconds in (4, 6, 8, 10):
-        duration_candidate = f"{candidate}_{duration_seconds}s"
+        if candidate.endswith("_fl"):
+            duration_candidate = f"{candidate[:-3]}_{duration_seconds}s_fl"
+        else:
+            duration_candidate = f"{candidate}_{duration_seconds}s"
         if duration_candidate in VIDEO_BASE_MODELS:
             candidate = duration_candidate
 
@@ -892,7 +907,7 @@ def resolve_model_name(
         return resolved
 
     # ────── 视频模型解析 ──────
-    friendly_video_alias = _resolve_friendly_video_alias(model, request)
+    friendly_video_alias = _resolve_friendly_video_alias(model, request, images=images)
     if friendly_video_alias:
         debug_logger.log_info(
             f"[MODEL_RESOLVER] 视频短别名转换: {model} → {friendly_video_alias}"
@@ -984,9 +999,15 @@ def get_friendly_model_aliases() -> Dict[str, str]:
     for alias in ("Omni Flash", "Veo 3.1 - Lite", "Veo 3.1 - Fast", "Veo 3.1 - Quality"):
         base = FRIENDLY_VIDEO_ALIASES[alias]
         display_name = VIDEO_ALIAS_DISPLAY_NAMES.get(alias, alias)
+        if alias == "Omni Flash":
+            parameter_hint = "use generationConfig for aspectRatio and durationSeconds (4/6/8/10); imageSize is ignored"
+        elif alias == "Veo 3.1 - Quality":
+            parameter_hint = "use generationConfig for aspectRatio and imageSize (1080p/4k); durationSeconds is ignored"
+        else:
+            parameter_hint = "use generationConfig for aspectRatio; durationSeconds and imageSize are ignored"
         aliases[alias] = (
             f"Video generation - {display_name}; base: {base}; "
-            "use generationConfig for aspectRatio, durationSeconds, and imageSize"
+            f"{parameter_hint}"
         )
 
     return aliases

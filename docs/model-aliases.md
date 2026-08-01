@@ -51,7 +51,7 @@
 
 ### 视频输出分辨率
 
-放在 `generationConfig.imageSize`，也兼容 `generationConfig.imageConfig.imageSize`。
+放在 `generationConfig.imageSize`，也兼容 `generationConfig.imageConfig.imageSize`。公开模型名中只有 `Veo 3.1 - Quality` 会读取此参数；`Omni Flash`、`Veo 3.1 - Lite`、`Veo 3.1 - Fast` 会忽略。
 
 | 输出 | 参数值 | 说明 |
 | --- | --- | --- |
