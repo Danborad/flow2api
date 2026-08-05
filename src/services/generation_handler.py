@@ -1458,7 +1458,7 @@ class GenerationHandler:
             if not generation_result.get("success"):
                 error_msg = generation_result.get("error_message") or "生成未成功完成"
                 debug_logger.log_warning(f"[GENERATION] 生成未成功，不扣次数: {error_msg}")
-                if token:
+                if token and self._should_count_token_error(error_msg):
                     await self.token_manager.record_error(token.id)
                 duration = time.time() - start_time
                 record_generation_result(generation_type, "failed", duration)
@@ -1632,6 +1632,12 @@ class GenerationHandler:
             "capsolver",
             "capmonster",
             "ezcaptcha",
+            "public_error_unsafe_generation",
+            "invalid argument",
+            "invalid_argument",
+            "http error 400",
+            "safety policy",
+            "content policy",
         )
         if any(marker in error_text for marker in non_token_fault_markers):
             return False
