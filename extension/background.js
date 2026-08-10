@@ -28,21 +28,43 @@ const GOOGLE_AUTH_COOKIE_GROUPS = [
 const DEFAULT_SETTINGS = {
     serverUrl: "ws://127.0.0.1:8000/captcha_ws",
     apiKey: "",
-    routeKey: "flow-main",
-    clientLabel: "chrome-flow-main",
+    instanceId: "",
+    routeKey: "",
+    clientLabel: "",
     refreshIntervalMinutes: "120",
     autoImportEnabled: true,
     autoImportIntervalMinutes: "30"
 };
 
+function createInstanceId() {
+    if (globalThis.crypto && typeof globalThis.crypto.randomUUID === "function") {
+        return globalThis.crypto.randomUUID();
+    }
+    return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 14)}`;
+}
+
+function ensureInstanceSettings(stored) {
+    const instanceId = stored.instanceId || createInstanceId();
+    const shortId = instanceId.replace(/-/g, "").slice(0, 12);
+    const routeKey = stored.instanceId ? (stored.routeKey || `flow-${shortId}`) : `flow-${shortId}`;
+    const clientLabel = stored.instanceId ? (stored.clientLabel || `chrome-${shortId}`) : `chrome-${shortId}`;
+    const settings = { instanceId, routeKey, clientLabel };
+    if (!stored.instanceId || !stored.routeKey || !stored.clientLabel) {
+        chrome.storage.local.set(settings);
+    }
+    return settings;
+}
+
 function getSettings() {
     return new Promise((resolve) => {
         chrome.storage.local.get(DEFAULT_SETTINGS, (stored) => {
+            const instanceSettings = ensureInstanceSettings(stored);
             resolve({
                 serverUrl: (stored.serverUrl || DEFAULT_SETTINGS.serverUrl).trim(),
                 apiKey: (stored.apiKey || DEFAULT_SETTINGS.apiKey).trim(),
-                routeKey: (stored.routeKey || DEFAULT_SETTINGS.routeKey).trim(),
-                clientLabel: (stored.clientLabel || DEFAULT_SETTINGS.clientLabel).trim(),
+                instanceId: instanceSettings.instanceId,
+                routeKey: instanceSettings.routeKey.trim(),
+                clientLabel: instanceSettings.clientLabel.trim(),
                 refreshIntervalMinutes: String(stored.refreshIntervalMinutes || DEFAULT_SETTINGS.refreshIntervalMinutes).trim(),
                 autoImportEnabled: stored.autoImportEnabled !== false,
                 autoImportIntervalMinutes: String(stored.autoImportIntervalMinutes || DEFAULT_SETTINGS.autoImportIntervalMinutes).trim()

@@ -5,7 +5,7 @@
 - 使用当前 Chrome Profile 的真实 Google Flow 登录态生成 reCAPTCHA token。
 - 读取并导入 Labs Session Token 和 Google 登录 Cookie。
 - 定时把账号信息同步到 Flow2API 后台。
-- 按 Route Key 把后台 Token 绑定到对应浏览器 Profile。
+- 自动为当前 Chrome Profile 生成内部实例标识，并把后台 Token 绑定到对应浏览器。
 
 不需要另外安装 Flow2API Token Updater。
 
@@ -25,8 +25,6 @@
 ```text
 WebSocket URL: ws://127.0.0.1:8000/captcha_ws
 Flow2API API Key: 管理后台中的 API Key
-Route Key: flow-main
-Client Label: chrome-flow-main
 后台自动刷新间隔: 120 分钟
 插件自动导入间隔: 30 分钟
 ```
@@ -46,7 +44,7 @@ ws://192.168.1.20:8000/captcha_ws
 1. 在当前 Chrome Profile 登录 Google 账号。
 2. 打开 `https://labs.google/fx/tools/flow` 并确认页面可用。
 3. 回到扩展设置页点击“导入当前 Google 账号”。
-4. 管理后台刷新 Token 列表，确认邮箱、余额、过期时间和 Route Key 正常。
+4. 管理后台刷新 Token 列表，确认邮箱、余额和过期时间正常。
 
 插件导入前会打开一个隐藏的 Flow 页面刷新 Labs Session Cookie。导入成功后，后台会更新现有邮箱对应的 Token，或为新邮箱创建 Token。
 
@@ -67,22 +65,21 @@ ws://192.168.1.20:8000/captcha_ws
 
 1. 单独登录一个 Google Flow 账号。
 2. 单独加载本扩展。
-3. 设置不同 Route Key。
-4. 点击一次“导入当前 Google 账号”。
+3. 点击一次“导入当前 Google 账号”。
 
 示例：
 
 ```text
-Profile A: route_key=flow-main
-Profile B: route_key=flow-second
-Profile C: route_key=flow-third
+Profile A: 插件自动生成实例标识
+Profile B: 插件自动生成实例标识
+Profile C: 插件自动生成实例标识
 ```
 
 同一 Chrome Profile 的多个窗口共享 Cookie，不能当作多个独立账号。
 
 ## reCAPTCHA
 
-生成时，后端通过 WebSocket 把 reCAPTCHA 请求发送给与 Token Route Key 匹配的扩展。扩展优先复用已打开的 Google Flow 标签页；没有可用页面时会创建临时隐藏页。
+生成时，后端通过 WebSocket 把 reCAPTCHA 请求发送给导入该账号的浏览器实例。扩展优先复用已打开的 Google Flow 标签页；没有可用页面时会创建临时隐藏页。
 
 验证码请求在插件中按队列处理。大量并发请求可能需要等待，建议先用单请求确认链路正常。
 
@@ -107,11 +104,11 @@ Profile C: route_key=flow-third
 - 查看扩展设置页的最近自动导入状态。
 - 手动刷新 Google Flow 页面后重新导入。
 - 确认 Chrome 没有被系统休眠或关闭后台运行。
-- 确认后台 Token 处于启用状态并绑定正确 Route Key。
+- 确认后台 Token 处于启用状态，并在当前 Profile 重新点击一次“导入当前 Google 账号”。
 
 ### 图片或视频提示 `Failed to obtain reCAPTCHA token`
 
-- 确认 Token Route Key 与当前扩展一致。
+- 确认账号是在当前 Chrome Profile 中导入的，不要手动复制其他 Profile 的配置。
 - 确认 Flow 页面没有跳回登录页。
 - 暂时降低并发，先发送一个请求。
 - 在扩展 Service Worker 控制台查看 `Extension script failed` 或 timeout 信息。

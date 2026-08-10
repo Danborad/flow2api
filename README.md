@@ -72,8 +72,6 @@ http://127.0.0.1:8000
 ```text
 WebSocket URL: ws://127.0.0.1:8000/captcha_ws
 Flow2API API Key: 管理后台中的 API Key
-Route Key: flow-main
-Client Label: chrome-flow-main
 ```
 
 6. 在同一 Chrome Profile 登录 `https://labs.google/fx/tools/flow`。
@@ -88,15 +86,15 @@ Client Label: chrome-flow-main
 
 不同账号必须使用不同 Chrome Profile，不能只开同一 Profile 的多个窗口。
 
-每个 Profile 单独加载扩展并设置不同的 Route Key：
+每个 Profile 单独加载扩展。插件会自动生成不同的内部实例标识：
 
 ```text
-账号 A: flow-main
-账号 B: flow-second
-账号 C: flow-third
+账号 A: 自动生成
+账号 B: 自动生成
+账号 C: 自动生成
 ```
 
-导入后，后台 Token 的 `extension_route_key` 会绑定对应浏览器，生成时验证码请求只会发给匹配的 Profile。
+导入后，后台 Token 会自动绑定当前浏览器 Profile，生成时验证码请求只会发给匹配的 Profile。API Key 是后台唯一的全局鉴权 Key，不需要为每个插件生成新的 Key。
 
 ## API 接入
 
@@ -214,7 +212,7 @@ Prometheus: http://127.0.0.1:8000/metrics
 ### `Failed to obtain reCAPTCHA token`
 
 - 确认扩展 WebSocket 已连接。
-- 确认 Token 和扩展使用相同 Route Key。
+- 确认账号是在当前 Chrome Profile 中导入的，不要混用其他 Profile 的账号配置。
 - 保持 Google Flow 页面可正常打开。
 - 并发请求会排队等待插件生成验证码，先用单请求验证。
 

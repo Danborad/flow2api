@@ -76,15 +76,9 @@
   <div class="wrap">
     <div class="panel">
       <h1>Flow2API Captcha Worker</h1>
-      <p>给当前浏览器实例设置一个独立的路由键，Flow2API 后端就能把对应账号的验证码请求固定发到这个实例。</p>
+      <p>只需要填写服务地址和后台 API Key。每个 Chrome Profile 会自动生成独立的内部实例标识，多个插件不需要手动分配不同 Key。</p>
 
-      <label for="routeKey">Route Key</label>
-      <input id="routeKey" type="text" placeholder="例如 9223">
-
-      <label for="clientLabel">Client Label</label>
-      <input id="clientLabel" type="text" placeholder="例如 browser-9223">
-
-      <label for="serverUrl">WebSocket URL</label>
+      <label for="serverUrl">服务 WebSocket 地址</label>
       <input id="serverUrl" type="text" placeholder="ws://127.0.0.1:8000/captcha_ws">
 
       <label for="apiKey">Flow2API API Key</label>
@@ -106,7 +100,7 @@
       <button id="saveBtn" type="button">保存</button>
       <button id="importBtn" type="button">导入当前 Google 账号</button>
       <div class="status" id="status"></div>
-      <div class="hint">管理台 token 里填写同样的 <code>Route Key</code>，比如 9223 对 9223。后端会使用 API Key 校验 WebSocket 连接。</div>
+      <div class="hint">API Key 是后台唯一的全局鉴权 Key，不需要为每个插件单独生成。插件实例标识由当前 Chrome Profile 自动生成并绑定导入的账号。</div>
       <div class="hint">导入功能会读取当前 Chrome 中的 Labs Session Token 和 Google Cookies，并以 <code>protocol</code> 模式写入后台，默认开启 ST/AT 自动刷新。</div>
     </div>
   </div>
