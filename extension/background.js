@@ -356,7 +356,10 @@ async function handleGetToken(data) {
         const existingTabs = await chrome.tabs.query({
             url: [
                 "https://labs.google/fx/tools/flow*",
-                "https://labs.google/fx/projects/*"
+                "https://labs.google/fx/vi/tools/flow*",
+                "https://labs.google/fx/*/tools/flow*",
+                "https://labs.google/fx/projects/*",
+                "https://labs.google/fx/vi/projects/*"
             ]
         });
         const targetTab = existingTabs.find(tab => tab.id) || await chrome.tabs.create({
@@ -370,7 +373,7 @@ async function handleGetToken(data) {
 
         let successResponse = null;
         let lastErrorMsg = "No response from tab.";
-        const scriptTimeoutMs = data.action === "VIDEO_GENERATION" ? 60000 : 45000;
+        const scriptTimeoutMs = data.action === "VIDEO_GENERATION" ? 120000 : 60000;
 
         try {
             const results = await chrome.scripting.executeScript({

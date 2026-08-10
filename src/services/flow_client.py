@@ -4536,7 +4536,7 @@ class FlowClient:
             try:
                 from .browser_captcha_extension import ExtensionCaptchaService
                 service = await ExtensionCaptchaService.get_instance(self.db)
-                extension_timeout = 75 if action == "VIDEO_GENERATION" else 60
+                extension_timeout = 135 if action == "VIDEO_GENERATION" else 75
                 token = await service.get_token(
                     project_id,
                     action,
