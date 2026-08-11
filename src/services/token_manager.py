@@ -587,6 +587,7 @@ class TokenManager:
                     return True
 
             debug_logger.log_error(f"[AT_REFRESH] Token {token_id}: all refresh attempts failed, disabling token")
+            await self._request_extension_account_sync(token_id, reason="at_refresh_failed")
             await self.disable_token(token_id)
             self._clear_at_validation_cache(token_id)
             return False
@@ -816,6 +817,7 @@ class TokenManager:
 
             new_st = await self._try_protocol_refresh_st(token_id, latest)
             if not new_st:
+                await self._request_extension_account_sync(token_id, reason="protocol_refresh_failed")
                 return
 
             try:
@@ -848,6 +850,7 @@ class TokenManager:
                 record_token_refresh("at", "success")
                 debug_logger.log_info(f"[PROTOCOL_REFRESH] Token {token_id}: 协议刷新 ST/AT 成功")
             except Exception as e:
+                await self._request_extension_account_sync(token_id, reason="protocol_at_refresh_failed")
                 await self.db.update_token(
                     token_id,
                     st=new_st,
@@ -959,9 +962,21 @@ class TokenManager:
         else:
             await self.db.increment_token_stats(token_id, "image")
 
+    async def _request_extension_account_sync(self, token_id: int, reason: str) -> None:
+        try:
+            from .browser_captcha_extension import ExtensionCaptchaService
+
+            service = await ExtensionCaptchaService.get_instance(self.db)
+            await service.request_account_sync(token_id, reason=reason)
+        except Exception as e:
+            debug_logger.log_warning(
+                f"[TOKEN_SYNC] Failed to request browser sync for token {token_id}: {e}"
+            )
+
     async def record_error(self, token_id: int):
         """Record token error and auto-disable if threshold reached"""
         await self.db.increment_token_stats(token_id, "error")
+        await self._request_extension_account_sync(token_id, reason="generation_error")
 
         # Check if should auto-disable token (based on consecutive errors)
         stats = await self.db.get_token_stats(token_id)

@@ -1,6 +1,7 @@
 let ws = null;
 let reconnectTimeout = null;
 let heartbeatInterval = null;
+let accountImportInProgress = false;
 
 const ACCOUNT_IMPORT_ALARM = "flow2api-auto-import-account";
 const LABS_SESSION_COOKIE = "__Secure-next-auth.session-token";
@@ -181,24 +182,30 @@ async function getGoogleCookies() {
 }
 
 async function importCurrentAccount(reason = "manual") {
+    if (accountImportInProgress) {
+        console.log("[Flow2API] Account import already in progress, skipping", reason);
+        return null;
+    }
+    accountImportInProgress = true;
     const settings = await getSettings();
-    if (!settings.apiKey) throw new Error("Flow2API API Key is empty");
+    try {
+        if (!settings.apiKey) throw new Error("Flow2API API Key is empty");
 
     await refreshLabsSessionCookie();
-    const sessionToken = await getLabsSessionToken();
-    if (!sessionToken) {
-        throw new Error("Labs Session Token not found. Open https://labs.google/fx/tools/flow in this Chrome profile first.");
-    }
+        const sessionToken = await getLabsSessionToken();
+        if (!sessionToken) {
+            throw new Error("Labs Session Token not found. Open https://labs.google/fx/tools/flow in this Chrome profile first.");
+        }
 
-    const googleCookies = await getGoogleCookies();
-    const foundNames = new Set(googleCookies.map(cookie => cookie.name));
+        const googleCookies = await getGoogleCookies();
+        const foundNames = new Set(googleCookies.map(cookie => cookie.name));
     const hasUsableCookieGroup = GOOGLE_AUTH_COOKIE_GROUPS.some(group => group.every(name => foundNames.has(name)));
-    if (!hasUsableCookieGroup) {
-        throw new Error(`Google login cookies are incomplete. Found: ${Array.from(foundNames).join(", ") || "none"}. Open accounts.google.com and labs.google in this Chrome profile, then import again.`);
-    }
+        if (!hasUsableCookieGroup) {
+            throw new Error(`Google login cookies are incomplete. Found: ${Array.from(foundNames).join(", ") || "none"}. Open accounts.google.com and labs.google in this Chrome profile, then import again.`);
+        }
 
-    const baseUrl = getBackendBaseUrl(settings.serverUrl);
-    const response = await fetch(`${baseUrl}/api/plugin/import-current-account`, {
+        const baseUrl = getBackendBaseUrl(settings.serverUrl);
+        const response = await fetch(`${baseUrl}/api/plugin/import-current-account`, {
         method: "POST",
         headers: {
             "Content-Type": "application/json",
@@ -211,19 +218,22 @@ async function importCurrentAccount(reason = "manual") {
             refresh_interval_minutes: parseInt(settings.refreshIntervalMinutes, 10) || 120
         })
     });
-    const payload = await response.json().catch(() => null);
-    if (!response.ok || !payload || payload.success !== true) {
-        const detail = payload && (payload.detail || payload.message);
-        throw new Error(detail || `Import failed HTTP ${response.status}`);
-    }
+        const payload = await response.json().catch(() => null);
+        if (!response.ok || !payload || payload.success !== true) {
+            const detail = payload && (payload.detail || payload.message);
+            throw new Error(detail || `Import failed HTTP ${response.status}`);
+        }
 
-    chrome.storage.local.set({
+        chrome.storage.local.set({
         lastAutoImportAt: new Date().toISOString(),
         lastAutoImportStatus: "success",
         lastAutoImportMessage: `${reason}: ${payload.email || "unknown"}`
     });
-    console.log("[Flow2API] Account import success", reason, payload);
-    return payload;
+        console.log("[Flow2API] Account import success", reason, payload);
+        return payload;
+    } finally {
+        accountImportInProgress = false;
+    }
 }
 
 async function runScheduledAccountImport() {
@@ -347,6 +357,13 @@ async function connectWS() {
 
         if (data.type === "register_ack") {
             console.log("[Flow2API] Registered route key:", data.route_key || "(empty)");
+            return;
+        }
+
+        if (data.type === "sync_account") {
+            importCurrentAccount(`server:${data.reason || "token_error"}`).catch(error => {
+                console.warn("[Flow2API] Immediate account sync failed", error);
+            });
             return;
         }
 

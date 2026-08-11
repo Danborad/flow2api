@@ -1638,6 +1638,11 @@ class GenerationHandler:
             "http error 400",
             "safety policy",
             "content policy",
+            "project-scoped image upload failed",
+            "uploadimage",
+            "uploaduserimage",
+            "failed to perform, curl",
+            "ssl_error_syscall",
         )
         if any(marker in error_text for marker in non_token_fault_markers):
             return False

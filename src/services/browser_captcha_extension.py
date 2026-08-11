@@ -26,6 +26,7 @@ class ExtensionCaptchaService:
         self.db = db
         self.active_connections: list[ExtensionConnection] = []
         self.pending_requests: dict[str, tuple[asyncio.Future, WebSocket]] = {}
+        self._sync_notifications_at: dict[int, float] = {}
 
     @classmethod
     async def get_instance(cls, db=None) -> "ExtensionCaptchaService":
@@ -117,6 +118,39 @@ class ExtensionCaptchaService:
     async def has_connection_for_token(self, token_id: Optional[int]) -> tuple[bool, str]:
         route_key = await self._resolve_route_key(token_id)
         return self._has_connection_for_route_key(route_key), route_key
+
+    async def request_account_sync(self, token_id: int, reason: str = "token_error") -> bool:
+        """Ask the browser bound to a token to refresh and re-import its account."""
+        now = time.time()
+        last_sent = self._sync_notifications_at.get(token_id, 0.0)
+        if now - last_sent < 60:
+            return False
+
+        route_key = await self._resolve_route_key(token_id)
+        conn = self._select_connection(route_key)
+        if conn is None:
+            debug_logger.log_warning(
+                f"[Extension Captcha] Cannot request account sync for token_id={token_id}; "
+                f"route_key='{route_key}', available={self._describe_routes() or 'none'}"
+            )
+            return False
+
+        try:
+            await conn.websocket.send_text(json.dumps({
+                "type": "sync_account",
+                "token_id": token_id,
+                "reason": reason,
+                "route_key": route_key,
+            }))
+            self._sync_notifications_at[token_id] = now
+            debug_logger.log_info(
+                f"[Extension Captcha] Requested immediate account sync for token_id={token_id}, "
+                f"route_key={route_key or '-'}, reason={reason}"
+            )
+            return True
+        except Exception as e:
+            debug_logger.log_warning(f"[Extension Captcha] Failed to request account sync for token {token_id}: {e}")
+            return False
 
     async def handle_message(self, websocket: WebSocket, data: str):
         try:

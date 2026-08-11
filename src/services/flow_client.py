@@ -1508,7 +1508,12 @@ class FlowClient:
                     json_data=new_json_data,
                     use_at=True,
                     at_token=at,
-                    use_media_proxy=True
+                    use_media_proxy=True,
+                    # Project uploads are sensitive to an unstable proxy or a
+                    # stale browser fingerprint. Retry the upload directly
+                    # before declaring the project upload unavailable.
+                    force_no_proxy=retry_attempt > 0,
+                    respect_fingerprint_proxy=retry_attempt == 0,
                 )
                 media_id = (
                     self._extract_media_name(new_result.get("media"))
