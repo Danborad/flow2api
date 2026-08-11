@@ -80,6 +80,8 @@ Flow2API API Key: 管理后台中的 API Key
 
 扩展会读取当前 Profile 的 Labs Session Token 和 Google 登录 Cookie，导入后台并定时更新。后台验证码方式应设置为 `extension`。
 
+扩展版本显示在插件设置页标题和 Chrome 扩展详情页中。每次插件代码更新都会递增 `extension/manifest.json` 的版本号，并同步记录在 `extension/CHANGELOG.md`。
+
 详细说明见 [浏览器插件配置](docs/captcha-worker-setup.md)。
 
 ### 3. 多账号

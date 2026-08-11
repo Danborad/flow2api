@@ -2,6 +2,9 @@ let ws = null;
 let reconnectTimeout = null;
 let heartbeatInterval = null;
 let accountImportInProgress = false;
+const EXTENSION_VERSION = chrome.runtime.getManifest().version;
+
+console.log(`[Flow2API] Captcha Worker v${EXTENSION_VERSION} loaded`);
 
 const ACCOUNT_IMPORT_ALARM = "flow2api-auto-import-account";
 const LABS_SESSION_COOKIE = "__Secure-next-auth.session-token";
@@ -326,6 +329,7 @@ async function connectWS() {
     if (settings.clientLabel) {
         url.searchParams.set("client_label", settings.clientLabel);
     }
+    url.searchParams.set("extension_version", EXTENSION_VERSION);
 
     const socket = new WebSocket(url.toString());
     ws = socket;
@@ -335,7 +339,8 @@ async function connectWS() {
         socket.send(JSON.stringify({
             type: "register",
             route_key: settings.routeKey,
-            client_label: settings.clientLabel
+            client_label: settings.clientLabel,
+            extension_version: EXTENSION_VERSION
         }));
         if (heartbeatInterval) clearInterval(heartbeatInterval);
         heartbeatInterval = setInterval(() => {

@@ -18,6 +18,8 @@
 
 扩展目录应包含 `manifest.json`、`background.js`、`content.js`、`options.html`。
 
+当前扩展版本会显示在插件设置页标题中，例如 `v1.1.0`。Chrome 扩展管理页的“详情”中也会显示同一版本；后台 WebSocket 日志会记录连接插件的版本号。
+
 ## 插件设置
 
 在扩展详情中打开“扩展程序选项”，填写：

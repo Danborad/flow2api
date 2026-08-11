@@ -168,6 +168,7 @@ async function importCurrentAccount() {
 }
 
 document.addEventListener("DOMContentLoaded", () => {
+  $("extensionVersion").textContent = `v${chrome.runtime.getManifest().version}`;
   loadSettings();
   $("saveBtn").addEventListener("click", saveSettings);
   $("importBtn").addEventListener("click", importCurrentAccount);

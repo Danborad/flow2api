@@ -15,6 +15,7 @@ class ExtensionConnection:
     websocket: WebSocket
     route_key: str = ""
     client_label: str = ""
+    extension_version: str = ""
     connected_at: float = field(default_factory=time.time)
 
 
@@ -44,11 +45,13 @@ class ExtensionCaptchaService:
             websocket=websocket,
             route_key=(websocket.query_params.get("route_key") or "").strip(),
             client_label=(websocket.query_params.get("client_label") or "").strip(),
+            extension_version=(websocket.query_params.get("extension_version") or "").strip(),
         )
         self.active_connections.append(conn)
         debug_logger.log_info(
             f"[Extension Captcha] Client connected. Total: {len(self.active_connections)}, "
-            f"route_key={conn.route_key or '-'}, label={conn.client_label or '-'}"
+            f"route_key={conn.route_key or '-'}, label={conn.client_label or '-'}, "
+            f"version={conn.extension_version or '-'}"
         )
 
     def disconnect(self, websocket: WebSocket):
@@ -57,7 +60,8 @@ class ExtensionCaptchaService:
                 self.active_connections.remove(conn)
                 debug_logger.log_info(
                     f"[Extension Captcha] Client disconnected. Total: {len(self.active_connections)}, "
-                    f"route_key={conn.route_key or '-'}, label={conn.client_label or '-'}"
+                    f"route_key={conn.route_key or '-'}, label={conn.client_label or '-'}, "
+                    f"version={conn.extension_version or '-'}"
                 )
                 return
 
@@ -162,9 +166,10 @@ class ExtensionCaptchaService:
                 if conn:
                     conn.route_key = (payload.get("route_key") or conn.route_key or "").strip()
                     conn.client_label = (payload.get("client_label") or conn.client_label or "").strip()
+                    conn.extension_version = (payload.get("extension_version") or conn.extension_version or "").strip()
                     debug_logger.log_info(
                         f"[Extension Captcha] Client registered route_key={conn.route_key or '-'}, "
-                        f"label={conn.client_label or '-'}"
+                        f"label={conn.client_label or '-'}, version={conn.extension_version or '-'}"
                     )
                     await self._send_ack(
                         websocket,
@@ -172,6 +177,7 @@ class ExtensionCaptchaService:
                             "type": "register_ack",
                             "route_key": conn.route_key,
                             "client_label": conn.client_label,
+                            "extension_version": conn.extension_version,
                         },
                     )
                 return
