@@ -586,9 +586,15 @@ class TokenManager:
                 if result:
                     return True
 
-            debug_logger.log_error(f"[AT_REFRESH] Token {token_id}: all refresh attempts failed, disabling token")
+            debug_logger.log_error(
+                f"[AT_REFRESH] Token {token_id}: all refresh attempts failed; keeping token enabled "
+                "so a transient network/Captcha failure cannot drain the account pool"
+            )
             await self._request_extension_account_sync(token_id, reason="at_refresh_failed")
-            await self.disable_token(token_id)
+            await self.db.update_token(
+                token_id,
+                last_st_refresh_result="AT refresh failed; waiting for browser resync",
+            )
             self._clear_at_validation_cache(token_id)
             return False
 
