@@ -1295,21 +1295,24 @@ class GenerationHandler:
             request_payload["video_credit_cost"] = _estimate_video_credit_cost_for_log(model, model_config)
         debug_logger.log_info(f"[GENERATION] 开始生成 - 模型: {model}, 类型: {generation_type}, Prompt: {prompt[:50]}...")
 
+        # Create the log before any network work so non-streaming requests are
+        # visible in the admin panel while they are still running.
+        request_log_state["id"] = await self._log_request(
+            token_id=None,
+            operation=request_operation,
+            request_data=request_payload,
+            response_data={"status": "processing", "status_text": "started", "progress": 0, "request_id": request_id},
+            status_code=102,
+            duration=0,
+            status_text="started",
+            progress=0,
+        )
+
         # 向用户展示开始信息
         if stream:
             yield self._create_stream_chunk(
                 f"✨ {'视频' if generation_type == 'video' else '图片'}生成任务已启动\n",
                 role="assistant"
-            )
-            request_log_state["id"] = await self._log_request(
-                token_id=None,
-                operation=request_operation,
-                request_data=request_payload,
-                response_data={"status": "processing", "status_text": "started", "progress": 0, "request_id": request_id},
-                status_code=102,
-                duration=0,
-                status_text="started",
-                progress=0,
             )
 
         # 2. 选择Token
