@@ -158,6 +158,10 @@ async function importCurrentAccount() {
       throw new Error((response && response.error) || "插件后台没有返回导入结果");
     }
     const payload = response.payload || {};
+    if (payload.skipped) {
+      setStatus("已有账号同步任务正在进行，请稍后刷新状态。", false);
+      return;
+    }
     setStatus(`导入完成，新增 ${payload.added || 0}，更新 ${payload.updated || 0}，账号 ${payload.email || "未知"}`);
     chrome.storage.local.get(DEFAULT_SETTINGS, renderAutoImportStatus);
   } catch (e) {

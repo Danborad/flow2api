@@ -187,7 +187,7 @@ async function getGoogleCookies() {
 async function importCurrentAccount(reason = "manual") {
     if (accountImportInProgress) {
         console.log("[Flow2API] Account import already in progress, skipping", reason);
-        return null;
+        return { skipped: true, reason: "in_progress" };
     }
     accountImportInProgress = true;
     const settings = await getSettings();
