@@ -39,19 +39,19 @@
 
 ### 视频时长
 
-只有 `Omni Flash` 读取 `generationConfig.durationSeconds`，也兼容 `duration`、`duration_seconds`。`Veo 3.1 - Lite`、`Veo 3.1 - Fast`、`Veo 3.1 - Quality` 会忽略时长参数，按 Flow 网页默认档走。
+只有 `Omni 1.1 Flash` 读取 `generationConfig.durationSeconds`，也兼容 `duration`、`duration_seconds`。`Veo 3.1 - Lite`、`Veo 3.1 - Fast`、`Veo 3.1 - Quality` 会忽略时长参数，按 Flow 网页默认档走。
 
 | 时长 | 参数值 | 说明 |
 | --- | --- | --- |
-| 默认 | 不传 | Omni Flash 默认时长 |
-| 4 秒 | `4`、`4s` | 仅 Omni Flash |
-| 6 秒 | `6`、`6s` | 仅 Omni Flash |
-| 8 秒 | `8`、`8s` | 仅 Omni Flash |
-| 10 秒 | `10`、`10s` | 仅 Omni Flash |
+| 默认 | 不传 | Omni 1.1 Flash 默认时长 |
+| 4 秒 | `4`、`4s` | 仅 Omni 1.1 Flash |
+| 6 秒 | `6`、`6s` | 仅 Omni 1.1 Flash |
+| 8 秒 | `8`、`8s` | 仅 Omni 1.1 Flash |
+| 10 秒 | `10`、`10s` | 仅 Omni 1.1 Flash |
 
 ### 视频输出分辨率
 
-放在 `generationConfig.imageSize`，也兼容 `generationConfig.imageConfig.imageSize`。公开模型名中只有 `Veo 3.1 - Quality` 会读取此参数；`Omni Flash`、`Veo 3.1 - Lite`、`Veo 3.1 - Fast` 会忽略。
+放在 `generationConfig.imageSize`，也兼容 `generationConfig.imageConfig.imageSize`。公开模型名中只有 `Veo 3.1 - Quality` 会读取此参数；`Omni 1.1 Flash`、`Veo 3.1 - Lite`、`Veo 3.1 - Fast` 会忽略。
 
 | 输出 | 参数值 | 说明 |
 | --- | --- | --- |
@@ -73,7 +73,7 @@
 
 | 模型名 | 0 张图 | 1 张图 | 2 张图 | 3 张及以上 | 说明 |
 | --- | --- | --- | --- | --- | --- |
-| `Omni Flash` | `abra_t2v_*s` | `abra_r2v_*s` | `abra_r2v_*s` | `abra_r2v_*s` | Flow 里的 Omni Flash 档；支持 4/6/8/10 秒 |
+| `Omni 1.1 Flash` | `abra_t2v_*s` | `abra_i2v_*s` | `abra_i2v_*s` | `abra_r2v_*s` | 1 张首帧，2 张首尾帧，3 张以上多参考图；支持 4/6/8/10 秒 |
 | `Veo 3.1 - Lite` | `t2v_lite` | `i2v_lite` | `interpolation_lite` | `interpolation_lite` | Flow 里的 Lite 档；忽略时长参数 |
 | `Veo 3.1 - Fast` | `t2v_fast` | `i2v_fast` | `i2v_fast` | `r2v_fast` | Flow 里的 Fast 档；忽略时长参数 |
 | `Veo 3.1 - Quality` | `t2v_quality` | `i2v_quality` | `i2v_quality` | `i2v_quality` | Flow 里的 Quality 档；忽略时长参数 |
@@ -84,6 +84,8 @@
 - 1 张图：走图生视频 `I2V`
 - 2 张图：优先走首尾帧或双帧 `I2V`
 - 3 张及以上：如果模型支持，走多参考图 `R2V`
+
+对于 `Omni 1.1 Flash`，1 张图使用首帧接口，2 张图使用首尾帧接口，3 张及以上使用多参考图接口。视频输出分辨率当前使用 Flow 默认档；`360p/720p` 选择不改变公开 API 的模型路由。
 
 这意味着画布/工作流应用不需要显式切换到 `veo-i2v-*` 或 `veo-r2v-*` 这类内部模型，只要把图片按 OpenAI/Gemini 标准方式传给上述公开模型名即可。
 
@@ -152,14 +154,14 @@ curl -X POST "http://localhost:8000/v1/chat/completions" \
   }'
 ```
 
-### Omni Flash 横屏 6 秒文生视频
+### Omni 1.1 Flash 横屏 6 秒文生视频
 
 ```bash
 curl -X POST "http://localhost:8000/v1/chat/completions" \
   -H "Authorization: Bearer $FLOW2API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
-    "model": "Omni Flash",
+    "model": "Omni 1.1 Flash",
     "messages": [
       {"role": "user", "content": "一辆未来感跑车穿过夜晚城市，速度感强"}
     ],
@@ -270,8 +272,10 @@ curl -X POST "http://localhost:8000/models/Nano%20Banana2:generateContent" \
 | --- | --- | --- |
 | `Nano Banana Pro` | `aspectRatio=3:4`、`imageSize=4k` | `gemini-3.0-pro-image-three-four-4k` |
 | `Nano Banana 2` | `aspectRatio=1:1`、`imageSize=2k` | `gemini-3.1-flash-image-square-2k` |
-| `Omni Flash` | `aspectRatio=16:9`、`durationSeconds=6`、0 张图 | `veo_3_1_t2v_fast_6s` |
-| `Omni Flash` | `aspectRatio=16:9`、`durationSeconds=8`、0 张图 | `veo_3_1_t2v_fast_landscape` |
+| `Omni 1.1 Flash` | `aspectRatio=16:9`、`durationSeconds=6`、0 张图 | `omni_6s` (`abra_t2v_6s`) |
+| `Omni 1.1 Flash` | `aspectRatio=16:9`、`durationSeconds=6`、1 张图 | `omni_6s` (`abra_i2v_6s`, 首帧) |
+| `Omni 1.1 Flash` | `aspectRatio=16:9`、`durationSeconds=6`、2 张图 | `omni_6s` (`abra_i2v_6s`, 首尾帧) |
+| `Omni 1.1 Flash` | `aspectRatio=16:9`、`durationSeconds=6`、3 张图 | `omni_6s` (`abra_r2v_6s`) |
 | `Veo 3.1 - Quality` | `aspectRatio=9:16`、`imageSize=1080p`、0 张图 | `veo_3_1_t2v_portrait_1080p` |
 | `Veo 3.1 - Fast` | `aspectRatio=16:9`、1 张图 | `veo_3_1_i2v_s_fast_fl` |
 | `Veo 3.1 - Fast` | `aspectRatio=16:9`、3 张图 | `veo_3_1_r2v_fast` |

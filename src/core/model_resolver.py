@@ -449,6 +449,7 @@ FRIENDLY_VIDEO_ALIASES = {
     "veo-fast": "veo_3_1_t2v_fast",
     "veo-lite": "veo_3_1_t2v_lite",
     "Omni Flash": "omni",
+    "Omni 1.1 Flash": "omni",
     "Veo 3.1 - Quality": "veo_3_1_t2v",
     "Veo 3.1 - Fast": "veo_3_1_t2v_fast",
     "Veo 3.1 - Lite": "veo_3_1_t2v_lite",
@@ -473,6 +474,7 @@ VIDEO_ALIAS_DISPLAY_NAMES = {
     "veo-fast": "Veo 3.1 Fast T2V",
     "veo-lite": "Veo 3.1 Lite T2V",
     "Omni Flash": "Omni Flash",
+    "Omni 1.1 Flash": "Omni 1.1 Flash",
     "Veo 3.1 - Quality": "Veo 3.1 - Quality",
     "Veo 3.1 - Fast": "Veo 3.1 - Fast",
     "Veo 3.1 - Lite": "Veo 3.1 - Lite",
@@ -492,6 +494,7 @@ VIDEO_ALIAS_DISPLAY_NAMES = {
 
 VIDEO_ALIASES_ALLOW_DURATION = {
     "Omni Flash",
+    "Omni 1.1 Flash",
     "omni-flash",
     "veo",
     "veo-fast",
@@ -799,7 +802,7 @@ def _resolve_friendly_video_alias(model: str, request=None, images: Any = None) 
     if isinstance(images, (list, tuple)):
         image_count = max(image_count, len(images))
 
-    if model == "Omni Flash":
+    if model in ("Omni Flash", "Omni 1.1 Flash"):
         base = "omni"
     elif model == "Veo 3.1 - Fast":
         base = "veo_3_1_t2v_fast"
@@ -996,11 +999,11 @@ def get_friendly_model_aliases() -> Dict[str, str]:
             desc_parts.append(f"sizes: {', '.join(sizes)}")
         aliases[alias] = f"Image generation - {'; '.join(desc_parts)}"
 
-    for alias in ("Omni Flash", "Veo 3.1 - Lite", "Veo 3.1 - Fast", "Veo 3.1 - Quality"):
+    for alias in ("Omni 1.1 Flash", "Veo 3.1 - Lite", "Veo 3.1 - Fast", "Veo 3.1 - Quality"):
         base = FRIENDLY_VIDEO_ALIASES[alias]
         display_name = VIDEO_ALIAS_DISPLAY_NAMES.get(alias, alias)
-        if alias == "Omni Flash":
-            parameter_hint = "use generationConfig for aspectRatio and durationSeconds (4/6/8/10); imageSize is ignored"
+        if alias == "Omni 1.1 Flash":
+            parameter_hint = "use generationConfig for aspectRatio and durationSeconds (4/6/8/10); 1/2/3+ images select first/last/reference modes"
         elif alias == "Veo 3.1 - Quality":
             parameter_hint = "use generationConfig for aspectRatio and imageSize (1080p/4k); durationSeconds is ignored"
         else:

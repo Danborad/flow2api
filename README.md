@@ -18,7 +18,7 @@
 - 文生图、图生图、连续图片编辑
 - 文生视频、图生视频、首尾帧视频、多参考图视频
 - Nano Banana Pro / Nano Banana 2 的 2K、4K 输出
-- Omni Flash 的 4、6、8、10 秒路由
+- Omni 1.1 Flash 的 4、6、8、10 秒路由，支持首帧和首尾帧
 - 多账号 Token 管理、并发控制和负载均衡
 - 浏览器账号自动导入与定时刷新
 - Chrome 扩展 route key 绑定，多浏览器 Profile 对应多账号
@@ -165,7 +165,7 @@ x-goog-api-key: <api_key>
 | `Nano Banana Pro` | 图片 | 5 种比例，默认/2K/4K |
 | `Nano Banana 2` | 图片 | 5 种比例，默认/2K/4K |
 | `Imagen 4` | 图片 | 16:9、9:16 |
-| `Omni Flash` | 视频 | 4/6/8/10 秒，支持参考图 |
+| `Omni 1.1 Flash` | 视频 | 4/6/8/10 秒；1 张首帧、2 张首尾帧、3 张以上参考图 |
 | `Veo 3.1 - Lite` | 视频 | 按图片数量自动选择 T2V/I2V/首尾帧 |
 | `Veo 3.1 - Fast` | 视频 | 按图片数量自动选择 T2V/I2V/R2V |
 | `Veo 3.1 - Quality` | 视频 | T2V/I2V，支持 1080p/4K 放大 |
@@ -181,10 +181,10 @@ x-goog-api-key: <api_key>
 | 模型 | 时长 | 点数 |
 | --- | --- | --- |
 | `Veo 3.1 - Lite` | 默认 | 10 |
-| `Omni Flash` | 4 秒 | 7 |
-| `Omni Flash` | 6 秒 | 10 |
-| `Omni Flash` | 8 秒 | 12 |
-| `Omni Flash` | 10 秒 | 15 |
+| `Omni 1.1 Flash` | 4 秒 | 7 |
+| `Omni 1.1 Flash` | 6 秒 | 10 |
+| `Omni 1.1 Flash` | 8 秒 | 12 |
+| `Omni 1.1 Flash` | 10 秒 | 15 |
 
 Token 列表里的余额来自上游账号 Credits；“今日视频点数/账号余额”是统计值，不会在本地重复扣款。
 

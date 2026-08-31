@@ -96,6 +96,47 @@ class VeoLiteModelResolverTests(unittest.TestCase):
 
         self.assertEqual(resolved, "veo_3_1_t2v_fast_landscape")
 
+    def test_omni_11_alias_uses_duration_specific_config(self):
+        for duration, expected in (
+            (4, "omni_4s"),
+            (6, "omni_6s"),
+            (8, "omni_8s"),
+            (10, "omni_10s"),
+        ):
+            request = types.SimpleNamespace(
+                generationConfig=types.SimpleNamespace(
+                    aspectRatio="16:9",
+                    durationSeconds=duration,
+                ),
+                messages=[],
+            )
+
+            resolved = resolve_model_name(
+                "Omni 1.1 Flash",
+                request=request,
+                model_config=MODEL_CONFIG,
+            )
+
+            self.assertEqual(resolved, expected)
+            self.assertEqual(MODEL_CONFIG[resolved]["model_key"], f"abra_t2v_{duration}s")
+            self.assertEqual(MODEL_CONFIG[resolved]["first_frame_model_key"], f"abra_i2v_{duration}s")
+            self.assertEqual(MODEL_CONFIG[resolved]["start_end_model_key"], f"abra_i2v_{duration}s")
+            self.assertEqual(MODEL_CONFIG[resolved]["reference_model_key"], f"abra_r2v_{duration}s")
+
+    def test_omni_11_alias_accepts_legacy_name(self):
+        request = types.SimpleNamespace(
+            generationConfig=types.SimpleNamespace(
+                aspectRatio="16:9",
+                durationSeconds=6,
+            ),
+            messages=[],
+        )
+
+        self.assertEqual(
+            resolve_model_name("Omni Flash", request=request, model_config=MODEL_CONFIG),
+            resolve_model_name("Omni 1.1 Flash", request=request, model_config=MODEL_CONFIG),
+        )
+
     def test_resolve_t2v_lite_alias_to_portrait_variant(self):
         request = types.SimpleNamespace(
             generationConfig=types.SimpleNamespace(aspectRatio="portrait")

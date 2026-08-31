@@ -719,8 +719,11 @@ for _duration in (4, 6, 8, 10):
     for _base_key, _new_key in (("omni", f"omni_{_duration}s"), ("omni_portrait", f"omni_{_duration}s_portrait")):
         _cfg = dict(MODEL_CONFIG[_base_key])
         _cfg["model_key"] = f"abra_t2v_{_duration}s"
+        _cfg["first_frame_model_key"] = f"abra_i2v_{_duration}s"
+        _cfg["start_end_model_key"] = f"abra_i2v_{_duration}s"
         _cfg["reference_model_key"] = f"abra_r2v_{_duration}s"
         _cfg["reference_duration"] = _duration
+        _cfg["reference_model_display_name"] = "Omni 1.1 Flash"
         MODEL_CONFIG[_new_key] = _cfg
 
 
@@ -2082,20 +2085,32 @@ class GenerationHandler:
                     })
                 debug_logger.log_info(f"[R2V] 上传了 {len(reference_images)} 张参考图片")
 
-            # Omni R2V: 参考图上传到 project，随后直接走 batchAsyncGenerateVideoReferenceImages
+            # Omni 1.1: 1 张为首帧，2 张为首尾帧，3 张以上才走参考图模式。
             elif video_type == "omni" and images:
                 if stream:
-                    yield self._create_stream_chunk(f"上传 {image_count} 张 Omni 参考图片...\n")
+                    yield self._create_stream_chunk(f"上传 {image_count} 张 Omni 1.1 参考图片...\n")
 
-                for img in images:
+                uploaded_ids = []
+                for img in images[:2] if image_count <= 2 else images:
                     media_id = await self.flow_client.upload_image(
                         token.at, img, model_config["aspect_ratio"], project_id=project_id
                     )
-                    reference_images.append({
-                        "imageUsageType": "IMAGE_USAGE_TYPE_ASSET",
-                        "mediaId": media_id
-                    })
-                debug_logger.log_info(f"[VIDEO OMNI-R2V] 上传了 {len(reference_images)} 张参考图片")
+                    uploaded_ids.append(media_id)
+                if image_count <= 2:
+                    start_media_id = uploaded_ids[0]
+                    end_media_id = uploaded_ids[1] if image_count == 2 else None
+                    debug_logger.log_info(
+                        f"[VIDEO OMNI-I2V] 上传首帧{'+尾帧' if end_media_id else ''}: {uploaded_ids}"
+                    )
+                else:
+                    reference_images = [
+                        {
+                            "imageUsageType": "IMAGE_USAGE_TYPE_ASSET",
+                            "mediaId": media_id,
+                        }
+                        for media_id in uploaded_ids
+                    ]
+                    debug_logger.log_info(f"[VIDEO OMNI-R2V] 上传了 {len(reference_images)} 张参考图片")
 
             # ========== 调用生成API ==========
             if stream:
@@ -2154,10 +2169,45 @@ class GenerationHandler:
                     token_video_concurrency=token.video_concurrency,
                 )
 
-            # Omni: 有图走 Reference Images 直连链路，无图走纯文本链路
+            # Omni 1.1: 单图首帧，双图首尾帧，匹配 abra_i2v_*s。
+            elif video_type == "omni" and start_media_id:
+                if stream:
+                    yield self._create_stream_chunk(
+                        "提交 Omni 1.1 首尾帧视频任务...\n" if end_media_id
+                        else "提交 Omni 1.1 首帧视频任务...\n"
+                    )
+                if end_media_id:
+                    result = await self.flow_client.generate_video_start_end(
+                        at=token.at,
+                        project_id=project_id,
+                        prompt=prompt,
+                        model_key=model_config.get("start_end_model_key", "abra_i2v_8s"),
+                        aspect_ratio=model_config["aspect_ratio"],
+                        start_media_id=start_media_id,
+                        end_media_id=end_media_id,
+                        use_v2_model_config=True,
+                        user_paygate_tier=normalized_tier,
+                        token_id=token.id,
+                        token_video_concurrency=token.video_concurrency,
+                    )
+                else:
+                    result = await self.flow_client.generate_video_start_image(
+                        at=token.at,
+                        project_id=project_id,
+                        prompt=prompt,
+                        model_key=model_config.get("first_frame_model_key", "abra_i2v_8s"),
+                        aspect_ratio=model_config["aspect_ratio"],
+                        start_media_id=start_media_id,
+                        use_v2_model_config=True,
+                        user_paygate_tier=normalized_tier,
+                        token_id=token.id,
+                        token_video_concurrency=token.video_concurrency,
+                    )
+
+            # Omni 1.1: 3 张以上才走 Reference Images 链路。
             elif video_type == "omni" and reference_images:
                 if stream:
-                    yield self._create_stream_chunk("提交 Omni 参考图视频任务...\n")
+                    yield self._create_stream_chunk("提交 Omni 1.1 多参考图视频任务...\n")
                 result = await self.flow_client.generate_video_reference_images(
                     at=token.at,
                     project_id=project_id,
