@@ -1,5 +1,10 @@
 # Flow2API Captcha Worker 更新记录
 
+## 1.1.6
+
+- 支持 Google Flow 重定向后的 `flow.google.com` 页面。
+- 修复页面白名单导致的 `page_check: unexpected page`。
+
 ## 1.1.5
 
 - reCAPTCHA 页面执行始终返回结构化结果，显示具体失败阶段。

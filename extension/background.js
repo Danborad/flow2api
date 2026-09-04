@@ -453,7 +453,8 @@ async function handleGetToken(data) {
                 "https://labs.google/fx/vi/tools/flow*",
                 "https://labs.google/fx/*/tools/flow*",
                 "https://labs.google/fx/projects/*",
-                "https://labs.google/fx/vi/projects/*"
+                "https://labs.google/fx/vi/projects/*",
+                "https://flow.google.com/*"
             ]
         });
         const targetTab = existingTabs.find(tab => tab.id) || await chrome.tabs.create({
@@ -489,7 +490,7 @@ async function handleGetToken(data) {
                         href: location.href,
                     });
                     try {
-                        if (!location.hostname.endsWith("labs.google")) {
+                        if (!location.hostname.endsWith("labs.google") && location.hostname !== "flow.google.com") {
                             return fail("page_check", `unexpected page: ${location.href}`);
                         }
 
