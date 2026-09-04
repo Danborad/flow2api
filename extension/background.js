@@ -465,6 +465,13 @@ async function handleGetToken(data) {
         await waitForTabReady(targetTab.id);
         await sleep(newTabId ? 2000 : 500);
 
+        logExtensionEvent("captcha_tab_selected", {
+            action: data.action || "IMAGE_GENERATION",
+            tab_id: targetTab.id,
+            reused: !newTabId,
+            url: targetTab.url || "",
+        });
+
         let successResponse = null;
         let lastErrorMsg = "No response from tab.";
         const scriptTimeoutMs = data.action === "VIDEO_GENERATION" ? 120000 : 60000;
@@ -474,46 +481,72 @@ async function handleGetToken(data) {
                 target: { tabId: targetTab.id },
                 world: "MAIN",
                 func: async (action, timeoutMs) => {
-                    return new Promise((resolve, reject) => {
-                        let settled = false;
-                        const finish = (fn, value) => {
-                            if (settled) return;
-                            settled = true;
-                            fn(value);
-                        };
-                        try {
-                            function run() {
-                                grecaptcha.enterprise.ready(function() {
-                                    grecaptcha.enterprise.execute("6LdsFiUsAAAAAIjVDZcuLhaHiDn5nnHVXVRQGeMV", { action: action })
-                                        .then(token => finish(resolve, token))
-                                        .catch(err => finish(reject, err.message || "reCAPTCHA evaluation failed internally"));
-                                });
-                            }
-
-                            if (typeof grecaptcha !== "undefined" && grecaptcha.enterprise) {
-                                run();
-                            } else {
-                                const s = document.createElement("script");
-                                s.src = "https://www.google.com/recaptcha/enterprise.js?render=6LdsFiUsAAAAAIjVDZcuLhaHiDn5nnHVXVRQGeMV";
-                                s.onload = run;
-                                s.onerror = () => finish(reject, "Failed to load enterprise.js via network");
-                                document.head.appendChild(s);
-                            }
-
-                            setTimeout(() => finish(reject, "Timeout generating reCAPTCHA locally"), timeoutMs);
-                        } catch (e) {
-                            finish(reject, e.message);
-                        }
+                    const siteKey = "6LdsFiUsAAAAAIjVDZcuLhaHiDn5nnHVXVRQGeMV";
+                    const fail = (stage, error) => ({
+                        ok: false,
+                        stage,
+                        error: String(error || "unknown error"),
+                        href: location.href,
                     });
+                    try {
+                        if (!location.hostname.endsWith("labs.google")) {
+                            return fail("page_check", `unexpected page: ${location.href}`);
+                        }
+
+                        if (!(window.grecaptcha && window.grecaptcha.enterprise)) {
+                            await new Promise((resolve, reject) => {
+                                const script = document.createElement("script");
+                                script.src = `https://www.google.com/recaptcha/enterprise.js?render=${siteKey}`;
+                                script.onload = resolve;
+                                script.onerror = () => reject(new Error("enterprise.js load failed"));
+                                (document.head || document.documentElement).appendChild(script);
+                            });
+                        }
+
+                        if (!(window.grecaptcha && window.grecaptcha.enterprise)) {
+                            return fail("captcha_load", "grecaptcha.enterprise is unavailable after script load");
+                        }
+
+                        await Promise.race([
+                            new Promise(resolve => window.grecaptcha.enterprise.ready(resolve)),
+                            new Promise((_, reject) => setTimeout(() => reject(new Error("enterprise.ready timeout")), timeoutMs)),
+                        ]);
+
+                        const token = await Promise.race([
+                            window.grecaptcha.enterprise.execute(siteKey, { action }),
+                            new Promise((_, reject) => setTimeout(() => reject(new Error("enterprise.execute timeout")), timeoutMs)),
+                        ]);
+                        if (!token) return fail("captcha_execute", "empty reCAPTCHA token");
+                        return { ok: true, token, href: location.href };
+                    } catch (error) {
+                        return fail("captcha_execute", error && error.message ? error.message : error);
+                    }
                 },
                 args: [data.action || "IMAGE_GENERATION", scriptTimeoutMs]
             });
 
-            if (results && results[0] && results[0].result) {
-                successResponse = { status: "success", token: results[0].result };
+            const scriptResult = results && results[0] ? results[0].result : null;
+            if (scriptResult && scriptResult.ok && scriptResult.token) {
+                successResponse = { status: "success", token: scriptResult.token };
+            } else if (scriptResult) {
+                lastErrorMsg = `${scriptResult.stage || "script"}: ${scriptResult.error || "empty result"}`;
+                logExtensionEvent("captcha_page_failed", {
+                    action: data.action || "IMAGE_GENERATION",
+                    request_id: data.req_id ? String(data.req_id).slice(-12) : "",
+                    stage: scriptResult.stage || "unknown",
+                    error: scriptResult.error || "empty result",
+                    href: scriptResult.href || "",
+                });
+            } else {
+                lastErrorMsg = `empty executeScript result (count=${results ? results.length : 0})`;
             }
         } catch (e) {
             lastErrorMsg = e.message || "Script execution failed";
+            logExtensionEvent("captcha_script_exception", {
+                action: data.action || "IMAGE_GENERATION",
+                request_id: data.req_id ? String(data.req_id).slice(-12) : "",
+                error: lastErrorMsg,
+            });
         }
 
         if (successResponse) {
