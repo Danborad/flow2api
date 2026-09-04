@@ -1484,6 +1484,18 @@ class GenerationHandler:
                         pending_token_state["active"] = False
 
                     fallback_attempt += 1
+                    await self._update_request_log_progress(
+                        request_log_state,
+                        token_id=token.id,
+                        status_text="image_fallback_switching",
+                        progress=4,
+                        response_extra={
+                            "fallback_attempt": fallback_attempt,
+                            "fallback_max_attempts": image_fallback_attempts,
+                            "previous_token_id": token.id,
+                            "error": error_msg,
+                        },
+                    )
                     if stream:
                         yield self._create_stream_chunk(
                             f"⚠️ 当前账号生成失败，正在切换其他账号重试 ({fallback_attempt}/{image_fallback_attempts})...\n"
@@ -1497,6 +1509,13 @@ class GenerationHandler:
                         exclude_token_ids=attempted_token_ids,
                     )
                     if not next_token:
+                        await self._update_request_log_progress(
+                            request_log_state,
+                            token_id=token.id,
+                            status_text="image_fallback_unavailable",
+                            progress=4,
+                            response_extra={"fallback_attempt": fallback_attempt, "error": "没有其他可用账号"},
+                        )
                         generation_result["error_message"] = "图片兜底重试失败：没有其他可用账号"
                         break
 
@@ -1504,11 +1523,32 @@ class GenerationHandler:
                     token = await self.token_manager.ensure_valid_token(token)
                     if not token:
                         await self.load_balancer.release_pending(next_token.id, for_image_generation=True)
+                        await self._update_request_log_progress(
+                            request_log_state,
+                            token_id=next_token.id,
+                            status_text="image_fallback_token_invalid",
+                            progress=8,
+                            response_extra={"fallback_attempt": fallback_attempt, "error": "备用账号 Token 无效"},
+                        )
                         generation_result["error_message"] = "图片兜底重试失败：备用账号 Token 无效"
                         break
                     attempted_token_ids.add(token.id)
                     pending_token_state["active"] = True
-                    project_id = await self.token_manager.ensure_project_exists(token.id)
+                    try:
+                        project_id = await self.token_manager.ensure_project_exists(token.id)
+                    except Exception as project_error:
+                        if pending_token_state.get("active") and self.load_balancer:
+                            await self.load_balancer.release_pending(token.id, for_image_generation=True)
+                            pending_token_state["active"] = False
+                        generation_result["error_message"] = f"图片兜底账号项目初始化失败: {project_error}"
+                        await self._update_request_log_progress(
+                            request_log_state,
+                            token_id=token.id,
+                            status_text="image_fallback_project_failed",
+                            progress=22,
+                            response_extra={"fallback_attempt": fallback_attempt, "error": str(project_error)},
+                        )
+                        break
                     await self._update_request_log_progress(
                         request_log_state,
                         token_id=token.id,
