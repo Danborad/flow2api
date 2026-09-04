@@ -18,7 +18,7 @@
 
 扩展目录应包含 `manifest.json`、`background.js`、`content.js`、`options.html`。
 
-当前扩展版本会显示在插件设置页标题中，例如 `v1.1.9`。Chrome 扩展管理页的“详情”中也会显示同一版本；后台 WebSocket 日志会记录连接插件的版本号。设置页还会显示 WebSocket 当前连接状态、最近错误和插件事件日志。
+当前扩展版本会显示在插件设置页标题中，例如 `v1.1.11`。Chrome 扩展管理页的“详情”中也会显示同一版本；后台 WebSocket 日志会记录连接插件的版本号。设置页还会显示 WebSocket 当前连接状态、最近错误和插件事件日志。服务地址权限在点击保存时由 Chrome 临时申请。
 
 ## 插件设置
 
@@ -42,10 +42,10 @@ ws://192.168.1.20:8000/captcha_ws
 也可以填写已配置 DNS 的远程域名，例如：
 
 ```text
-ws://ai2.960916.xyz:8000/captcha_ws
+ws://flow2api.example.com:8000/captcha_ws
 ```
 
-域名解析到 IPv4 或 IPv6 都可以，浏览器会按 DNS 解析结果连接。远程服务必须监听对应地址，并允许外部访问 `8000` 端口；如果使用 HTTPS 反向代理，应改用 `wss://ai2.960916.xyz/captcha_ws`。
+域名解析到 IPv4 或 IPv6 都可以，浏览器会按 DNS 解析结果连接。保存远程地址时，Chrome 会申请该地址的访问权限。远程服务必须监听对应地址，并允许外部访问 `8000` 端口；如果使用 HTTPS 反向代理，应改用 `wss://flow2api.example.com/captcha_ws`。
 
 服务端防火墙需要允许浏览器设备访问 `8000` 端口。
 

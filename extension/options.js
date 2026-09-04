@@ -113,6 +113,20 @@ function isValidWsUrl(value) {
   }
 }
 
+function getServerOriginPattern(serverUrl) {
+  const url = new URL(serverUrl);
+  const protocol = url.protocol === "wss:" ? "https:" : "http:";
+  return `${protocol}//${url.host}/*`;
+}
+
+async function requestServerHostPermission(serverUrl) {
+  if (!chrome.permissions || !chrome.permissions.request) return true;
+  const origin = getServerOriginPattern(serverUrl);
+  const granted = await chrome.permissions.contains({ origins: [origin] });
+  if (granted) return true;
+  return chrome.permissions.request({ origins: [origin] });
+}
+
 function loadSettings() {
   chrome.storage.local.get(DEFAULT_SETTINGS, (stored) => {
     ensureInstanceSettings(stored);
@@ -128,8 +142,8 @@ function loadSettings() {
   });
 }
 
-function saveSettings() {
-  chrome.storage.local.get(DEFAULT_SETTINGS, (stored) => {
+async function saveSettings() {
+  const stored = await new Promise((resolve) => chrome.storage.local.get(DEFAULT_SETTINGS, resolve));
     const instanceSettings = ensureInstanceSettings(stored);
     const settings = normalizeSettings({
       ...instanceSettings,
@@ -149,6 +163,17 @@ function saveSettings() {
       return;
     }
 
+    try {
+      const permissionGranted = await requestServerHostPermission(settings.serverUrl);
+      if (!permissionGranted) {
+        setStatus("未获得服务地址访问权限，无法连接后台。", true);
+        return;
+      }
+    } catch (error) {
+      setStatus(`申请服务地址权限失败：${error.message}`, true);
+      return;
+    }
+
     chrome.storage.local.set(settings, () => {
       if (chrome.runtime.lastError) {
         setStatus(`保存失败：${chrome.runtime.lastError.message}`, true);
@@ -156,7 +181,6 @@ function saveSettings() {
       }
       setStatus("已保存，后台连接会自动重连。");
     });
-  });
 }
 
 async function importCurrentAccount() {
