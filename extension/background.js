@@ -6,6 +6,15 @@ const EXTENSION_VERSION = chrome.runtime.getManifest().version;
 
 console.log(`[Flow2API] Captcha Worker v${EXTENSION_VERSION} loaded`);
 
+function setConnectionStatus(status, error = "") {
+    chrome.storage.local.set({
+        connectionStatus: status,
+        connectionError: error || "",
+        connectionLastChangedAt: new Date().toISOString(),
+        connectionVersion: EXTENSION_VERSION,
+    });
+}
+
 const ACCOUNT_IMPORT_ALARM = "flow2api-auto-import-account";
 const LABS_SESSION_COOKIE = "__Secure-next-auth.session-token";
 const GOOGLE_COOKIE_NAMES = [
@@ -319,6 +328,7 @@ async function connectWS() {
     if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) return;
 
     const settings = await getSettings();
+    setConnectionStatus("connecting");
     const url = new URL(settings.serverUrl || DEFAULT_SETTINGS.serverUrl);
     if (settings.apiKey) {
         url.searchParams.set("key", settings.apiKey);
@@ -335,6 +345,7 @@ async function connectWS() {
     ws = socket;
 
     socket.onopen = () => {
+        setConnectionStatus("connected");
         console.log("[Flow2API] Background connected to WebSocket", url.toString());
         socket.send(JSON.stringify({
             type: "register",
@@ -380,6 +391,11 @@ async function connectWS() {
     };
 
     socket.onclose = () => {
+        const status = socket.code === 1008 ? "auth_failed" : "disconnected";
+        setConnectionStatus(
+            status,
+            socket.code === 1008 ? "服务器拒绝了连接，请检查 API Key。" : `连接已关闭（${socket.code || "未知"}）`
+        );
         console.log("[Flow2API] WebSocket Closed. Reconnecting in 2s...");
         if (ws === socket) {
             ws = null;
@@ -390,6 +406,7 @@ async function connectWS() {
     };
 
     socket.onerror = (e) => {
+        setConnectionStatus("error", "无法连接到 Flow2API 服务，请检查地址、端口和防火墙。");
         console.log("[Flow2API] WebSocket Error", e);
     };
 }
@@ -519,6 +536,13 @@ chrome.alarms.onAlarm.addListener((alarm) => {
 });
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+    if (message && message.type === "flow2api_reconnect") {
+        closeSocket();
+        connectWS()
+            .then(() => sendResponse({ success: true }))
+            .catch(error => sendResponse({ success: false, error: error.message }));
+        return true;
+    }
     if (!message || message.type !== "flow2api_import_current_account") return false;
     importCurrentAccount("manual")
         .then(payload => sendResponse({ success: true, payload }))

@@ -76,6 +76,26 @@
       font-size: 13px;
       color: #065f46;
     }
+    .connection-status {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-top: 16px;
+      padding: 10px 12px;
+      border-radius: 10px;
+      background: #f3f4f6;
+      font-size: 13px;
+    }
+    .connection-dot {
+      width: 9px;
+      height: 9px;
+      border-radius: 50%;
+      background: #9ca3af;
+      flex: 0 0 auto;
+    }
+    .connection-dot.connected { background: #16a34a; }
+    .connection-dot.connecting { background: #f59e0b; }
+    .connection-dot.error, .connection-dot.auth_failed { background: #dc2626; }
     code {
       background: #f3f4f6;
       border-radius: 6px;
@@ -86,7 +106,7 @@
 <body>
   <div class="wrap">
     <div class="panel">
-      <h1>Flow2API Captcha Worker <span class="version" id="extensionVersion">v1.1.2</span></h1>
+      <h1>Flow2API Captcha Worker <span class="version" id="extensionVersion">v1.1.3</span></h1>
       <p>只需要填写服务地址和后台 API Key。每个 Chrome Profile 会自动生成独立的内部实例标识，多个插件不需要手动分配不同 Key。</p>
 
       <label for="serverUrl">服务 WebSocket 地址</label>
@@ -94,6 +114,12 @@
 
       <label for="apiKey">Flow2API API Key</label>
       <input id="apiKey" type="password" placeholder="管理后台里的 API Key">
+
+      <div class="connection-status">
+        <span class="connection-dot" id="connectionDot"></span>
+        <span id="connectionStatus">连接状态：检查中</span>
+        <button id="reconnectBtn" type="button" style="margin:0 0 0 auto;padding:6px 10px;font-size:12px;">立即重连</button>
+      </div>
 
       <label for="refreshIntervalMinutes">自动刷新间隔（分钟）</label>
       <input id="refreshIntervalMinutes" type="number" min="5" max="1440" step="1" placeholder="120">

@@ -62,6 +62,27 @@ function renderAutoImportStatus(stored) {
   el.textContent = `自动导入状态：${status === "success" ? "成功" : "失败"}，${time}${message ? `，${message}` : ""}`;
 }
 
+function renderConnectionStatus(stored) {
+  const label = $("connectionStatus");
+  const dot = $("connectionDot");
+  if (!label || !dot) return;
+  const status = stored.connectionStatus || "unknown";
+  const labels = {
+    connected: "已连接",
+    connecting: "连接中",
+    disconnected: "未连接，等待重连",
+    error: "连接错误",
+    auth_failed: "鉴权失败",
+    unknown: "检查中",
+  };
+  dot.className = `connection-dot ${status}`;
+  const error = stored.connectionError ? `：${stored.connectionError}` : "";
+  const time = stored.connectionLastChangedAt
+    ? `（${new Date(stored.connectionLastChangedAt).toLocaleTimeString("zh-CN", { hour12: false })}）`
+    : "";
+  label.textContent = `连接状态：${labels[status] || status}${error}${time}`;
+}
+
 function setStatus(message, isError = false) {
   const status = $("status");
   status.textContent = message;
@@ -87,6 +108,7 @@ function loadSettings() {
     $("autoImportEnabled").checked = settings.autoImportEnabled;
     $("autoImportIntervalMinutes").value = settings.autoImportIntervalMinutes;
     renderAutoImportStatus(stored);
+    renderConnectionStatus(stored);
   });
 }
 
@@ -176,4 +198,19 @@ document.addEventListener("DOMContentLoaded", () => {
   loadSettings();
   $("saveBtn").addEventListener("click", saveSettings);
   $("importBtn").addEventListener("click", importCurrentAccount);
+  $("reconnectBtn").addEventListener("click", async () => {
+    renderConnectionStatus({ connectionStatus: "connecting" });
+    const response = await chrome.runtime.sendMessage({ type: "flow2api_reconnect" });
+    if (!response || response.success !== true) {
+      setStatus(`重连失败：${(response && response.error) || "未知错误"}`, true);
+    }
+  });
+  chrome.storage.onChanged.addListener((changes, areaName) => {
+    if (areaName === "local" && (changes.connectionStatus || changes.connectionError || changes.connectionLastChangedAt)) {
+      chrome.storage.local.get(
+        ["connectionStatus", "connectionError", "connectionLastChangedAt"],
+        renderConnectionStatus
+      );
+    }
+  });
 });
