@@ -96,6 +96,33 @@
     .connection-dot.connected { background: #16a34a; }
     .connection-dot.connecting { background: #f59e0b; }
     .connection-dot.error, .connection-dot.auth_failed { background: #dc2626; }
+    .log-toolbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-top: 18px;
+      font-size: 13px;
+      font-weight: 600;
+    }
+    .log-toolbar button {
+      margin: 0;
+      padding: 5px 9px;
+      font-size: 12px;
+      background: #e5e7eb;
+      color: #374151;
+    }
+    .event-log {
+      max-height: 220px;
+      overflow-y: auto;
+      margin-top: 8px;
+      padding: 8px 10px;
+      border: 1px solid #e5e7eb;
+      border-radius: 10px;
+      background: #f9fafb;
+      font: 12px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
     code {
       background: #f3f4f6;
       border-radius: 6px;
@@ -106,7 +133,7 @@
 <body>
   <div class="wrap">
     <div class="panel">
-      <h1>Flow2API Captcha Worker <span class="version" id="extensionVersion">v1.1.3</span></h1>
+      <h1>Flow2API Captcha Worker <span class="version" id="extensionVersion">v1.1.4</span></h1>
       <p>只需要填写服务地址和后台 API Key。每个 Chrome Profile 会自动生成独立的内部实例标识，多个插件不需要手动分配不同 Key。</p>
 
       <label for="serverUrl">服务 WebSocket 地址</label>
@@ -133,6 +160,12 @@
       <input id="autoImportIntervalMinutes" type="number" min="5" max="1440" step="1" placeholder="30">
 
       <div class="hint" id="lastAutoImportStatus">自动导入状态：尚未运行</div>
+
+      <div class="log-toolbar">
+        <span>最近插件日志</span>
+        <button id="clearLogsBtn" type="button">清空日志</button>
+      </div>
+      <div class="event-log" id="extensionLogs">暂无日志</div>
 
       <button id="saveBtn" type="button">保存</button>
       <button id="importBtn" type="button">导入当前 Google 账号</button>

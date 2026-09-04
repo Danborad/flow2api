@@ -6,6 +6,20 @@ const EXTENSION_VERSION = chrome.runtime.getManifest().version;
 
 console.log(`[Flow2API] Captcha Worker v${EXTENSION_VERSION} loaded`);
 
+function logExtensionEvent(event, details = {}) {
+    const safeDetails = {};
+    for (const [key, value] of Object.entries(details || {})) {
+        if (["token", "session_token", "google_cookies", "apiKey", "cookie"].includes(key)) continue;
+        safeDetails[key] = typeof value === "string" ? value.slice(0, 300) : value;
+    }
+    const entry = { time: new Date().toISOString(), event, details: safeDetails };
+    console.log(`[Flow2API] ${event}`, safeDetails);
+    chrome.storage.local.get({ extensionLogs: [] }, (stored) => {
+        const logs = Array.isArray(stored.extensionLogs) ? stored.extensionLogs : [];
+        chrome.storage.local.set({ extensionLogs: [entry, ...logs].slice(0, 100) });
+    });
+}
+
 function setConnectionStatus(status, error = "") {
     chrome.storage.local.set({
         connectionStatus: status,
@@ -13,6 +27,7 @@ function setConnectionStatus(status, error = "") {
         connectionLastChangedAt: new Date().toISOString(),
         connectionVersion: EXTENSION_VERSION,
     });
+    logExtensionEvent("connection_status", { status, error });
 }
 
 const ACCOUNT_IMPORT_ALARM = "flow2api-auto-import-account";
@@ -196,6 +211,7 @@ async function getGoogleCookies() {
 async function importCurrentAccount(reason = "manual") {
     if (accountImportInProgress) {
         console.log("[Flow2API] Account import already in progress, skipping", reason);
+        logExtensionEvent("account_import_skipped", { reason, cause: "in_progress" });
         return { skipped: true, reason: "in_progress" };
     }
     accountImportInProgress = true;
@@ -237,10 +253,16 @@ async function importCurrentAccount(reason = "manual") {
         }
 
         chrome.storage.local.set({
-        lastAutoImportAt: new Date().toISOString(),
-        lastAutoImportStatus: "success",
-        lastAutoImportMessage: `${reason}: ${payload.email || "unknown"}`
-    });
+            lastAutoImportAt: new Date().toISOString(),
+            lastAutoImportStatus: "success",
+            lastAutoImportMessage: `${reason}: ${payload.email || "unknown"}`
+        });
+        logExtensionEvent("account_import_success", {
+            reason,
+            email: payload.email || "unknown",
+            added: payload.added || 0,
+            updated: payload.updated || 0,
+        });
         console.log("[Flow2API] Account import success", reason, payload);
         return payload;
     } finally {
@@ -254,6 +276,7 @@ async function runScheduledAccountImport() {
     try {
         await importCurrentAccount("auto");
     } catch (e) {
+        logExtensionEvent("account_import_failed", { reason, error: e.message || String(e) });
         console.warn("[Flow2API] Auto account import failed", e);
         chrome.storage.local.set({
             lastAutoImportAt: new Date().toISOString(),
@@ -377,6 +400,7 @@ async function connectWS() {
         }
 
         if (data.type === "sync_account") {
+            logExtensionEvent("server_sync_request", { reason: data.reason || "token_error" });
             importCurrentAccount(`server:${data.reason || "token_error"}`).catch(error => {
                 console.warn("[Flow2API] Immediate account sync failed", error);
             });
@@ -384,7 +408,12 @@ async function connectWS() {
         }
 
         if (data.type === "get_token") {
+            logExtensionEvent("captcha_request_received", {
+                action: data.action || "IMAGE_GENERATION",
+                request_id: data.req_id ? String(data.req_id).slice(-12) : "",
+            });
             tokenQueue = tokenQueue.then(() => handleGetToken(data)).catch(err => {
+                logExtensionEvent("captcha_queue_failed", { error: err.message || String(err) });
                 console.error("[Flow2API] Queue Error:", err);
             });
         }
@@ -414,6 +443,10 @@ async function connectWS() {
 async function handleGetToken(data) {
     let newTabId = null;
     try {
+        logExtensionEvent("captcha_start", {
+            action: data.action || "IMAGE_GENERATION",
+            request_id: data.req_id ? String(data.req_id).slice(-12) : "",
+        });
         const existingTabs = await chrome.tabs.query({
             url: [
                 "https://labs.google/fx/tools/flow*",
@@ -492,12 +525,22 @@ async function handleGetToken(data) {
                 status: successResponse.status,
                 token: successResponse.token
             }));
+            logExtensionEvent("captcha_success", {
+                action: data.action || "IMAGE_GENERATION",
+                request_id: data.req_id ? String(data.req_id).slice(-12) : "",
+                token_length: successResponse.token ? successResponse.token.length : 0,
+            });
         } else {
             ws.send(JSON.stringify({
                 req_id: data.req_id,
                 status: "error",
                 error: "Extension script failed: " + lastErrorMsg
             }));
+            logExtensionEvent("captcha_failed", {
+                action: data.action || "IMAGE_GENERATION",
+                request_id: data.req_id ? String(data.req_id).slice(-12) : "",
+                error: lastErrorMsg,
+            });
         }
     } catch (err) {
         ws.send(JSON.stringify({
@@ -505,10 +548,16 @@ async function handleGetToken(data) {
             status: "error",
             error: err.message
         }));
+        logExtensionEvent("captcha_failed", {
+            action: data.action || "IMAGE_GENERATION",
+            request_id: data.req_id ? String(data.req_id).slice(-12) : "",
+            error: err.message || String(err),
+        });
     } finally {
         if (newTabId) {
             try {
                 await chrome.tabs.remove(newTabId);
+                logExtensionEvent("temporary_flow_tab_closed");
                 console.log("[Flow2API] Closed temporary token tab.");
             } catch (e) {
                 console.log("[Flow2API] Error closing tab:", e);

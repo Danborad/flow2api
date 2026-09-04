@@ -83,6 +83,21 @@ function renderConnectionStatus(stored) {
   label.textContent = `连接状态：${labels[status] || status}${error}${time}`;
 }
 
+function renderExtensionLogs(stored) {
+  const el = $("extensionLogs");
+  if (!el) return;
+  const logs = Array.isArray(stored.extensionLogs) ? stored.extensionLogs : [];
+  if (!logs.length) {
+    el.textContent = "暂无日志";
+    return;
+  }
+  el.textContent = logs.map(entry => {
+    const time = entry.time ? new Date(entry.time).toLocaleString("zh-CN", { hour12: false }) : "";
+    const details = entry.details && Object.keys(entry.details).length ? ` ${JSON.stringify(entry.details)}` : "";
+    return `[${time}] ${entry.event}${details}`;
+  }).join("\n");
+}
+
 function setStatus(message, isError = false) {
   const status = $("status");
   status.textContent = message;
@@ -109,6 +124,7 @@ function loadSettings() {
     $("autoImportIntervalMinutes").value = settings.autoImportIntervalMinutes;
     renderAutoImportStatus(stored);
     renderConnectionStatus(stored);
+    renderExtensionLogs(stored);
   });
 }
 
@@ -205,12 +221,16 @@ document.addEventListener("DOMContentLoaded", () => {
       setStatus(`重连失败：${(response && response.error) || "未知错误"}`, true);
     }
   });
+  $("clearLogsBtn").addEventListener("click", () => {
+    chrome.storage.local.set({ extensionLogs: [] }, () => renderExtensionLogs({ extensionLogs: [] }));
+  });
   chrome.storage.onChanged.addListener((changes, areaName) => {
-    if (areaName === "local" && (changes.connectionStatus || changes.connectionError || changes.connectionLastChangedAt)) {
-      chrome.storage.local.get(
-        ["connectionStatus", "connectionError", "connectionLastChangedAt"],
-        renderConnectionStatus
-      );
+    if (areaName !== "local") return;
+    if (changes.connectionStatus || changes.connectionError || changes.connectionLastChangedAt) {
+      chrome.storage.local.get(["connectionStatus", "connectionError", "connectionLastChangedAt"], renderConnectionStatus);
+    }
+    if (changes.extensionLogs) {
+      chrome.storage.local.get(["extensionLogs"], renderExtensionLogs);
     }
   });
 });
