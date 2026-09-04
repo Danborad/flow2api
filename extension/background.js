@@ -447,6 +447,10 @@ async function handleGetToken(data) {
             action: data.action || "IMAGE_GENERATION",
             request_id: data.req_id ? String(data.req_id).slice(-12) : "",
         });
+        const projectId = String(data.project_id || "").trim();
+        const projectUrl = projectId
+            ? `https://flow.google.com/project/${encodeURIComponent(projectId)}`
+            : "https://flow.google.com/";
         const existingTabs = await chrome.tabs.query({
             url: [
                 "https://labs.google/fx/tools/flow*",
@@ -457,11 +461,17 @@ async function handleGetToken(data) {
                 "https://flow.google.com/*"
             ]
         });
-        const targetTab = existingTabs.find(tab => tab.id) || await chrome.tabs.create({
-            url: "https://labs.google/fx/tools/flow",
+        const projectTab = projectId
+            ? existingTabs.find(tab => tab.url && tab.url.includes(`/project/${projectId}`))
+            : null;
+        const anyProjectTab = projectId
+            ? null
+            : existingTabs.find(tab => tab.url && /flow\.google\.com\/project\//.test(tab.url));
+        const targetTab = projectTab || anyProjectTab || await chrome.tabs.create({
+            url: projectUrl,
             active: false
         });
-        newTabId = existingTabs.length ? null : targetTab.id;
+        newTabId = projectTab || anyProjectTab ? null : targetTab.id;
 
         await waitForTabReady(targetTab.id);
         await sleep(newTabId ? 2000 : 500);
@@ -471,6 +481,7 @@ async function handleGetToken(data) {
             tab_id: targetTab.id,
             reused: !newTabId,
             url: targetTab.url || "",
+            project_id: projectId,
         });
 
         let successResponse = null;
