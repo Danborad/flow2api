@@ -1447,6 +1447,7 @@ class GenerationHandler:
                 debug_logger.log_info(f"[GENERATION] 开始图片生成流程...")
                 attempted_token_ids = {token.id}
                 fallback_attempt = 0
+                fallback_log_state = None
                 while True:
                     generation_result = self._create_generation_result()
                     response_state = self._create_response_state()
@@ -1457,7 +1458,7 @@ class GenerationHandler:
                             perf_trace=perf_trace,
                             generation_result=generation_result,
                             response_state=response_state,
-                            request_log_state=request_log_state,
+                            request_log_state=fallback_log_state or request_log_state,
                             pending_token_state=pending_token_state,
                             emit_error_response=fallback_attempt >= image_fallback_attempts,
                         ):
@@ -1469,7 +1470,39 @@ class GenerationHandler:
                             f"{image_fallback_attempts}: {attempt_error}"
                         )
 
+                    if fallback_log_state and not generation_result.get("success"):
+                        fallback_error = generation_result.get("error_message") or "图片兜底生成失败"
+                        await self._log_request(
+                            token.id,
+                            "图片兜底",
+                            {**request_payload, "fallback_attempt": fallback_attempt},
+                            {"error": fallback_error, "fallback_of": request_log_state.get("id")},
+                            500,
+                            time.time() - fallback_log_state.get("started_at", start_time),
+                            log_id=fallback_log_state.get("id"),
+                            status_text="failed",
+                            progress=fallback_log_state.get("progress", 0),
+                        )
+                        fallback_log_state = None
+
                     if generation_result.get("success"):
+                        if fallback_log_state:
+                            await self._log_request(
+                                token.id,
+                                "图片兜底",
+                                {**request_payload, "fallback_attempt": fallback_attempt},
+                                {
+                                    "status": "success",
+                                    "fallback_of": request_log_state.get("id"),
+                                    "url": response_state.get("url"),
+                                },
+                                200,
+                                time.time() - fallback_log_state.get("started_at", start_time),
+                                log_id=fallback_log_state.get("id"),
+                                status_text="completed",
+                                progress=100,
+                            )
+                            fallback_log_state = None
                         break
 
                     error_msg = generation_result.get("error_message") or "图片生成失败"
@@ -1536,6 +1569,11 @@ class GenerationHandler:
                     pending_token_state["active"] = True
                     try:
                         project_id = await self.token_manager.ensure_project_exists(token.id)
+                        await self.flow_client.prefill_remote_browser_pool(
+                            project_id=project_id,
+                            action="IMAGE_GENERATION",
+                            token_id=token.id,
+                        )
                     except Exception as project_error:
                         if pending_token_state.get("active") and self.load_balancer:
                             await self.load_balancer.release_pending(token.id, for_image_generation=True)
@@ -1563,6 +1601,26 @@ class GenerationHandler:
                         progress=22,
                         response_extra={"project_id": project_id, "fallback_attempt": fallback_attempt},
                     )
+                    fallback_log_state = {
+                        "id": await self._log_request(
+                            token.id,
+                            "图片兜底",
+                            {**request_payload, "fallback_attempt": fallback_attempt},
+                            {
+                                "status": "processing",
+                                "status_text": "fallback_started",
+                                "progress": 22,
+                                "fallback_of": request_log_state.get("id"),
+                                "fallback_attempt": fallback_attempt,
+                            },
+                            102,
+                            0,
+                            status_text="fallback_started",
+                            progress=22,
+                        ),
+                        "progress": 22,
+                        "started_at": time.time(),
+                    }
             else:  # video
                 debug_logger.log_info(f"[GENERATION] 开始视频生成流程...")
                 async for chunk in self._handle_video_generation(
