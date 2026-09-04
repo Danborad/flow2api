@@ -1,5 +1,11 @@
 # Flow2API Captcha Worker 更新记录
 
+## 1.1.9
+
+- 增加 `executeScript` 外层超时，避免浏览器脚本卡住后一直无回包。
+- reCAPTCHA 页面未加载时 15 秒内返回明确的 `captcha_load` 错误。
+- 记录空脚本结果和脚本调用超时。
+
 ## 1.1.7
 
 - 不再向 `flow.google.com` 注入外部脚本，避免触发 Trusted Types 错误。

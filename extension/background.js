@@ -475,10 +475,11 @@ async function handleGetToken(data) {
 
         let successResponse = null;
         let lastErrorMsg = "No response from tab.";
-        const scriptTimeoutMs = data.action === "VIDEO_GENERATION" ? 120000 : 60000;
+        const scriptTimeoutMs = data.action === "VIDEO_GENERATION" ? 120000 : 30000;
+        const executeScriptTimeoutMs = scriptTimeoutMs + 5000;
 
         try {
-            const results = await chrome.scripting.executeScript({
+            const executeScriptPromise = chrome.scripting.executeScript({
                 target: { tabId: targetTab.id },
                 world: "MAIN",
                 func: async (action, timeoutMs) => {
@@ -494,7 +495,9 @@ async function handleGetToken(data) {
                             return fail("page_check", `unexpected page: ${location.href}`);
                         }
 
-                        const captchaDeadline = Date.now() + timeoutMs;
+                        // Flow should load reCAPTCHA itself. Do not inject a
+                        // script here because flow.google.com enforces Trusted Types.
+                        const captchaDeadline = Date.now() + Math.min(timeoutMs, 15000);
                         while (!(window.grecaptcha && window.grecaptcha.enterprise) && Date.now() < captchaDeadline) {
                             await new Promise(resolve => setTimeout(resolve, 250));
                         }
@@ -519,6 +522,13 @@ async function handleGetToken(data) {
                 },
                 args: [data.action || "IMAGE_GENERATION", scriptTimeoutMs]
             });
+            const results = await Promise.race([
+                executeScriptPromise,
+                new Promise((_, reject) => setTimeout(
+                    () => reject(new Error(`executeScript timeout after ${executeScriptTimeoutMs}ms`)),
+                    executeScriptTimeoutMs
+                )),
+            ]);
 
             const scriptResult = results && results[0] ? results[0].result : null;
             if (scriptResult && scriptResult.ok && scriptResult.token) {
@@ -534,6 +544,12 @@ async function handleGetToken(data) {
                 });
             } else {
                 lastErrorMsg = `empty executeScript result (count=${results ? results.length : 0})`;
+                logExtensionEvent("captcha_page_failed", {
+                    action: data.action || "IMAGE_GENERATION",
+                    request_id: data.req_id ? String(data.req_id).slice(-12) : "",
+                    stage: "execute_script",
+                    error: lastErrorMsg,
+                });
             }
         } catch (e) {
             lastErrorMsg = e.message || "Script execution failed";
