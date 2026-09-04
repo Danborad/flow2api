@@ -1,5 +1,15 @@
 # Flow2API Captcha Worker 更新记录
 
+## 1.1.7
+
+- 不再向 `flow.google.com` 注入外部脚本，避免触发 Trusted Types 错误。
+- 等待 Flow 页面自身加载 `grecaptcha.enterprise` 后再执行验证码。
+- 同步更新旧 content script，避免旧路径再次注入外部脚本。
+
+## 1.1.8
+
+- 将 content script 同步到 `flow.google.com`，避免旧页面注入逻辑继续触发 Trusted Types 错误。
+
 ## 1.1.6
 
 - 支持 Google Flow 重定向后的 `flow.google.com` 页面。

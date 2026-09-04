@@ -494,18 +494,12 @@ async function handleGetToken(data) {
                             return fail("page_check", `unexpected page: ${location.href}`);
                         }
 
-                        if (!(window.grecaptcha && window.grecaptcha.enterprise)) {
-                            await new Promise((resolve, reject) => {
-                                const script = document.createElement("script");
-                                script.src = `https://www.google.com/recaptcha/enterprise.js?render=${siteKey}`;
-                                script.onload = resolve;
-                                script.onerror = () => reject(new Error("enterprise.js load failed"));
-                                (document.head || document.documentElement).appendChild(script);
-                            });
+                        const captchaDeadline = Date.now() + timeoutMs;
+                        while (!(window.grecaptcha && window.grecaptcha.enterprise) && Date.now() < captchaDeadline) {
+                            await new Promise(resolve => setTimeout(resolve, 250));
                         }
-
                         if (!(window.grecaptcha && window.grecaptcha.enterprise)) {
-                            return fail("captcha_load", "grecaptcha.enterprise is unavailable after script load");
+                            return fail("captcha_load", "grecaptcha.enterprise 未由 Flow 页面加载");
                         }
 
                         await Promise.race([

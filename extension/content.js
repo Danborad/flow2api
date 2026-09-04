@@ -17,11 +17,7 @@ function getRecaptchaToken(action) {
                 if (typeof grecaptcha !== "undefined" && grecaptcha.enterprise) {
                     runCaptcha();
                 } else {
-                    const rScript = document.createElement('script');
-                    rScript.src = "https://www.google.com/recaptcha/enterprise.js?render=6LdsFiUsAAAAAIjVDZcuLhaHiDn5nnHVXVRQGeMV";
-                    rScript.onload = () => { runCaptcha(); };
-                    rScript.onerror = () => { window.postMessage({type: 'reCAPTCHA_error', reqId: '${reqId}', error: 'Failed to load enterprise.js'}, '*'); };
-                    document.head.appendChild(rScript);
+                    window.postMessage({type: 'reCAPTCHA_error', reqId: '${reqId}', error: 'grecaptcha.enterprise is not loaded by Flow'}, '*');
                 }
             } catch (e) {
                 window.postMessage({type: 'reCAPTCHA_error', reqId: '${reqId}', error: e.message}, '*');
@@ -60,4 +56,3 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         return true; 
     }
 });
-
