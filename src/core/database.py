@@ -189,6 +189,7 @@ class Database:
             image_timeout = 300
             video_timeout = 1500
             max_retries = 3
+            image_fallback_attempts = 1
 
             if config_dict:
                 generation_config = config_dict.get("generation", {})
@@ -196,16 +197,21 @@ class Database:
                 image_timeout = generation_config.get("image_timeout", 300)
                 video_timeout = generation_config.get("video_timeout", 1500)
                 max_retries = flow_config.get("max_retries", 3)
+                image_fallback_attempts = generation_config.get("image_fallback_attempts", 1)
 
             try:
                 max_retries = max(1, int(max_retries))
             except Exception:
                 max_retries = 3
+            try:
+                image_fallback_attempts = max(0, int(image_fallback_attempts))
+            except Exception:
+                image_fallback_attempts = 1
 
             await db.execute("""
-                INSERT INTO generation_config (id, image_timeout, video_timeout, max_retries)
-                VALUES (1, ?, ?, ?)
-            """, (image_timeout, video_timeout, max_retries))
+                INSERT INTO generation_config (id, image_timeout, video_timeout, max_retries, image_fallback_attempts)
+                VALUES (1, ?, ?, ?, ?)
+            """, (image_timeout, video_timeout, max_retries, image_fallback_attempts))
 
         # Ensure call_logic_config has a row
         cursor = await db.execute("SELECT COUNT(*) FROM call_logic_config")
@@ -550,6 +556,7 @@ class Database:
             if await self._table_exists(db, "generation_config"):
                 generation_columns_to_add = [
                     ("max_retries", "INTEGER DEFAULT 3"),
+                    ("image_fallback_attempts", "INTEGER DEFAULT 1"),
                 ]
 
                 for col_name, col_type in generation_columns_to_add:
@@ -803,6 +810,7 @@ class Database:
                     image_timeout INTEGER DEFAULT 300,
                     video_timeout INTEGER DEFAULT 1500,
                     max_retries INTEGER DEFAULT 3,
+                    image_fallback_attempts INTEGER DEFAULT 1,
                     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
             """)
@@ -1500,6 +1508,7 @@ class Database:
         image_timeout: Optional[int] = None,
         video_timeout: Optional[int] = None,
         max_retries: Optional[int] = None,
+        image_fallback_attempts: Optional[int] = None,
     ):
         """Update generation configuration"""
         async with self._connect(write=True) as db:
@@ -1526,18 +1535,26 @@ class Database:
                 )
             except Exception:
                 normalized_max_retries = 3
+            try:
+                normalized_image_fallback_attempts = (
+                    max(0, int(image_fallback_attempts))
+                    if image_fallback_attempts is not None
+                    else max(0, int(current.get("image_fallback_attempts", 1)))
+                )
+            except Exception:
+                normalized_image_fallback_attempts = 1
 
             if row:
                 await db.execute("""
                     UPDATE generation_config
-                    SET image_timeout = ?, video_timeout = ?, max_retries = ?, updated_at = CURRENT_TIMESTAMP
+                    SET image_timeout = ?, video_timeout = ?, max_retries = ?, image_fallback_attempts = ?, updated_at = CURRENT_TIMESTAMP
                     WHERE id = 1
-                """, (normalized_image_timeout, normalized_video_timeout, normalized_max_retries))
+                """, (normalized_image_timeout, normalized_video_timeout, normalized_max_retries, normalized_image_fallback_attempts))
             else:
                 await db.execute("""
-                    INSERT INTO generation_config (id, image_timeout, video_timeout, max_retries)
-                    VALUES (1, ?, ?, ?)
-                """, (normalized_image_timeout, normalized_video_timeout, normalized_max_retries))
+                    INSERT INTO generation_config (id, image_timeout, video_timeout, max_retries, image_fallback_attempts)
+                    VALUES (1, ?, ?, ?, ?)
+                """, (normalized_image_timeout, normalized_video_timeout, normalized_max_retries, normalized_image_fallback_attempts))
             await db.commit()
 
     async def get_call_logic_config(self) -> CallLogicConfig:

@@ -137,6 +137,31 @@ class VeoLiteModelResolverTests(unittest.TestCase):
             resolve_model_name("Omni 1.1 Flash", request=request, model_config=MODEL_CONFIG),
         )
 
+    def test_omni_11_route_preserves_image_count_for_generation_layer(self):
+        request = types.SimpleNamespace(
+            generationConfig=types.SimpleNamespace(
+                aspectRatio="16:9",
+                durationSeconds=6,
+            ),
+            messages=[],
+        )
+
+        for count in (0, 1, 2, 3):
+            resolved = resolve_model_name(
+                "Omni 1.1 Flash",
+                request=request,
+                images=[b"image"] * count,
+                model_config=MODEL_CONFIG,
+            )
+            self.assertEqual(resolved, "omni_6s")
+            config = MODEL_CONFIG[resolved]
+            if count == 0:
+                self.assertEqual(config["model_key"], "abra_t2v_6s")
+            elif count <= 2:
+                self.assertEqual(config["start_end_model_key"], "abra_i2v_6s")
+            else:
+                self.assertEqual(config["reference_model_key"], "abra_r2v_6s")
+
     def test_resolve_t2v_lite_alias_to_portrait_variant(self):
         request = types.SimpleNamespace(
             generationConfig=types.SimpleNamespace(aspectRatio="portrait")
@@ -421,6 +446,32 @@ class VeoLiteFlowClientTests(unittest.IsolatedAsyncioTestCase):
             result["operations"][0]["status"],
             "MEDIA_GENERATION_STATUS_PENDING",
         )
+
+    async def test_generate_video_start_end_uses_omni_i2v_model_key(self):
+        captured = {}
+
+        async def fake_make_request(method, url, json_data, use_at, at_token, **kwargs):
+            captured["json_data"] = json_data
+            return {"operations": [{"operation": {"name": "task-omni"}}]}
+
+        self.client._make_request = AsyncMock(side_effect=fake_make_request)
+
+        await self.client.generate_video_start_end(
+            at="at-token",
+            project_id="project-1",
+            prompt="从白天过渡到夜晚",
+            model_key="abra_i2v_6s",
+            aspect_ratio="VIDEO_ASPECT_RATIO_LANDSCAPE",
+            start_media_id="start-media",
+            end_media_id="end-media",
+            use_v2_model_config=True,
+        )
+
+        request_data = captured["json_data"]["requests"][0]
+        self.assertEqual(request_data["videoModelKey"], "abra_i2v_6s")
+        self.assertEqual(request_data["startImage"]["mediaId"], "start-media")
+        self.assertEqual(request_data["endImage"]["mediaId"], "end-media")
+        self.assertTrue(captured["json_data"]["useV2ModelConfig"])
 
 
 class RouteNormalizationTests(unittest.IsolatedAsyncioTestCase):

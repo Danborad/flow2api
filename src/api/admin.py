@@ -627,6 +627,7 @@ class GenerationConfigRequest(BaseModel):
     image_timeout: Optional[int] = None
     video_timeout: Optional[int] = None
     max_retries: Optional[int] = None
+    image_fallback_attempts: Optional[int] = None
 
 
 class CallLogicConfigRequest(BaseModel):
@@ -1364,6 +1365,7 @@ async def get_generation_config(token: str = Depends(verify_admin_token)):
             "image_timeout": config.image_timeout,
             "video_timeout": config.video_timeout,
             "max_retries": config.max_retries,
+            "image_fallback_attempts": config.image_fallback_attempts,
         }
     }
 
@@ -1378,6 +1380,7 @@ async def update_generation_config(
         image_timeout=request.image_timeout,
         video_timeout=request.video_timeout,
         max_retries=request.max_retries,
+        image_fallback_attempts=request.image_fallback_attempts,
     )
 
     # 🔥 Hot reload: sync database config to memory
@@ -1627,6 +1630,7 @@ async def update_generation_timeout(
         image_timeout=request.image_timeout,
         video_timeout=request.video_timeout,
         max_retries=request.max_retries,
+        image_fallback_attempts=request.image_fallback_attempts,
     )
 
     # 🔥 Hot reload: sync database config to memory

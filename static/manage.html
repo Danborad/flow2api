@@ -249,8 +249,13 @@
                             <input id="cfgMaxRetries" type="number" class="flex h-9 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" placeholder="3" min="1">
                             <p class="text-xs text-muted-foreground mt-1">生成、上传、轮询等请求失败时的最大重试次数，最小值为 1</p>
                         </div>
+                        <div>
+                            <label class="text-sm font-medium mb-2 block">图片失败兜底次数</label>
+                            <input id="cfgImageFallbackAttempts" type="number" class="flex h-9 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" placeholder="1" min="0" max="5">
+                            <p class="text-xs text-muted-foreground mt-1">图片生成失败后切换其他账号重新生成的次数；0 表示关闭，默认 1 次</p>
+                        </div>
                     </div>
-                    <button onclick="saveGenerationTimeout()" class="inline-flex items-center justify-center rounded-md bg-primary text-primary-foreground hover:bg-primary/90 h-9 px-4 w-full mt-4">保存配置</button>
+                    <button onclick="saveAllGenerationConfig()" class="inline-flex items-center justify-center rounded-md bg-primary text-primary-foreground hover:bg-primary/90 h-9 px-4 w-full mt-4">保存配置</button>
                 </div>
 
                 <div class="rounded-lg border border-border bg-background p-6 flex flex-col">
@@ -1255,6 +1260,71 @@
         }
 
         window.addEventListener('DOMContentLoaded',()=>{if(typeof checkAuth==='function')checkAuth();refreshTokens();loadATAutoRefreshConfig()});
+    </script>
+    <script>
+        async function loadImageFallbackAttempts() {
+            const input = document.getElementById('cfgImageFallbackAttempts');
+            if (!input) return;
+            try {
+                const response = await fetch('/api/generation/timeout', { credentials: 'include' });
+                if (response.status === 401) {
+                    window.location.href = '/login';
+                    return;
+                }
+                if (!response.ok) return;
+                const data = await response.json();
+                if (data.success && data.config) {
+                    input.value = data.config.image_fallback_attempts ?? 1;
+                }
+            } catch (error) {
+                console.error('加载图片失败兜底配置失败:', error);
+            }
+        }
+
+        async function saveImageFallbackAttempts() {
+            const input = document.getElementById('cfgImageFallbackAttempts');
+            if (!input) return;
+            const raw = input.value.trim();
+            const attempts = raw === '' ? 1 : Number.parseInt(raw, 10);
+            if (!Number.isInteger(attempts) || attempts < 0 || attempts > 5) {
+                showToast('图片失败兜底次数必须在 0-5 之间', 'error');
+                return;
+            }
+            try {
+                const response = await fetch('/api/generation/timeout', {
+                    method: 'POST',
+                    credentials: 'include',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ image_fallback_attempts: attempts })
+                });
+                if (response.status === 401) {
+                    window.location.href = '/login';
+                    return;
+                }
+                const data = await response.json();
+                if (data.success) {
+                    showToast('图片失败兜底配置保存成功', 'success');
+                } else {
+                    showToast('图片失败兜底配置保存失败', 'error');
+                }
+            } catch (error) {
+                showToast('图片失败兜底配置保存失败: ' + error.message, 'error');
+            }
+        }
+
+        async function saveAllGenerationConfig() {
+            const input = document.getElementById('cfgImageFallbackAttempts');
+            const raw = input ? input.value.trim() : '';
+            const attempts = raw === '' ? 1 : Number.parseInt(raw, 10);
+            if (!Number.isInteger(attempts) || attempts < 0 || attempts > 5) {
+                showToast('图片失败兜底次数必须在 0-5 之间', 'error');
+                return;
+            }
+            await saveGenerationTimeout();
+            await saveImageFallbackAttempts();
+        }
+
+        window.addEventListener('DOMContentLoaded', loadImageFallbackAttempts);
     </script>
 </body>
 </html>

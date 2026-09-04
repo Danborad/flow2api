@@ -145,6 +145,7 @@ class LoadBalancer:
         reserve: bool = False,
         enforce_concurrency_filter: bool = True,
         track_pending: bool = False,
+        exclude_token_ids: Optional[set[int]] = None,
     ) -> Optional[Token]:
         """
         Select a token using load-aware balancing
@@ -171,6 +172,9 @@ class LoadBalancer:
         )
 
         active_tokens = await self.token_manager.get_active_tokens()
+        excluded = exclude_token_ids or set()
+        if excluded:
+            active_tokens = [token for token in active_tokens if token.id not in excluded]
         debug_logger.log_info(f"[LOAD_BALANCER] 获取到 {len(active_tokens)} 个活跃Token")
 
         if not active_tokens:

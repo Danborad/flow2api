@@ -680,7 +680,7 @@ MODEL_CONFIG = {
         "supports_images": False,
         "requires_video_id": True,
     },
-    # ========== Gemini Omni Flash ==========
+    # ========== Gemini Omni 1.1 Flash ==========
     # 2026-05-26 实测上游真实请求：
     # - 纯文本 -> video:batchAsyncGenerateVideoText, videoModelKey=abra_t2v_8s
     # - 参考图 -> video:batchAsyncGenerateVideoReferenceImages, videoModelKey=abra_r2v_8s
@@ -696,7 +696,7 @@ MODEL_CONFIG = {
         "allow_tier_upgrade": False,
         "reference_model_key": "abra_r2v_8s",
         "reference_duration": 8,
-        "reference_model_display_name": "Omni Flash",
+        "reference_model_display_name": "Omni 1.1 Flash",
     },
     "omni_portrait": {
         "type": "video",
@@ -710,7 +710,7 @@ MODEL_CONFIG = {
         "allow_tier_upgrade": False,
         "reference_model_key": "abra_r2v_8s",
         "reference_duration": 8,
-        "reference_model_display_name": "Omni Flash",
+        "reference_model_display_name": "Omni 1.1 Flash",
     },
 }
 
@@ -1296,6 +1296,14 @@ class GenerationHandler:
         if generation_type == "video":
             request_payload["video_duration_seconds"] = model_config.get("reference_duration")
             request_payload["video_credit_cost"] = _estimate_video_credit_cost_for_log(model, model_config)
+        image_fallback_attempts = 1
+        if generation_type == "image":
+            try:
+                generation_config = await self.db.get_generation_config()
+                image_fallback_attempts = max(0, int(getattr(generation_config, "image_fallback_attempts", 1)))
+            except Exception as exc:
+                debug_logger.log_warning(f"[GENERATION] 读取图片兜底配置失败，使用默认值 1: {exc}")
+            request_payload["image_fallback_attempts"] = image_fallback_attempts
         debug_logger.log_info(f"[GENERATION] 开始生成 - 模型: {model}, 类型: {generation_type}, Prompt: {prompt[:50]}...")
 
         # Create the log before any network work so non-streaming requests are
@@ -1437,15 +1445,84 @@ class GenerationHandler:
             generation_pipeline_started_at = time.time()
             if generation_type == "image":
                 debug_logger.log_info(f"[GENERATION] 开始图片生成流程...")
-                async for chunk in self._handle_image_generation(
-                    token, project_id, model_config, prompt, images, stream,
-                    perf_trace=perf_trace,
-                    generation_result=generation_result,
-                    response_state=response_state,
-                    request_log_state=request_log_state,
-                    pending_token_state=pending_token_state
-                ):
-                    yield chunk
+                attempted_token_ids = {token.id}
+                fallback_attempt = 0
+                while True:
+                    generation_result = self._create_generation_result()
+                    response_state = self._create_response_state()
+                    response_state["base_url"] = (base_url_override or "").strip().rstrip("/") or None
+                    try:
+                        async for chunk in self._handle_image_generation(
+                            token, project_id, model_config, prompt, images, stream,
+                            perf_trace=perf_trace,
+                            generation_result=generation_result,
+                            response_state=response_state,
+                            request_log_state=request_log_state,
+                            pending_token_state=pending_token_state,
+                            emit_error_response=fallback_attempt >= image_fallback_attempts,
+                        ):
+                            yield chunk
+                    except Exception as attempt_error:
+                        generation_result["error_message"] = f"生成失败: {attempt_error}"
+                        debug_logger.log_warning(
+                            f"[IMAGE FALLBACK] Token {token.id} 生成失败，兜底尝试 {fallback_attempt}/"
+                            f"{image_fallback_attempts}: {attempt_error}"
+                        )
+
+                    if generation_result.get("success"):
+                        break
+
+                    error_msg = generation_result.get("error_message") or "图片生成失败"
+                    if fallback_attempt >= image_fallback_attempts:
+                        break
+
+                    if self._should_count_token_error(Exception(error_msg)):
+                        await self.token_manager.record_error(token.id)
+                    attempted_token_ids.add(token.id)
+                    if pending_token_state.get("active") and self.load_balancer:
+                        await self.load_balancer.release_pending(token.id, for_image_generation=True)
+                        pending_token_state["active"] = False
+
+                    fallback_attempt += 1
+                    if stream:
+                        yield self._create_stream_chunk(
+                            f"⚠️ 当前账号生成失败，正在切换其他账号重试 ({fallback_attempt}/{image_fallback_attempts})...\n"
+                        )
+                    next_token = await self.load_balancer.select_token(
+                        for_image_generation=True,
+                        model=model,
+                        reserve=False,
+                        enforce_concurrency_filter=False,
+                        track_pending=True,
+                        exclude_token_ids=attempted_token_ids,
+                    )
+                    if not next_token:
+                        generation_result["error_message"] = "图片兜底重试失败：没有其他可用账号"
+                        break
+
+                    token = next_token
+                    token = await self.token_manager.ensure_valid_token(token)
+                    if not token:
+                        await self.load_balancer.release_pending(next_token.id, for_image_generation=True)
+                        generation_result["error_message"] = "图片兜底重试失败：备用账号 Token 无效"
+                        break
+                    attempted_token_ids.add(token.id)
+                    pending_token_state["active"] = True
+                    project_id = await self.token_manager.ensure_project_exists(token.id)
+                    await self._update_request_log_progress(
+                        request_log_state,
+                        token_id=token.id,
+                        status_text="fallback_token_selected",
+                        progress=8,
+                        response_extra={"token_email": token.email, "fallback_attempt": fallback_attempt},
+                    )
+                    await self._update_request_log_progress(
+                        request_log_state,
+                        token_id=token.id,
+                        status_text="fallback_project_ready",
+                        progress=22,
+                        response_extra={"project_id": project_id, "fallback_attempt": fallback_attempt},
+                    )
             else:  # video
                 debug_logger.log_info(f"[GENERATION] 开始视频生成流程...")
                 async for chunk in self._handle_video_generation(
@@ -1670,7 +1747,8 @@ class GenerationHandler:
         generation_result: Optional[Dict[str, Any]] = None,
         response_state: Optional[Dict[str, Any]] = None,
         request_log_state: Optional[Dict[str, Any]] = None,
-        pending_token_state: Optional[Dict[str, bool]] = None
+        pending_token_state: Optional[Dict[str, bool]] = None,
+        emit_error_response: bool = True
     ) -> AsyncGenerator:
         """处理图片生成 (同步返回)"""
 
@@ -1764,7 +1842,10 @@ class GenerationHandler:
             media = result.get("media", [])
             if not media:
                 self._mark_generation_failed(generation_result, "\u751f\u6210\u7ed3\u679c\u4e3a\u7a7a")
-                yield self._create_error_response("生成结果为空", status_code=502)
+                if emit_error_response:
+                    yield self._create_error_response("生成结果为空", status_code=502)
+                else:
+                    generation_result["error_emitted"] = False
                 return
 
             image_url = media[0]["image"]["generatedImage"]["fifeUrl"]

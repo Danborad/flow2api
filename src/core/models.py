@@ -151,6 +151,7 @@ class GenerationConfig(BaseModel):
     image_timeout: int = 300  # seconds
     video_timeout: int = 1500  # seconds
     max_retries: int = 3  # 请求最大重试次数
+    image_fallback_attempts: int = 1  # 图片失败后切换其他 Token 的兜底次数
 
 
 class CallLogicConfig(BaseModel):
