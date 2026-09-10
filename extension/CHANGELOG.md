@@ -1,5 +1,9 @@
 # Flow2API Captcha Worker 更新记录
 
+## 1.1.17
+
+- 精准会话接口换取：后台自动请求 `labs.google/fx/api/auth/session` 激活并拉取会话 Token，避免重定向中断；报错提供明确指引。
+
 ## 1.1.16
 
 - 自动静默轮询换取 Session Token：针对仅打开过 `flow.google.com` 的新环境，后台自动在授权落地前持续轮询检测写入，无需手动介入。

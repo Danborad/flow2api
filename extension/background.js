@@ -200,9 +200,9 @@ async function refreshLabsSessionCookie() {
 
     let tabId = null;
     try {
-        const tab = await chrome.tabs.create({ url: "https://labs.google/fx/tools/flow", active: false });
+        const tab = await chrome.tabs.create({ url: "https://labs.google/fx/api/auth/session", active: false });
         tabId = tab.id;
-        const deadline = Date.now() + 10000;
+        const deadline = Date.now() + 8000;
         while (Date.now() < deadline) {
             await sleep(500);
             const token = await getLabsSessionToken();
@@ -271,7 +271,7 @@ async function importCurrentAccount(reason = "manual") {
     await refreshLabsSessionCookie();
         const sessionToken = await getLabsSessionToken();
         if (!sessionToken) {
-            throw new Error("Flow Session Token not found. Flow 页面已打开但没有可读取的会话 Cookie，请确认当前 Chrome Profile 已登录并允许插件读取 flow.google.com Cookie。");
+            throw new Error("未检测到 Flow/Labs 会话凭据。请在当前浏览器打开一次 https://labs.google/fx/api/auth/session（确认页面显示包含账号邮箱的 JSON），然后再次点击导入即可。");
         }
 
         const googleCookies = await getGoogleCookies();
