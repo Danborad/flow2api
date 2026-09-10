@@ -339,6 +339,14 @@
                                 <p class="text-xs text-muted-foreground mt-1">在企业微信群添加群机器人后获取的 Webhook URL</p>
                             </div>
                             <div>
+                                <label class="text-sm font-medium mb-2 block">通知消息类型</label>
+                                <select id="cfgWebhookMsgType" class="flex h-9 w-full rounded-md border border-input bg-background px-3 py-2 text-sm">
+                                    <option value="markdown">Markdown 格式（排版更美观，推荐企业微信客户端查看）</option>
+                                    <option value="text">纯文本格式（兼容性最佳，方便直接在普通微信中阅读）</option>
+                                </select>
+                                <p class="text-xs text-muted-foreground mt-1">若直接在微信内查看群消息，选择“纯文本格式”排版最清晰直观</p>
+                            </div>
+                            <div>
                                 <label class="inline-flex items-center gap-2 cursor-pointer">
                                     <input type="checkbox" id="cfgNotifyOnExpired" class="h-4 w-4 rounded border-input">
                                     <span class="text-sm font-medium">账号失效实时告警</span>
@@ -1391,6 +1399,7 @@
                 if (data.success && data.config) {
                     enabledInput.checked = !!data.config.enabled;
                     document.getElementById('cfgWecomWebhookUrl').value = data.config.wecom_webhook_url || '';
+                    document.getElementById('cfgWebhookMsgType').value = data.config.msg_type || 'markdown';
                     document.getElementById('cfgNotifyOnExpired').checked = data.config.notify_on_expired !== false;
                     document.getElementById('cfgDailyReportEnabled').checked = !!data.config.daily_report_enabled;
                     document.getElementById('cfgDailyReportTime').value = data.config.daily_report_time || '22:00';
@@ -1405,6 +1414,7 @@
         async function saveWebhookConfig() {
             const enabled = document.getElementById('cfgWebhookEnabled').checked;
             const url = document.getElementById('cfgWecomWebhookUrl').value.trim();
+            const msgType = document.getElementById('cfgWebhookMsgType').value || 'markdown';
             const notifyExpired = document.getElementById('cfgNotifyOnExpired').checked;
             const dailyReport = document.getElementById('cfgDailyReportEnabled').checked;
             const dailyTime = document.getElementById('cfgDailyReportTime').value.trim() || '22:00';
@@ -1426,6 +1436,7 @@
                     body: JSON.stringify({
                         enabled: enabled,
                         wecom_webhook_url: url,
+                        msg_type: msgType,
                         notify_on_expired: notifyExpired,
                         daily_report_enabled: dailyReport,
                         daily_report_time: dailyTime
@@ -1445,6 +1456,7 @@
 
         async function testWebhook() {
             const url = document.getElementById('cfgWecomWebhookUrl').value.trim();
+            const msgType = document.getElementById('cfgWebhookMsgType').value || 'markdown';
             if (!url) {
                 showToast('请先填写企业微信 Webhook 机器人地址', 'error');
                 return;
@@ -1455,11 +1467,11 @@
                     method: 'POST',
                     credentials: 'include',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ wecom_webhook_url: url })
+                    body: JSON.stringify({ wecom_webhook_url: url, msg_type: msgType })
                 });
                 const data = await response.json();
                 if (data.success) {
-                    showToast('测试消息发送成功，请在企业微信群中查收！', 'success', 3500);
+                    showToast('测试消息发送成功，请在微信/企业微信中查收！', 'success', 3500);
                 } else {
                     showToast('发送测试失败: ' + (data.message || '未知错误'), 'error', 4000);
                 }
@@ -1470,17 +1482,18 @@
 
         async function sendDailyReportNow() {
             const url = document.getElementById('cfgWecomWebhookUrl').value.trim();
+            const msgType = document.getElementById('cfgWebhookMsgType').value || 'markdown';
             showToast('正在生成并发送今日汇报...', 'info');
             try {
                 const response = await fetch('/api/webhook/send-report', {
                     method: 'POST',
                     credentials: 'include',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ wecom_webhook_url: url })
+                    body: JSON.stringify({ wecom_webhook_url: url, msg_type: msgType })
                 });
                 const data = await response.json();
                 if (data.success) {
-                    showToast('今日统计汇报发送成功，请在企业微信群中查收！', 'success', 3500);
+                    showToast('今日统计汇报发送成功，请在微信/企业微信中查收！', 'success', 3500);
                 } else {
                     showToast('汇报发送失败: ' + (data.message || '未知错误'), 'error', 4000);
                 }

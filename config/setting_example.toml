@@ -77,6 +77,7 @@ capsolver_base_url = "https://api.capsolver.com"
 [webhook]
 enabled = false
 wecom_webhook_url = ""  # 企业微信群机器人 Webhook 地址
+msg_type = "markdown"  # 消息类型: markdown (企业微信端排版佳) 或 text (纯文本，兼容微信直接阅读)
 notify_on_expired = true  # 账号失效/过期/禁用实时告警
 daily_report_enabled = false  # 定时每日生成情况汇报
 daily_report_time = "22:00"  # 每日汇报时间(本地时间 HH:MM)

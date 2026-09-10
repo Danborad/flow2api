@@ -2502,6 +2502,7 @@ async def get_webhook_config(token: str = Depends(verify_admin_token)):
         "config": {
             "enabled": cfg.enabled,
             "wecom_webhook_url": cfg.wecom_webhook_url,
+            "msg_type": getattr(cfg, "msg_type", "markdown"),
             "notify_on_expired": cfg.notify_on_expired,
             "daily_report_enabled": cfg.daily_report_enabled,
             "daily_report_time": cfg.daily_report_time,
@@ -2519,6 +2520,7 @@ async def update_webhook_config(
     cfg = await db.update_webhook_config(
         enabled=request.enabled,
         wecom_webhook_url=request.wecom_webhook_url,
+        msg_type=request.msg_type,
         notify_on_expired=request.notify_on_expired,
         daily_report_enabled=request.daily_report_enabled,
         daily_report_time=request.daily_report_time,
@@ -2529,6 +2531,7 @@ async def update_webhook_config(
         "config": {
             "enabled": cfg.enabled,
             "wecom_webhook_url": cfg.wecom_webhook_url,
+            "msg_type": getattr(cfg, "msg_type", "markdown"),
             "notify_on_expired": cfg.notify_on_expired,
             "daily_report_enabled": cfg.daily_report_enabled,
             "daily_report_time": cfg.daily_report_time,
@@ -2545,8 +2548,9 @@ async def test_webhook_notification(
     """Send a test message to WeCom Webhook."""
     from ..services.webhook_service import get_webhook_service
     custom_url = (request or {}).get("wecom_webhook_url") if isinstance(request, dict) else None
+    custom_msg_type = (request or {}).get("msg_type") if isinstance(request, dict) else None
     ws = get_webhook_service(db)
-    success, msg = await ws.send_test_message(custom_url=custom_url)
+    success, msg = await ws.send_test_message(custom_url=custom_url, custom_msg_type=custom_msg_type)
     return {
         "success": success,
         "message": msg
@@ -2561,8 +2565,9 @@ async def send_webhook_daily_report_now(
     """Trigger daily generation and account summary report immediately."""
     from ..services.webhook_service import get_webhook_service
     custom_url = (request or {}).get("wecom_webhook_url") if isinstance(request, dict) else None
+    custom_msg_type = (request or {}).get("msg_type") if isinstance(request, dict) else None
     ws = get_webhook_service(db)
-    success, msg = await ws.send_daily_report(custom_url=custom_url)
+    success, msg = await ws.send_daily_report(custom_url=custom_url, custom_msg_type=custom_msg_type)
     return {
         "success": success,
         "message": msg

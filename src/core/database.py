@@ -508,6 +508,7 @@ class Database:
                         id INTEGER PRIMARY KEY DEFAULT 1,
                         enabled BOOLEAN DEFAULT 0,
                         wecom_webhook_url TEXT DEFAULT '',
+                        msg_type TEXT DEFAULT 'markdown',
                         notify_on_expired BOOLEAN DEFAULT 1,
                         daily_report_enabled BOOLEAN DEFAULT 0,
                         daily_report_time TEXT DEFAULT '22:00',
@@ -516,9 +517,16 @@ class Database:
                     )
                 """)
                 await db.execute("""
-                    INSERT OR IGNORE INTO webhook_config (id, enabled, wecom_webhook_url, notify_on_expired, daily_report_enabled, daily_report_time)
-                    VALUES (1, 0, '', 1, 0, '22:00')
+                    INSERT OR IGNORE INTO webhook_config (id, enabled, wecom_webhook_url, msg_type, notify_on_expired, daily_report_enabled, daily_report_time)
+                    VALUES (1, 0, '', 'markdown', 1, 0, '22:00')
                 """)
+            else:
+                if not await self._column_exists(db, "webhook_config", "msg_type"):
+                    try:
+                        await db.execute("ALTER TABLE webhook_config ADD COLUMN msg_type TEXT DEFAULT 'markdown'")
+                        print("  ✓ Added column 'msg_type' to webhook_config table")
+                    except Exception as e:
+                        print(f"  ✗ Failed to add column 'msg_type': {e}")
 
             # ========== Step 2: Add missing columns to existing tables ==========
             # Check and add missing columns to tokens table
@@ -936,6 +944,7 @@ class Database:
                     id INTEGER PRIMARY KEY DEFAULT 1,
                     enabled BOOLEAN DEFAULT 0,
                     wecom_webhook_url TEXT DEFAULT '',
+                    msg_type TEXT DEFAULT 'markdown',
                     notify_on_expired BOOLEAN DEFAULT 1,
                     daily_report_enabled BOOLEAN DEFAULT 0,
                     daily_report_time TEXT DEFAULT '22:00',
@@ -2206,6 +2215,7 @@ class Database:
                     id=data.get("id", 1),
                     enabled=bool(data.get("enabled", 0)),
                     wecom_webhook_url=data.get("wecom_webhook_url") or "",
+                    msg_type=data.get("msg_type") or "markdown",
                     notify_on_expired=bool(data.get("notify_on_expired", 1)),
                     daily_report_enabled=bool(data.get("daily_report_enabled", 0)),
                     daily_report_time=data.get("daily_report_time") or "22:00",
@@ -2218,6 +2228,7 @@ class Database:
         self,
         enabled: Optional[bool] = None,
         wecom_webhook_url: Optional[str] = None,
+        msg_type: Optional[str] = None,
         notify_on_expired: Optional[bool] = None,
         daily_report_enabled: Optional[bool] = None,
         daily_report_time: Optional[str] = None
@@ -2231,6 +2242,9 @@ class Database:
 
             new_enabled = enabled if enabled is not None else bool(current.get("enabled", False))
             new_url = (wecom_webhook_url if wecom_webhook_url is not None else current.get("wecom_webhook_url", "")).strip()
+            new_msg_type = (msg_type if msg_type is not None else current.get("msg_type", "markdown")).strip().lower()
+            if new_msg_type not in ("markdown", "text"):
+                new_msg_type = "markdown"
             new_notify_expired = notify_on_expired if notify_on_expired is not None else bool(current.get("notify_on_expired", True))
             new_daily_report = daily_report_enabled if daily_report_enabled is not None else bool(current.get("daily_report_enabled", False))
             new_daily_time = (daily_report_time if daily_report_time is not None else current.get("daily_report_time", "22:00")).strip()
@@ -2240,15 +2254,15 @@ class Database:
             if row:
                 await db.execute("""
                     UPDATE webhook_config
-                    SET enabled = ?, wecom_webhook_url = ?, notify_on_expired = ?,
+                    SET enabled = ?, wecom_webhook_url = ?, msg_type = ?, notify_on_expired = ?,
                         daily_report_enabled = ?, daily_report_time = ?, updated_at = CURRENT_TIMESTAMP
                     WHERE id = 1
-                """, (int(new_enabled), new_url, int(new_notify_expired), int(new_daily_report), new_daily_time))
+                """, (int(new_enabled), new_url, new_msg_type, int(new_notify_expired), int(new_daily_report), new_daily_time))
             else:
                 await db.execute("""
-                    INSERT INTO webhook_config (id, enabled, wecom_webhook_url, notify_on_expired, daily_report_enabled, daily_report_time)
-                    VALUES (1, ?, ?, ?, ?, ?)
-                """, (int(new_enabled), new_url, int(new_notify_expired), int(new_daily_report), new_daily_time))
+                    INSERT INTO webhook_config (id, enabled, wecom_webhook_url, msg_type, notify_on_expired, daily_report_enabled, daily_report_time)
+                    VALUES (1, ?, ?, ?, ?, ?, ?)
+                """, (int(new_enabled), new_url, new_msg_type, int(new_notify_expired), int(new_daily_report), new_daily_time))
             await db.commit()
 
         return await self.get_webhook_config()

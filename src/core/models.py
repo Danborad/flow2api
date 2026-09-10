@@ -241,6 +241,7 @@ class WebhookConfig(BaseModel):
     id: int = 1
     enabled: bool = False
     wecom_webhook_url: str = ""
+    msg_type: str = "markdown"  # "markdown" 或 "text" (纯文本)
     notify_on_expired: bool = True
     daily_report_enabled: bool = False
     daily_report_time: str = "22:00"
@@ -253,6 +254,7 @@ class WebhookConfigRequest(BaseModel):
 
     enabled: Optional[bool] = None
     wecom_webhook_url: Optional[str] = None
+    msg_type: Optional[str] = None
     notify_on_expired: Optional[bool] = None
     daily_report_enabled: Optional[bool] = None
     daily_report_time: Optional[str] = None
