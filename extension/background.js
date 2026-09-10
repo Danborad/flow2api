@@ -151,23 +151,29 @@ function getCookies(details) {
 }
 
 async function getLabsSessionToken() {
-    const urls = [
-        "https://flow.google.com/",
-        "https://flow.google.com/project/",
-        "https://labs.google/fx",
-        "https://labs.google/fx/tools/flow",
-        "https://labs.google/"
+    const queries = [
+        { domain: "labs.google" },
+        { domain: ".labs.google" },
+        { domain: "flow.google.com" },
+        { domain: ".flow.google.com" },
+        { url: "https://labs.google/" },
+        { url: "https://labs.google/fx" },
+        { url: "https://labs.google/fx/tools/flow" },
+        { url: "https://flow.google.com/" },
+        { url: "https://flow.google.com/project/" }
     ];
     const cookiesByBaseName = new Map();
-    for (const url of urls) {
-        const cookies = await getCookies({ url });
+    for (const query of queries) {
+        const cookies = await getCookies(query);
         for (const cookie of cookies) {
             const baseName = SESSION_COOKIE_BASE_NAMES.find((name) => (
                 cookie.name === name || cookie.name.startsWith(`${name}.`)
             ));
             if (!baseName || !cookie.value) continue;
             const candidates = cookiesByBaseName.get(baseName) || [];
-            candidates.push(cookie);
+            if (!candidates.some(c => c.name === cookie.name && c.value === cookie.value)) {
+                candidates.push(cookie);
+            }
             cookiesByBaseName.set(baseName, candidates);
         }
     }
@@ -191,7 +197,7 @@ async function getLabsSessionToken() {
 async function refreshLabsSessionCookie() {
     let tabId = null;
     try {
-        const tab = await chrome.tabs.create({ url: FLOW_HOME_URL, active: false });
+        const tab = await chrome.tabs.create({ url: "https://labs.google/fx/tools/flow", active: false });
         tabId = tab.id;
         if (tabId) {
             await waitForTabReady(tabId);
@@ -488,28 +494,27 @@ async function handleGetToken(data) {
             : "https://flow.google.com/";
         const existingTabs = await chrome.tabs.query({
             url: [
-                "https://labs.google/fx/tools/flow*",
-                "https://labs.google/fx/vi/tools/flow*",
-                "https://labs.google/fx/*/tools/flow*",
-                "https://labs.google/fx/projects/*",
-                "https://labs.google/fx/vi/projects/*",
-                "https://flow.google.com/*"
+                "https://flow.google.com/*",
+                "https://labs.google/fx/*"
             ]
         });
         const projectTab = projectId
             ? existingTabs.find(tab => tab.url && tab.url.includes(`/project/${projectId}`))
             : null;
-        const anyProjectTab = projectId
-            ? null
-            : existingTabs.find(tab => tab.url && /flow\.google\.com\/project\//.test(tab.url));
-        const targetTab = projectTab || anyProjectTab || await chrome.tabs.create({
-            url: projectUrl || FLOW_HOME_URL,
-            active: false
-        });
-        newTabId = projectTab || anyProjectTab ? null : targetTab.id;
+        const anyProjectTab = existingTabs.find(tab => tab.url && (tab.url.includes("/project/") || tab.url.includes("/projects/")));
+        const anyFlowTab = existingTabs.find(tab => tab.url && (tab.url.includes("flow.google.com") || tab.url.includes("labs.google")));
+
+        let targetTab = projectTab || anyProjectTab || anyFlowTab;
+        if (!targetTab) {
+            targetTab = await chrome.tabs.create({
+                url: projectUrl || FLOW_HOME_URL,
+                active: false
+            });
+            newTabId = targetTab.id;
+        }
 
         await waitForTabReady(targetTab.id);
-        await sleep(newTabId ? 2000 : 500);
+        await sleep(newTabId ? 2500 : 300);
 
         logExtensionEvent("captcha_tab_selected", {
             action: data.action || "IMAGE_GENERATION",
@@ -541,9 +546,17 @@ async function handleGetToken(data) {
                             return fail("page_check", `unexpected page: ${location.href}`);
                         }
 
-                        // Flow should load reCAPTCHA itself. Do not inject a
-                        // script here because flow.google.com enforces Trusted Types.
-                        const captchaDeadline = Date.now() + Math.min(timeoutMs, 15000);
+                        // 如果当前不在项目页且没有验证码环境，尝试自动从首页链接进入项目
+                        if (!location.pathname.includes("/project") && !location.pathname.includes("/projects") && !(window.grecaptcha && window.grecaptcha.enterprise)) {
+                            const link = document.querySelector('a[href*="/project/"]');
+                            if (link && link.href) {
+                                location.href = link.href;
+                                return fail("navigating_to_project", `页面在首页，已触发自动跳转到项目页: ${link.href}，请稍候重试`);
+                            }
+                        }
+
+                        // Flow 项目页面自身会加载 reCAPTCHA。
+                        const captchaDeadline = Date.now() + Math.min(timeoutMs, 20000);
                         while (!(window.grecaptcha && window.grecaptcha.enterprise) && Date.now() < captchaDeadline) {
                             await new Promise(resolve => setTimeout(resolve, 250));
                         }

@@ -1,5 +1,10 @@
 # Flow2API Captcha Worker 更新记录
 
+## 1.1.15
+
+- 修复 Session Token 获取：按 domain 深度扫描 labs.google / flow.google.com 的认证 Cookie。
+- 修复打码页面选择：智能复用已有项目页；若在首页自动跳转进入已有项目页获取验证码。
+
 ## 1.1.14
 
 - 兼容新版 Flow 会话 Cookie 名称、作用域和分片 Cookie。
