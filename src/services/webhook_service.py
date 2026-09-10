@@ -148,10 +148,22 @@ class WebhookService:
                     return False
 
             token = token_obj or await self.db.get_token(token_id)
+            if not token:
+                return False
+
+            is_active = bool(getattr(token, "is_active", False))
+            at_expires = getattr(token, "at_expires", None)
+
+            # 防误报过滤：如果账号依然处于启用状态且 AT 尚未过期，说明账号完全可用，不应发送失效告警
+            if is_active and at_expires:
+                now_utc = datetime.now(timezone.utc)
+                at_exp = at_expires if at_expires.tzinfo else at_expires.replace(tzinfo=timezone.utc)
+                if at_exp > now_utc:
+                    return False
+
             email = getattr(token, "email", None) or f"Token ID: {token_id}"
             credits = getattr(token, "credits", 0) or 0
-            is_active = getattr(token, "is_active", False)
-            status_text = "已禁用" if not is_active else "异常警告"
+            status_text = "已禁用" if not is_active else "已过期"
 
             now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 

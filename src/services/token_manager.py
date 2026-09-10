@@ -591,7 +591,6 @@ class TokenManager:
                 "so a transient network/Captcha failure cannot drain the account pool"
             )
             await self._request_extension_account_sync(token_id, reason="at_refresh_failed")
-            await self._notify_webhook_token_expired(token_id, "AT 刷新失败，正在等待浏览器扩展同步")
             await self.db.update_token(
                 token_id,
                 last_st_refresh_result="AT refresh failed; waiting for browser resync",
@@ -825,7 +824,6 @@ class TokenManager:
             new_st = await self._try_protocol_refresh_st(token_id, latest)
             if not new_st:
                 await self._request_extension_account_sync(token_id, reason="protocol_refresh_failed")
-                await self._notify_webhook_token_expired(token_id, "Google 协议刷新 ST 失败，Cookie 可能已过期或被风控")
                 return
 
             try:

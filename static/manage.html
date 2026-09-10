@@ -97,6 +97,11 @@
                                 </div>
                             </div>
                         </div>
+                        <button onclick="toggleEmailMask()" id="btnToggleEmailMask" class="inline-flex items-center justify-center rounded-md transition-colors hover:bg-accent h-8 w-8 text-muted-foreground hover:text-foreground" title="脱敏显示账号（方便截图）">
+                            <svg class="h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>
+                            </svg>
+                        </button>
                         <button onclick="refreshTokens()" class="inline-flex items-center justify-center rounded-md transition-colors hover:bg-accent h-8 w-8" title="刷新">
                             <svg class="h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                 <polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
@@ -132,7 +137,16 @@
                     <table class="w-full table-auto text-sm">
                         <thead>
                             <tr class="border-b border-border">
-                                <th class="h-10 px-2.5 text-left align-middle font-medium text-muted-foreground">邮箱</th>
+                                <th class="h-10 px-2.5 text-left align-middle font-medium text-muted-foreground">
+                                    <div class="inline-flex items-center gap-1.5 cursor-pointer select-none hover:text-foreground" onclick="toggleEmailMask()" title="点击切换账号脱敏（方便截图）">
+                                        <span>邮箱</span>
+                                        <span id="thEmailMaskIcon" class="inline-flex items-center opacity-70 hover:opacity-100">
+                                            <svg class="h-3.5 w-3.5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>
+                                            </svg>
+                                        </span>
+                                    </div>
+                                </th>
                                 <th class="h-10 px-2.5 text-center align-middle font-medium text-muted-foreground">状态</th>
                                 <th class="h-10 px-2.5 text-center align-middle font-medium text-muted-foreground">协议</th>
                                 <th class="h-10 px-2.5 text-center align-middle font-medium text-muted-foreground">过期时间</th>
@@ -975,7 +989,7 @@
         formatProjectNameDisplay=name=>{if(!name)return'<span class="text-muted-foreground">-</span>';const text=String(name);const match=text.match(/^(.*?)(?:\s+(P\d+))$/);if(match){return`<div class="flex flex-col items-center justify-center gap-1 leading-none"><span class="text-xs font-medium text-foreground whitespace-nowrap">${escapeLogHtml(match[1])}</span><span class="inline-flex items-center rounded-full border border-slate-200 bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-700">${escapeLogHtml(match[2])}</span></div>`}return`<div class="text-center text-xs font-medium text-foreground whitespace-nowrap">${escapeLogHtml(text)}</div>`},
         formatProjectIdDisplay=projectId=>{if(!projectId)return'<span class="text-muted-foreground">-</span>';const text=String(projectId);const short=text.length>8?`${text.substring(0,8)}...`:text;return`<button onclick="copyProjectId('${projectId}')" class="inline-flex items-center justify-center rounded-full border border-blue-200 bg-blue-50 px-2 py-0.5 text-[10px] font-mono font-medium text-blue-700 transition-colors hover:bg-blue-100 hover:text-blue-800" title="点击复制项目ID&#10;${escapeLogHtml(text)}">${escapeLogHtml(short)}</button>`},
         renderTokenActions=t=>{const toggleLabel=t.is_active?'禁用':'启用';return`<div class="inline-flex flex-nowrap items-center justify-end gap-1"><button onclick="refreshTokenAT(${t.id})" class="inline-flex h-7 items-center justify-center rounded-md px-2 text-xs font-medium hover:bg-blue-50 hover:text-blue-700">刷新AT</button><button onclick="openEditModal(${t.id})" class="inline-flex h-7 items-center justify-center rounded-md px-2 text-xs font-medium hover:bg-green-50 hover:text-green-700">详情</button><button onclick="toggleToken(${t.id},${t.is_active})" class="inline-flex h-7 items-center justify-center rounded-md px-2 text-xs font-medium hover:bg-accent">${toggleLabel}</button><button onclick="deleteToken(${t.id})" class="inline-flex h-7 items-center justify-center rounded-md px-2 text-xs font-medium hover:bg-destructive/10 hover:text-destructive">删除</button></div>`},
-        renderTokens=()=>{const tb=$('tokenTableBody');tb.innerHTML=allTokens.map(t=>{const imageDisplay=t.image_enabled?`${t.image_count||0}`:'-';const videoDisplay=t.video_enabled?`${t.video_count||0}`:'-';const creditsDisplay=t.credits!==undefined?`${t.credits}`:'-';const accountTypeDisplay=formatAccountType(t.user_paygate_tier);const projectIdDisplay=formatProjectIdDisplay(t.current_project_id);const expiryDisplay=formatExpiry(t.at_expires);const protocolDisplay=t.protocol_mode==='protocol'?`<span class="inline-flex items-center rounded px-2 py-0.5 text-xs bg-indigo-50 text-indigo-700" title="${escapeLogHtml(t.last_st_refresh_result||'')}">协议</span>`:`<span class="inline-flex items-center rounded px-2 py-0.5 text-xs bg-gray-100 text-gray-700">ST</span>`;const tokenActions=renderTokenActions(t);return`<tr class="hover:bg-muted/20 transition-colors"><td class="py-3 px-2.5 align-middle"><div class="max-w-[180px] overflow-hidden text-ellipsis whitespace-nowrap text-sm font-medium text-foreground" title="${escapeLogHtml(t.email||'')}">${escapeLogHtml(t.email||'-')}</div></td><td class="py-3 px-2.5 text-center align-middle whitespace-nowrap"><span class="inline-flex items-center rounded px-2 py-0.5 text-xs ${t.is_active?'bg-green-50 text-green-700':'bg-gray-100 text-gray-700'}">${t.is_active?'启用':'禁用'}</span></td><td class="py-3 px-2.5 text-center align-middle whitespace-nowrap">${protocolDisplay}</td><td class="py-3 px-2.5 text-center text-xs align-middle whitespace-nowrap">${expiryDisplay}</td><td class="py-3 px-2.5 text-center align-middle whitespace-nowrap"><button onclick="refreshTokenCredits(${t.id})" class="inline-flex items-center justify-center gap-1 rounded-full bg-blue-50 px-2 py-0.5 text-sm font-medium text-blue-700 transition-colors hover:bg-blue-100 hover:text-blue-800" title="点击刷新余额"><span>${creditsDisplay}</span><svg class="h-3 w-3" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 11-6.219-8.56"/><path d="M15 4.5l3.5 3.5L22 4.5"/></svg></button></td><td class="py-3 px-2.5 text-center align-middle whitespace-nowrap">${accountTypeDisplay}</td><td class="py-3 px-2.5 text-center text-xs align-middle whitespace-nowrap">${projectIdDisplay}</td><td class="py-3 px-2.5 text-center align-middle whitespace-nowrap"><span class="text-sm font-medium">${imageDisplay}</span></td><td class="py-3 px-2.5 text-center align-middle whitespace-nowrap"><span class="text-sm font-medium">${videoDisplay}</span></td><td class="py-3 px-2.5 text-center align-middle whitespace-nowrap"><span class="text-sm font-medium ${Number(t.error_count||0)>0?'text-red-600':'text-foreground'}">${t.error_count||0}</span></td><td class="py-3 px-2.5 text-right align-middle whitespace-nowrap">${tokenActions}</td></tr>`}).join('')},
+        renderTokens=()=>{const tb=$('tokenTableBody');tb.innerHTML=allTokens.map(t=>{const imageDisplay=t.image_enabled?`${t.image_count||0}`:'-';const videoDisplay=t.video_enabled?`${t.video_count||0}`:'-';const creditsDisplay=t.credits!==undefined?`${t.credits}`:'-';const accountTypeDisplay=formatAccountType(t.user_paygate_tier);const projectIdDisplay=formatProjectIdDisplay(t.current_project_id);const expiryDisplay=formatExpiry(t.at_expires);const protocolDisplay=t.protocol_mode==='protocol'?`<span class="inline-flex items-center rounded px-2 py-0.5 text-xs bg-indigo-50 text-indigo-700" title="${escapeLogHtml(t.last_st_refresh_result||'')}">协议</span>`:`<span class="inline-flex items-center rounded px-2 py-0.5 text-xs bg-gray-100 text-gray-700">ST</span>`;const tokenActions=renderTokenActions(t);const emailText=typeof formatTokenEmail==='function'?formatTokenEmail(t.email):t.email||'-';return`<tr class="hover:bg-muted/20 transition-colors"><td class="py-3 px-2.5 align-middle"><div class="max-w-[180px] overflow-hidden text-ellipsis whitespace-nowrap text-sm font-medium text-foreground" title="${escapeLogHtml(emailText)}">${escapeLogHtml(emailText)}</div></td><td class="py-3 px-2.5 text-center align-middle whitespace-nowrap"><span class="inline-flex items-center rounded px-2 py-0.5 text-xs ${t.is_active?'bg-green-50 text-green-700':'bg-gray-100 text-gray-700'}">${t.is_active?'启用':'禁用'}</span></td><td class="py-3 px-2.5 text-center align-middle whitespace-nowrap">${protocolDisplay}</td><td class="py-3 px-2.5 text-center text-xs align-middle whitespace-nowrap">${expiryDisplay}</td><td class="py-3 px-2.5 text-center align-middle whitespace-nowrap"><button onclick="refreshTokenCredits(${t.id})" class="inline-flex items-center justify-center gap-1 rounded-full bg-blue-50 px-2 py-0.5 text-sm font-medium text-blue-700 transition-colors hover:bg-blue-100 hover:text-blue-800" title="点击刷新余额"><span>${creditsDisplay}</span><svg class="h-3 w-3" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 11-6.219-8.56"/><path d="M15 4.5l3.5 3.5L22 4.5"/></svg></button></td><td class="py-3 px-2.5 text-center align-middle whitespace-nowrap">${accountTypeDisplay}</td><td class="py-3 px-2.5 text-center text-xs align-middle whitespace-nowrap">${projectIdDisplay}</td><td class="py-3 px-2.5 text-center align-middle whitespace-nowrap"><span class="text-sm font-medium">${imageDisplay}</span></td><td class="py-3 px-2.5 text-center align-middle whitespace-nowrap"><span class="text-sm font-medium">${videoDisplay}</span></td><td class="py-3 px-2.5 text-center align-middle whitespace-nowrap"><span class="text-sm font-medium ${Number(t.error_count||0)>0?'text-red-600':'text-foreground'}">${t.error_count||0}</span></td><td class="py-3 px-2.5 text-right align-middle whitespace-nowrap">${tokenActions}</td></tr>`}).join('')},
         refreshTokenCredits=async(id)=>{try{showToast('正在刷新余额...','info');const r=await apiRequest(`/api/tokens/${id}/refresh-credits`,{method:'POST'});if(!r)return;const d=await r.json();if(d.success){showToast(`余额刷新成功: ${d.credits}`,'success');await refreshTokens()}else{showToast('刷新余额失败: '+(d.detail||'未知错误'),'error')}}catch(e){showToast('刷新余额失败: '+e.message,'error')}},
         refreshTokenAT=async(id)=>{try{showToast('正在更新AT...','info');const r=await apiRequest(`/api/tokens/${id}/refresh-at`,{method:'POST'});if(!r)return;const d=await r.json();if(d.success){const expiresDate=d.token.at_expires?new Date(d.token.at_expires):null;const expiresStr=expiresDate?expiresDate.toLocaleString('zh-CN',{year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hour12:false}).replace(/\//g,'-'):'未知';showToast(`AT更新成功! 新过期时间: ${expiresStr}`,'success');await refreshTokens()}else{showToast('更新失败: '+(d.detail||'未知错误'),'error')}}catch(e){showToast('更新失败: '+e.message,'error')}},
         refreshTokens=async()=>{await loadTokens();await loadStats()},
@@ -1502,9 +1516,57 @@
             }
         }
 
+        window.isEmailMasked = localStorage.getItem('flow2api_mask_emails') === '1';
+
+        function formatTokenEmail(email) {
+            if (!email) return '-';
+            if (!window.isEmailMasked) return email;
+            const atIdx = email.indexOf('@');
+            if (atIdx === -1) {
+                if (email.length <= 4) return '***';
+                return email.slice(0, 2) + '***' + email.slice(-2);
+            }
+            const name = email.slice(0, atIdx);
+            const domain = email.slice(atIdx);
+            if (name.length <= 2) {
+                return name[0] + '***' + domain;
+            }
+            if (name.length <= 4) {
+                return name.slice(0, 1) + '***' + name.slice(-1) + domain;
+            }
+            return name.slice(0, 2) + '***' + name.slice(-2) + domain;
+        }
+
+        function updateEmailMaskButtons() {
+            const eyeSvg = `<svg class="h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>`;
+            const eyeOffSvg = `<svg class="h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>`;
+
+            const btn = document.getElementById('btnToggleEmailMask');
+            if (btn) {
+                btn.innerHTML = window.isEmailMasked ? eyeOffSvg : eyeSvg;
+                btn.title = window.isEmailMasked ? '已脱敏（点击显示完整账号）' : '脱敏显示账号（方便截图）';
+                btn.classList.toggle('text-primary', window.isEmailMasked);
+                btn.classList.toggle('bg-accent', window.isEmailMasked);
+            }
+            const thIcon = document.getElementById('thEmailMaskIcon');
+            if (thIcon) {
+                thIcon.innerHTML = window.isEmailMasked ? eyeOffSvg : eyeSvg;
+                thIcon.classList.toggle('text-primary', window.isEmailMasked);
+            }
+        }
+
+        function toggleEmailMask() {
+            window.isEmailMasked = !window.isEmailMasked;
+            localStorage.setItem('flow2api_mask_emails', window.isEmailMasked ? '1' : '0');
+            updateEmailMaskButtons();
+            if (typeof renderTokens === 'function') renderTokens();
+            showToast(window.isEmailMasked ? '已开启账号脱敏（可直接截图分享）' : '已恢复完整账号显示', 'info', 1800);
+        }
+
         window.addEventListener('DOMContentLoaded', () => {
             loadImageFallbackAttempts();
             loadWebhookConfig();
+            updateEmailMaskButtons();
             const tabBtn = document.getElementById('tabSettings');
             if (tabBtn) tabBtn.addEventListener('click', () => setTimeout(loadWebhookConfig, 100));
         });
