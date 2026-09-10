@@ -1,5 +1,10 @@
 # Flow2API Captcha Worker 更新记录
 
+## 1.1.14
+
+- 兼容新版 Flow 会话 Cookie 名称、作用域和分片 Cookie。
+- 导入失败时只记录会话 Cookie 名称，不记录 Cookie 值。
+
 ## 1.1.13
 
 - 将 `flow.google.com` 设为账号同步和验证码页面的主入口。

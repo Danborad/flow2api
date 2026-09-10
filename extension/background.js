@@ -34,6 +34,14 @@ const ACCOUNT_IMPORT_ALARM = "flow2api-auto-import-account";
 const LABS_SESSION_COOKIE = "__Secure-next-auth.session-token";
 const FLOW_HOME_URL = "https://flow.google.com/";
 const FLOW_PROJECT_URL = "https://flow.google.com/project/";
+const SESSION_COOKIE_BASE_NAMES = [
+    "__Secure-next-auth.session-token",
+    "next-auth.session-token",
+    "__Host-next-auth.session-token",
+    "__Secure-authjs.session-token",
+    "authjs.session-token",
+    "__Host-authjs.session-token",
+];
 const GOOGLE_COOKIE_NAMES = [
     "SID",
     "HSID",
@@ -150,10 +158,33 @@ async function getLabsSessionToken() {
         "https://labs.google/fx/tools/flow",
         "https://labs.google/"
     ];
+    const cookiesByBaseName = new Map();
     for (const url of urls) {
-        const cookie = await getCookie({ url, name: LABS_SESSION_COOKIE });
-        if (cookie && cookie.value) return cookie.value;
+        const cookies = await getCookies({ url });
+        for (const cookie of cookies) {
+            const baseName = SESSION_COOKIE_BASE_NAMES.find((name) => (
+                cookie.name === name || cookie.name.startsWith(`${name}.`)
+            ));
+            if (!baseName || !cookie.value) continue;
+            const candidates = cookiesByBaseName.get(baseName) || [];
+            candidates.push(cookie);
+            cookiesByBaseName.set(baseName, candidates);
+        }
     }
+    const candidates = Array.from(cookiesByBaseName.entries()).map(([baseName, cookies]) => {
+        const sorted = cookies.sort((left, right) => {
+            const leftIndex = left.name === baseName ? -1 : Number(left.name.split(".").pop());
+            const rightIndex = right.name === baseName ? -1 : Number(right.name.split(".").pop());
+            return leftIndex - rightIndex;
+        });
+        return { baseName, value: sorted.map(cookie => cookie.value).join("") };
+    });
+    logExtensionEvent("session_cookie_candidates", {
+        names: candidates.map(candidate => candidate.baseName),
+        count: candidates.length,
+    });
+    const preferred = candidates.find(candidate => candidate.baseName === LABS_SESSION_COOKIE) || candidates[0];
+    if (preferred && preferred.value) return preferred.value;
     return "";
 }
 
@@ -226,7 +257,7 @@ async function importCurrentAccount(reason = "manual") {
     await refreshLabsSessionCookie();
         const sessionToken = await getLabsSessionToken();
         if (!sessionToken) {
-            throw new Error("Flow Session Token not found. Open https://flow.google.com/ in this Chrome profile first.");
+            throw new Error("Flow Session Token not found. Flow 页面已打开但没有可读取的会话 Cookie，请确认当前 Chrome Profile 已登录并允许插件读取 flow.google.com Cookie。");
         }
 
         const googleCookies = await getGoogleCookies();
