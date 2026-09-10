@@ -32,6 +32,8 @@ function setConnectionStatus(status, error = "") {
 
 const ACCOUNT_IMPORT_ALARM = "flow2api-auto-import-account";
 const LABS_SESSION_COOKIE = "__Secure-next-auth.session-token";
+const FLOW_HOME_URL = "https://flow.google.com/";
+const FLOW_PROJECT_URL = "https://flow.google.com/project/";
 const GOOGLE_COOKIE_NAMES = [
     "SID",
     "HSID",
@@ -142,6 +144,8 @@ function getCookies(details) {
 
 async function getLabsSessionToken() {
     const urls = [
+        "https://flow.google.com/",
+        "https://flow.google.com/project/",
         "https://labs.google/fx",
         "https://labs.google/fx/tools/flow",
         "https://labs.google/"
@@ -156,7 +160,7 @@ async function getLabsSessionToken() {
 async function refreshLabsSessionCookie() {
     let tabId = null;
     try {
-        const tab = await chrome.tabs.create({ url: "https://labs.google/fx/tools/flow", active: false });
+        const tab = await chrome.tabs.create({ url: FLOW_HOME_URL, active: false });
         tabId = tab.id;
         if (tabId) {
             await waitForTabReady(tabId);
@@ -222,7 +226,7 @@ async function importCurrentAccount(reason = "manual") {
     await refreshLabsSessionCookie();
         const sessionToken = await getLabsSessionToken();
         if (!sessionToken) {
-            throw new Error("Labs Session Token not found. Open https://labs.google/fx/tools/flow in this Chrome profile first.");
+            throw new Error("Flow Session Token not found. Open https://flow.google.com/ in this Chrome profile first.");
         }
 
         const googleCookies = await getGoogleCookies();
@@ -468,7 +472,7 @@ async function handleGetToken(data) {
             ? null
             : existingTabs.find(tab => tab.url && /flow\.google\.com\/project\//.test(tab.url));
         const targetTab = projectTab || anyProjectTab || await chrome.tabs.create({
-            url: projectUrl,
+            url: projectUrl || FLOW_HOME_URL,
             active: false
         });
         newTabId = projectTab || anyProjectTab ? null : targetTab.id;

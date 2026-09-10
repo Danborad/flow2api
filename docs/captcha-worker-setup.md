@@ -18,7 +18,7 @@
 
 扩展目录应包含 `manifest.json`、`background.js`、`content.js`、`options.html`。
 
-当前扩展版本会显示在插件设置页标题中，例如 `v1.1.12`。Chrome 扩展管理页的“详情”中也会显示同一版本；后台 WebSocket 日志会记录连接插件的版本号。设置页还会显示 WebSocket 当前连接状态、最近错误和插件事件日志。服务地址权限在点击保存时由 Chrome 临时申请。
+当前扩展版本会显示在插件设置页标题中，例如 `v1.1.13`。Chrome 扩展管理页的“详情”中也会显示同一版本；后台 WebSocket 日志会记录连接插件的版本号。设置页还会显示 WebSocket 当前连接状态、最近错误和插件事件日志。服务地址权限在点击保存时由 Chrome 临时申请。
 
 ## 插件设置
 
@@ -52,7 +52,7 @@ ws://flow2api.example.com:8000/captcha_ws
 ## 导入账号
 
 1. 在当前 Chrome Profile 登录 Google 账号。
-2. 打开 `https://labs.google/fx/tools/flow` 并确认页面可用。
+2. 打开 `https://flow.google.com/` 并确认页面可用。
 3. 回到扩展设置页点击“导入当前 Google 账号”。
 4. 管理后台刷新 Token 列表，确认邮箱、余额和过期时间正常。
 
