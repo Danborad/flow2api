@@ -261,6 +261,11 @@ class TokenManager:
         await self.db.update_token(token_id, is_active=True, ban_reason=None, banned_at=None)
         # Reset error count when enabling (only reset total error_count, keep today_error_count)
         await self.db.reset_error_count(token_id)
+        try:
+            from .webhook_service import get_webhook_service
+            get_webhook_service(self.db).mark_token_recovered(token_id)
+        except Exception:
+            pass
 
     async def disable_token(self, token_id: int):
         """Disable a token"""

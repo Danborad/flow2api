@@ -131,21 +131,18 @@ class WebhookService:
 
         return await self.send_wecom_message(markdown, content_text=text, custom_url=custom_url, custom_msg_type=custom_msg_type)
 
+    def mark_token_recovered(self, token_id: int):
+        """当账号恢复正常（重新导入/启用/刷新成功）时，清除失效通知标记"""
+        if token_id in self._notified_expired_tokens:
+            debug_logger.log_info(f"[WEBHOOK] Token {token_id} 已恢复正常，清除失效通知标记")
+            self._notified_expired_tokens.pop(token_id, None)
+
     async def notify_token_expired(self, token_id: int, reason: str, token_obj: Optional[Any] = None) -> bool:
-        """当 Token 失效/过期/禁用时，发送企业微信实时告警通知"""
+        """当 Token 失效/过期/禁用时，发送企业微信实时告警通知（每个账号失效期间只发一次，绝不重复轰炸）"""
         try:
             cfg = await self.db.get_webhook_config()
             if not cfg.enabled or not cfg.notify_on_expired or not cfg.wecom_webhook_url:
                 return False
-
-            # 去重限制：同一 token 相同原因在 30 分钟内不重复告警
-            import time
-            now_ts = time.time()
-            last_info = self._notified_expired_tokens.get(token_id)
-            if last_info:
-                last_ts, last_reason = last_info
-                if last_reason == reason and (now_ts - last_ts < 1800):
-                    return False
 
             token = token_obj or await self.db.get_token(token_id)
             if not token:
@@ -154,12 +151,20 @@ class WebhookService:
             is_active = bool(getattr(token, "is_active", False))
             at_expires = getattr(token, "at_expires", None)
 
-            # 防误报过滤：如果账号依然处于启用状态且 AT 尚未过期，说明账号完全可用，不应发送失效告警
+            # 防误报过滤：如果账号依然处于启用状态且 AT 尚未过期，说明账号完全可用，清除记录并不发送告警
             if is_active and at_expires:
                 now_utc = datetime.now(timezone.utc)
                 at_exp = at_expires if at_expires.tzinfo else at_expires.replace(tzinfo=timezone.utc)
                 if at_exp > now_utc:
+                    self.mark_token_recovered(token_id)
                     return False
+
+            # 单次告警限制：只要该账号已发送过失效告警且尚未恢复正常，坚决不再重复发送
+            if token_id in self._notified_expired_tokens:
+                return False
+
+            import time
+            now_ts = time.time()
 
             email = getattr(token, "email", None) or f"Token ID: {token_id}"
             credits = getattr(token, "credits", 0) or 0
@@ -190,7 +195,7 @@ class WebhookService:
             success, msg = await self.send_wecom_message(markdown, content_text=text)
             if success:
                 self._notified_expired_tokens[token_id] = (now_ts, reason)
-                debug_logger.log_info(f"[WEBHOOK] 成功推送账号失效告警: {email} - {reason}")
+                debug_logger.log_info(f"[WEBHOOK] 成功推送账号失效单次告警: {email} - {reason}")
             else:
                 debug_logger.log_warning(f"[WEBHOOK] 推送账号失效告警失败: {msg}")
             return success
@@ -343,17 +348,27 @@ class WebhookService:
             return False, str(e)
 
     async def check_all_tokens_health(self):
-        """巡检所有账号，如果发现有失效或过期的账号触发告警"""
+        """巡检所有账号，如果发现有失效或过期的账号触发单次告警；已恢复健康的账号自动清除告警标记"""
         try:
             tokens = await self.db.get_all_tokens()
             now_utc = datetime.now(timezone.utc)
             for token in tokens:
-                if not token.is_active:
-                    reason = token.ban_reason or token.last_st_refresh_result or "账号已处于禁用状态"
-                    await self.notify_token_expired(token.id, f"账号已被禁用: {reason}", token_obj=token)
-                elif token.at_expires:
+                is_active = bool(token.is_active)
+                is_at_valid = False
+                if token.at_expires:
                     at_exp = token.at_expires if token.at_expires.tzinfo else token.at_expires.replace(tzinfo=timezone.utc)
-                    if at_exp <= now_utc:
+                    if at_exp > now_utc:
+                        is_at_valid = True
+
+                if is_active and is_at_valid:
+                    # 账号健康正常，清除失效通知标记（未来若再次失效可重新触发一次告警）
+                    self.mark_token_recovered(token.id)
+                else:
+                    # 账号失效，触发告警（内部已有去重拦截，失效期间仅发一次，绝不重复提醒）
+                    if not is_active:
+                        reason = token.ban_reason or token.last_st_refresh_result or "账号已处于禁用状态"
+                        await self.notify_token_expired(token.id, f"账号已被禁用: {reason}", token_obj=token)
+                    elif not is_at_valid:
                         await self.notify_token_expired(token.id, "Access Token 已过期且未恢复", token_obj=token)
         except Exception as e:
             debug_logger.log_error(f"[WEBHOOK] 账号巡检异常: {e}")

@@ -916,6 +916,11 @@ async def import_current_browser_account(
 
         if token_id is not None:
             await handler.token_manager.db.update_token(token_id, **update_fields)
+            try:
+                from ..services.webhook_service import get_webhook_service
+                get_webhook_service(handler.token_manager.db).mark_token_recovered(token_id)
+            except Exception:
+                pass
 
         return {
             "success": True,
