@@ -1,5 +1,9 @@
 # Flow2API Captcha Worker 更新记录
 
+## 1.1.18
+
+- 导入时全自动静默完成 Google Labs 会话激活与握手，无需用户手动打开任何页面。
+
 ## 1.1.17
 
 - 精准会话接口换取：后台自动请求 `labs.google/fx/api/auth/session` 激活并拉取会话 Token，避免重定向中断；报错提供明确指引。

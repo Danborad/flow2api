@@ -195,33 +195,66 @@ async function getLabsSessionToken() {
 }
 
 async function refreshLabsSessionCookie() {
-    const existing = await getLabsSessionToken();
-    if (existing) return;
+    let token = await getLabsSessionToken();
+    if (token) return token;
 
     let tabId = null;
     try {
-        const tab = await chrome.tabs.create({ url: "https://labs.google/fx/api/auth/session", active: false });
+        logExtensionEvent("auto_login_labs_start");
+        const tab = await chrome.tabs.create({ url: "https://labs.google/fx", active: false });
         tabId = tab.id;
-        const deadline = Date.now() + 8000;
+        await waitForTabReady(tabId);
+        await sleep(1500);
+
+        try {
+            await chrome.scripting.executeScript({
+                target: { tabId },
+                func: () => {
+                    const directBtn = document.getElementById("sign-in-now-button");
+                    if (directBtn) {
+                        directBtn.click();
+                        return "clicked_direct";
+                    }
+                    const openDialogBtn = Array.from(document.querySelectorAll("button, a")).find(
+                        el => el.innerText && (el.innerText.includes("Sign in") || el.innerText.includes("登录"))
+                    );
+                    if (openDialogBtn) {
+                        openDialogBtn.click();
+                        setTimeout(() => {
+                            const modalBtn = document.getElementById("sign-in-now-button");
+                            if (modalBtn) modalBtn.click();
+                        }, 500);
+                        return "clicked_dialog_then_modal";
+                    }
+                    return "not_found";
+                }
+            });
+        } catch (scriptErr) {
+            console.warn("[Flow2API] Auto-signin script failed:", scriptErr);
+        }
+
+        const deadline = Date.now() + 10000;
         while (Date.now() < deadline) {
-            await sleep(500);
-            const token = await getLabsSessionToken();
+            await sleep(600);
+            token = await getLabsSessionToken();
             if (token) {
-                console.log("[Flow2API] Successfully acquired Labs session token via background tab");
+                logExtensionEvent("auto_login_labs_success");
                 break;
             }
         }
     } catch (e) {
+        logExtensionEvent("auto_login_labs_failed", { error: e.message });
         console.warn("[Flow2API] Failed to refresh Labs session tab", e);
     } finally {
         if (tabId) {
             try {
                 await chrome.tabs.remove(tabId);
             } catch (e) {
-                console.warn("[Flow2API] Failed to close Labs session refresh tab", e);
+                // ignore
             }
         }
     }
+    return token;
 }
 
 async function getGoogleCookies() {
@@ -271,7 +304,7 @@ async function importCurrentAccount(reason = "manual") {
     await refreshLabsSessionCookie();
         const sessionToken = await getLabsSessionToken();
         if (!sessionToken) {
-            throw new Error("未检测到 Flow/Labs 会话凭据。请在当前浏览器打开一次 https://labs.google/fx/api/auth/session（确认页面显示包含账号邮箱的 JSON），然后再次点击导入即可。");
+            throw new Error("未能自动获取到 Flow/Labs 会话凭据。请确认当前浏览器已登录 Google 账号并能正常访问 https://flow.google.com/。");
         }
 
         const googleCookies = await getGoogleCookies();
