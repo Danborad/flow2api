@@ -195,13 +195,21 @@ async function getLabsSessionToken() {
 }
 
 async function refreshLabsSessionCookie() {
+    const existing = await getLabsSessionToken();
+    if (existing) return;
+
     let tabId = null;
     try {
         const tab = await chrome.tabs.create({ url: "https://labs.google/fx/tools/flow", active: false });
         tabId = tab.id;
-        if (tabId) {
-            await waitForTabReady(tabId);
-            await sleep(2500);
+        const deadline = Date.now() + 10000;
+        while (Date.now() < deadline) {
+            await sleep(500);
+            const token = await getLabsSessionToken();
+            if (token) {
+                console.log("[Flow2API] Successfully acquired Labs session token via background tab");
+                break;
+            }
         }
     } catch (e) {
         console.warn("[Flow2API] Failed to refresh Labs session tab", e);

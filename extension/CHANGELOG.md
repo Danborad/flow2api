@@ -1,5 +1,9 @@
 # Flow2API Captcha Worker 更新记录
 
+## 1.1.16
+
+- 自动静默轮询换取 Session Token：针对仅打开过 `flow.google.com` 的新环境，后台自动在授权落地前持续轮询检测写入，无需手动介入。
+
 ## 1.1.15
 
 - 修复 Session Token 获取：按 domain 深度扫描 labs.google / flow.google.com 的认证 Cookie。
