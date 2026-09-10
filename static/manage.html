@@ -320,6 +320,52 @@
                     <button onclick="saveCacheConfig()" class="inline-flex items-center justify-center rounded-md bg-primary text-primary-foreground hover:bg-primary/90 h-9 px-4 w-full mt-4">保存配置</button>
                 </div>
 
+                <!-- 企业微信通知配置 -->
+                <div class="rounded-lg border border-border bg-background p-6 flex flex-col">
+                    <h3 class="text-lg font-semibold mb-4">企业微信通知配置</h3>
+                    <div class="space-y-4 flex-1">
+                        <div>
+                            <label class="inline-flex items-center gap-2 cursor-pointer">
+                                <input type="checkbox" id="cfgWebhookEnabled" class="h-4 w-4 rounded border-input" onchange="toggleWebhookOptions()">
+                                <span class="text-sm font-medium">启用企业微信通知</span>
+                            </label>
+                            <p class="text-xs text-muted-foreground mt-1">开启后可通过企业微信群机器人接收账号失效告警与每日生成情况汇报</p>
+                        </div>
+
+                        <div id="webhookOptions" style="display: none;" class="space-y-4 pt-4 border-t border-border">
+                            <div>
+                                <label class="text-sm font-medium mb-2 block">Webhook 机器人地址</label>
+                                <input id="cfgWecomWebhookUrl" type="text" class="flex h-9 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" placeholder="https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=...">
+                                <p class="text-xs text-muted-foreground mt-1">在企业微信群添加群机器人后获取的 Webhook URL</p>
+                            </div>
+                            <div>
+                                <label class="inline-flex items-center gap-2 cursor-pointer">
+                                    <input type="checkbox" id="cfgNotifyOnExpired" class="h-4 w-4 rounded border-input">
+                                    <span class="text-sm font-medium">账号失效实时告警</span>
+                                </label>
+                                <p class="text-xs text-muted-foreground mt-1">当有账号 Token 过期、刷新失败或被系统自动禁用时，立即向群机器人推送告警</p>
+                            </div>
+                            <div class="pt-2 border-t border-border">
+                                <label class="inline-flex items-center gap-2 cursor-pointer">
+                                    <input type="checkbox" id="cfgDailyReportEnabled" class="h-4 w-4 rounded border-input" onchange="toggleDailyReportOptions()">
+                                    <span class="text-sm font-medium">定时每日生成汇报</span>
+                                </label>
+                                <p class="text-xs text-muted-foreground mt-1">每天定时总结今日生成情况（图片/视频生成数与成败、各账号调用量与余额）</p>
+                            </div>
+                            <div id="dailyReportTimeBox" style="display: none;">
+                                <label class="text-sm font-medium mb-2 block">每日汇报时间</label>
+                                <input id="cfgDailyReportTime" type="time" class="flex h-9 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" value="22:00">
+                                <p class="text-xs text-muted-foreground mt-1">每天在此时间（本地时间）自动向群机器人推送今日生成统计报告</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="flex gap-2 mt-4">
+                        <button onclick="saveWebhookConfig()" class="inline-flex items-center justify-center rounded-md bg-primary text-primary-foreground hover:bg-primary/90 h-9 px-4 flex-1">保存配置</button>
+                        <button onclick="testWebhook()" class="inline-flex items-center justify-center rounded-md bg-secondary text-secondary-foreground hover:bg-secondary/80 h-9 px-3 text-sm">测试通知</button>
+                        <button onclick="sendDailyReportNow()" class="inline-flex items-center justify-center rounded-md bg-secondary text-secondary-foreground hover:bg-secondary/80 h-9 px-3 text-sm">立即汇报</button>
+                    </div>
+                </div>
+
                 <!-- 验证码配置 -->
                 <div class="rounded-lg border border-border bg-background p-6 flex flex-col">
                     <h3 class="text-lg font-semibold mb-4">验证码配置</h3>
@@ -1324,7 +1370,131 @@
             await saveImageFallbackAttempts();
         }
 
-        window.addEventListener('DOMContentLoaded', loadImageFallbackAttempts);
+        function toggleWebhookOptions() {
+            const enabled = document.getElementById('cfgWebhookEnabled').checked;
+            document.getElementById('webhookOptions').style.display = enabled ? 'block' : 'none';
+        }
+
+        function toggleDailyReportOptions() {
+            const enabled = document.getElementById('cfgDailyReportEnabled').checked;
+            document.getElementById('dailyReportTimeBox').style.display = enabled ? 'block' : 'none';
+        }
+
+        async function loadWebhookConfig() {
+            const enabledInput = document.getElementById('cfgWebhookEnabled');
+            if (!enabledInput) return;
+            try {
+                const response = await fetch('/api/webhook/config', { credentials: 'include' });
+                if (response.status === 401) return;
+                if (!response.ok) return;
+                const data = await response.json();
+                if (data.success && data.config) {
+                    enabledInput.checked = !!data.config.enabled;
+                    document.getElementById('cfgWecomWebhookUrl').value = data.config.wecom_webhook_url || '';
+                    document.getElementById('cfgNotifyOnExpired').checked = data.config.notify_on_expired !== false;
+                    document.getElementById('cfgDailyReportEnabled').checked = !!data.config.daily_report_enabled;
+                    document.getElementById('cfgDailyReportTime').value = data.config.daily_report_time || '22:00';
+                    toggleWebhookOptions();
+                    toggleDailyReportOptions();
+                }
+            } catch (e) {
+                console.error('加载企业微信通知配置失败:', e);
+            }
+        }
+
+        async function saveWebhookConfig() {
+            const enabled = document.getElementById('cfgWebhookEnabled').checked;
+            const url = document.getElementById('cfgWecomWebhookUrl').value.trim();
+            const notifyExpired = document.getElementById('cfgNotifyOnExpired').checked;
+            const dailyReport = document.getElementById('cfgDailyReportEnabled').checked;
+            const dailyTime = document.getElementById('cfgDailyReportTime').value.trim() || '22:00';
+
+            if (enabled && !url) {
+                showToast('请填写企业微信 Webhook 机器人地址', 'error');
+                return;
+            }
+            if (enabled && url && !url.startsWith('https://qyapi.weixin.qq.com/')) {
+                showToast('Webhook 地址格式不正确（需以 https://qyapi.weixin.qq.com/ 开头）', 'error');
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/webhook/config', {
+                    method: 'POST',
+                    credentials: 'include',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        enabled: enabled,
+                        wecom_webhook_url: url,
+                        notify_on_expired: notifyExpired,
+                        daily_report_enabled: dailyReport,
+                        daily_report_time: dailyTime
+                    })
+                });
+                const data = await response.json();
+                if (data.success) {
+                    showToast('企业微信通知配置已保存', 'success');
+                    await loadWebhookConfig();
+                } else {
+                    showToast('保存失败: ' + (data.detail || data.message || '未知错误'), 'error');
+                }
+            } catch (e) {
+                showToast('保存异常: ' + e.message, 'error');
+            }
+        }
+
+        async function testWebhook() {
+            const url = document.getElementById('cfgWecomWebhookUrl').value.trim();
+            if (!url) {
+                showToast('请先填写企业微信 Webhook 机器人地址', 'error');
+                return;
+            }
+            showToast('正在发送测试消息...', 'info');
+            try {
+                const response = await fetch('/api/webhook/test', {
+                    method: 'POST',
+                    credentials: 'include',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ wecom_webhook_url: url })
+                });
+                const data = await response.json();
+                if (data.success) {
+                    showToast('测试消息发送成功，请在企业微信群中查收！', 'success', 3500);
+                } else {
+                    showToast('发送测试失败: ' + (data.message || '未知错误'), 'error', 4000);
+                }
+            } catch (e) {
+                showToast('请求异常: ' + e.message, 'error');
+            }
+        }
+
+        async function sendDailyReportNow() {
+            const url = document.getElementById('cfgWecomWebhookUrl').value.trim();
+            showToast('正在生成并发送今日汇报...', 'info');
+            try {
+                const response = await fetch('/api/webhook/send-report', {
+                    method: 'POST',
+                    credentials: 'include',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ wecom_webhook_url: url })
+                });
+                const data = await response.json();
+                if (data.success) {
+                    showToast('今日统计汇报发送成功，请在企业微信群中查收！', 'success', 3500);
+                } else {
+                    showToast('汇报发送失败: ' + (data.message || '未知错误'), 'error', 4000);
+                }
+            } catch (e) {
+                showToast('请求异常: ' + e.message, 'error');
+            }
+        }
+
+        window.addEventListener('DOMContentLoaded', () => {
+            loadImageFallbackAttempts();
+            loadWebhookConfig();
+            const tabBtn = document.getElementById('tabSettings');
+            if (tabBtn) tabBtn.addEventListener('click', () => setTimeout(loadWebhookConfig, 100));
+        });
     </script>
 </body>
 </html>

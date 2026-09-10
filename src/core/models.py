@@ -235,6 +235,29 @@ class TokenRefreshConfig(BaseModel):
     updated_at: Optional[datetime] = None
 
 
+class WebhookConfig(BaseModel):
+    """WeCom Webhook notification configuration"""
+
+    id: int = 1
+    enabled: bool = False
+    wecom_webhook_url: str = ""
+    notify_on_expired: bool = True
+    daily_report_enabled: bool = False
+    daily_report_time: str = "22:00"
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+
+
+class WebhookConfigRequest(BaseModel):
+    """WeCom Webhook configuration update request"""
+
+    enabled: Optional[bool] = None
+    wecom_webhook_url: Optional[str] = None
+    notify_on_expired: Optional[bool] = None
+    daily_report_enabled: Optional[bool] = None
+    daily_report_time: Optional[str] = None
+
+
 # OpenAI Compatible Request Models
 class ChatMessage(BaseModel):
     """Chat message"""

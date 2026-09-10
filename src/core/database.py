@@ -8,7 +8,7 @@ from datetime import date, datetime
 from typing import Optional, List, Dict, Any
 from pathlib import Path
 from .config import DEFAULT_YESCAPTCHA_TASK_TYPE, normalize_yescaptcha_task_type
-from .models import Token, TokenStats, Task, RequestLog, AdminConfig, ProxyConfig, GenerationConfig, CacheConfig, Project, CaptchaConfig, PluginConfig, CallLogicConfig, TokenRefreshConfig
+from .models import Token, TokenStats, Task, RequestLog, AdminConfig, ProxyConfig, GenerationConfig, CacheConfig, Project, CaptchaConfig, PluginConfig, CallLogicConfig, TokenRefreshConfig, WebhookConfig
 
 
 class Database:
@@ -375,6 +375,16 @@ class Database:
                 VALUES (1, 1, 120)
             """)
 
+        # Ensure webhook_config has a row
+        if await self._table_exists(db, "webhook_config"):
+            cursor = await db.execute("SELECT COUNT(*) FROM webhook_config")
+            count = await cursor.fetchone()
+            if count[0] == 0:
+                await db.execute("""
+                    INSERT INTO webhook_config (id, enabled, wecom_webhook_url, notify_on_expired, daily_report_enabled, daily_report_time)
+                    VALUES (1, 0, '', 1, 0, '22:00')
+                """)
+
     async def check_and_migrate_db(self, config_dict: dict = None):
         """Check database integrity and perform migrations if needed
 
@@ -489,6 +499,25 @@ class Database:
                         refresh_interval_minutes INTEGER DEFAULT 120,
                         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                     )
+                """)
+
+            if not await self._table_exists(db, "webhook_config"):
+                print("  ✓ Creating missing table: webhook_config")
+                await db.execute("""
+                    CREATE TABLE webhook_config (
+                        id INTEGER PRIMARY KEY DEFAULT 1,
+                        enabled BOOLEAN DEFAULT 0,
+                        wecom_webhook_url TEXT DEFAULT '',
+                        notify_on_expired BOOLEAN DEFAULT 1,
+                        daily_report_enabled BOOLEAN DEFAULT 0,
+                        daily_report_time TEXT DEFAULT '22:00',
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    )
+                """)
+                await db.execute("""
+                    INSERT OR IGNORE INTO webhook_config (id, enabled, wecom_webhook_url, notify_on_expired, daily_report_enabled, daily_report_time)
+                    VALUES (1, 0, '', 1, 0, '22:00')
                 """)
 
             # ========== Step 2: Add missing columns to existing tables ==========
@@ -898,6 +927,19 @@ class Database:
                     id INTEGER PRIMARY KEY DEFAULT 1,
                     enabled BOOLEAN DEFAULT 1,
                     refresh_interval_minutes INTEGER DEFAULT 120,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+
+            await db.execute("""
+                CREATE TABLE IF NOT EXISTS webhook_config (
+                    id INTEGER PRIMARY KEY DEFAULT 1,
+                    enabled BOOLEAN DEFAULT 0,
+                    wecom_webhook_url TEXT DEFAULT '',
+                    notify_on_expired BOOLEAN DEFAULT 1,
+                    daily_report_enabled BOOLEAN DEFAULT 0,
+                    daily_report_time TEXT DEFAULT '22:00',
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
             """)
@@ -2151,3 +2193,133 @@ class Database:
             await db.commit()
 
         return await self.get_token_refresh_config()
+
+    async def get_webhook_config(self) -> WebhookConfig:
+        """Get WeCom Webhook configuration"""
+        async with self._connect() as db:
+            db.row_factory = aiosqlite.Row
+            cursor = await db.execute("SELECT * FROM webhook_config WHERE id = 1")
+            row = await cursor.fetchone()
+            if row:
+                data = dict(row)
+                return WebhookConfig(
+                    id=data.get("id", 1),
+                    enabled=bool(data.get("enabled", 0)),
+                    wecom_webhook_url=data.get("wecom_webhook_url") or "",
+                    notify_on_expired=bool(data.get("notify_on_expired", 1)),
+                    daily_report_enabled=bool(data.get("daily_report_enabled", 0)),
+                    daily_report_time=data.get("daily_report_time") or "22:00",
+                    created_at=data.get("created_at"),
+                    updated_at=data.get("updated_at")
+                )
+            return WebhookConfig()
+
+    async def update_webhook_config(
+        self,
+        enabled: Optional[bool] = None,
+        wecom_webhook_url: Optional[str] = None,
+        notify_on_expired: Optional[bool] = None,
+        daily_report_enabled: Optional[bool] = None,
+        daily_report_time: Optional[str] = None
+    ) -> WebhookConfig:
+        """Update WeCom Webhook configuration"""
+        async with self._connect(write=True) as db:
+            db.row_factory = aiosqlite.Row
+            cursor = await db.execute("SELECT * FROM webhook_config WHERE id = 1")
+            row = await cursor.fetchone()
+            current = dict(row) if row else {}
+
+            new_enabled = enabled if enabled is not None else bool(current.get("enabled", False))
+            new_url = (wecom_webhook_url if wecom_webhook_url is not None else current.get("wecom_webhook_url", "")).strip()
+            new_notify_expired = notify_on_expired if notify_on_expired is not None else bool(current.get("notify_on_expired", True))
+            new_daily_report = daily_report_enabled if daily_report_enabled is not None else bool(current.get("daily_report_enabled", False))
+            new_daily_time = (daily_report_time if daily_report_time is not None else current.get("daily_report_time", "22:00")).strip()
+            if not new_daily_time:
+                new_daily_time = "22:00"
+
+            if row:
+                await db.execute("""
+                    UPDATE webhook_config
+                    SET enabled = ?, wecom_webhook_url = ?, notify_on_expired = ?,
+                        daily_report_enabled = ?, daily_report_time = ?, updated_at = CURRENT_TIMESTAMP
+                    WHERE id = 1
+                """, (int(new_enabled), new_url, int(new_notify_expired), int(new_daily_report), new_daily_time))
+            else:
+                await db.execute("""
+                    INSERT INTO webhook_config (id, enabled, wecom_webhook_url, notify_on_expired, daily_report_enabled, daily_report_time)
+                    VALUES (1, ?, ?, ?, ?, ?)
+                """, (int(new_enabled), new_url, int(new_notify_expired), int(new_daily_report), new_daily_time))
+            await db.commit()
+
+        return await self.get_webhook_config()
+
+    async def get_today_summary_stats(self) -> Dict[str, Any]:
+        """Get today's generation summary and account breakdown statistics"""
+        async with self._connect() as db:
+            db.row_factory = aiosqlite.Row
+
+            # 1. 查询今日生成概况
+            overview_cur = await db.execute("""
+                SELECT
+                    COUNT(CASE WHEN operation IN ('generate_image', '图片兜底') AND status_code = 200 THEN 1 END) as img_success,
+                    COUNT(CASE WHEN operation IN ('generate_image', '图片兜底') AND status_code >= 400 THEN 1 END) as img_fail,
+                    COUNT(CASE WHEN operation = 'generate_video' AND status_code = 200 THEN 1 END) as vid_success,
+                    COUNT(CASE WHEN operation = 'generate_video' AND status_code >= 400 THEN 1 END) as vid_fail,
+                    COUNT(CASE WHEN status_code = 200 THEN 1 END) as total_success,
+                    COUNT(CASE WHEN status_code >= 400 THEN 1 END) as total_fail,
+                    COUNT(*) as total_requests
+                FROM request_logs
+                WHERE date(created_at, 'localtime') = date('now', 'localtime')
+            """)
+            overview_row = await overview_cur.fetchone()
+            overview = dict(overview_row) if overview_row else {}
+
+            # 2. 查询今日各账号详细调用 (按总请求数降序)
+            account_cur = await db.execute("""
+                SELECT
+                    r.token_id,
+                    COALESCE(t.email, '未绑定账号 (Token ' || COALESCE(r.token_id, '空') || ')') as email,
+                    COALESCE(t.is_active, 0) as is_active,
+                    COALESCE(t.credits, 0) as credits,
+                    COUNT(CASE WHEN r.operation IN ('generate_image', '图片兜底') AND r.status_code = 200 THEN 1 END) as img_success,
+                    COUNT(CASE WHEN r.operation IN ('generate_image', '图片兜底') AND r.status_code >= 400 THEN 1 END) as img_fail,
+                    COUNT(CASE WHEN r.operation = 'generate_video' AND r.status_code = 200 THEN 1 END) as vid_success,
+                    COUNT(CASE WHEN r.operation = 'generate_video' AND r.status_code >= 400 THEN 1 END) as vid_fail,
+                    COUNT(CASE WHEN r.status_code = 200 THEN 1 END) as total_success,
+                    COUNT(CASE WHEN r.status_code >= 400 THEN 1 END) as total_fail,
+                    COUNT(*) as total_requests
+                FROM request_logs r
+                LEFT JOIN tokens t ON r.token_id = t.id
+                WHERE date(r.created_at, 'localtime') = date('now', 'localtime')
+                GROUP BY r.token_id
+                ORDER BY total_requests DESC
+            """)
+            account_rows = await account_cur.fetchall()
+            accounts_usage = [dict(row) for row in account_rows]
+
+            # 3. 查询当前所有 Token 状态
+            all_tokens_cur = await db.execute("""
+                SELECT id, email, is_active, at_expires, credits, ban_reason, last_st_refresh_result
+                FROM tokens
+                ORDER BY id
+            """)
+            all_token_rows = await all_tokens_cur.fetchall()
+            all_tokens = [dict(row) for row in all_token_rows]
+
+            # 4. 估算今日视频消耗积分
+            video_logs_cursor = await db.execute("""
+                SELECT request_body
+                FROM request_logs
+                WHERE operation = 'generate_video' AND status_code = 200
+                  AND date(created_at, 'localtime') = date('now', 'localtime')
+            """)
+            today_video_credits = 0
+            for row in await video_logs_cursor.fetchall():
+                today_video_credits += self._estimate_video_credit_cost(row[0])
+
+            return {
+                "overview": overview,
+                "accounts_usage": accounts_usage,
+                "all_tokens": all_tokens,
+                "today_video_credits": today_video_credits
+            }

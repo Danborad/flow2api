@@ -198,6 +198,11 @@ async def lifespan(app: FastAPI):
     auto_unban_task_handle = asyncio.create_task(auto_unban_task())
     token_manager.start_protocol_refresher()
 
+    # Initialize and start Webhook service
+    from .services.webhook_service import get_webhook_service
+    webhook_service = get_webhook_service(db)
+    webhook_task_handle = asyncio.create_task(webhook_service.start_scheduler())
+
     print("Database initialized")
     print(f"Total tokens: {len(tokens)}")
     print(f"Cache: {'Enabled' if config.cache_enabled else 'Disabled'} (timeout: {config.cache_timeout}s)")
@@ -218,8 +223,14 @@ async def lifespan(app: FastAPI):
     await generation_handler.file_cache.stop_cleanup_task()
     # Stop auto-unban task
     auto_unban_task_handle.cancel()
+    webhook_service.stop_scheduler()
+    webhook_task_handle.cancel()
     try:
         await auto_unban_task_handle
+    except asyncio.CancelledError:
+        pass
+    try:
+        await webhook_task_handle
     except asyncio.CancelledError:
         pass
     await token_manager.stop_protocol_refresher()

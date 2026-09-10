@@ -591,6 +591,7 @@ class TokenManager:
                 "so a transient network/Captcha failure cannot drain the account pool"
             )
             await self._request_extension_account_sync(token_id, reason="at_refresh_failed")
+            await self._notify_webhook_token_expired(token_id, "AT 刷新失败，正在等待浏览器扩展同步")
             await self.db.update_token(
                 token_id,
                 last_st_refresh_result="AT refresh failed; waiting for browser resync",
@@ -824,6 +825,7 @@ class TokenManager:
             new_st = await self._try_protocol_refresh_st(token_id, latest)
             if not new_st:
                 await self._request_extension_account_sync(token_id, reason="protocol_refresh_failed")
+                await self._notify_webhook_token_expired(token_id, "Google 协议刷新 ST 失败，Cookie 可能已过期或被风控")
                 return
 
             try:
@@ -979,6 +981,17 @@ class TokenManager:
                 f"[TOKEN_SYNC] Failed to request browser sync for token {token_id}: {e}"
             )
 
+    async def _notify_webhook_token_expired(self, token_id: int, reason: str) -> None:
+        try:
+            from .webhook_service import get_webhook_service
+
+            service = get_webhook_service(self.db)
+            await service.notify_token_expired(token_id, reason=reason)
+        except Exception as e:
+            debug_logger.log_warning(
+                f"[WEBHOOK_NOTIFY] Failed to notify webhook for token {token_id}: {e}"
+            )
+
     async def record_error(self, token_id: int):
         """Record token error and auto-disable if threshold reached"""
         await self.db.increment_token_stats(token_id, "error")
@@ -994,6 +1007,10 @@ class TokenManager:
                 f"reached threshold ({admin_config.error_ban_threshold}), auto-disabling"
             )
             await self.disable_token(token_id)
+            await self._notify_webhook_token_expired(
+                token_id,
+                f"连续失败达到阈值 ({stats.consecutive_error_count} 次)，账号已被系统自动禁用"
+            )
 
     async def record_success(self, token_id: int):
         """Record successful request (reset consecutive error count)
@@ -1016,6 +1033,7 @@ class TokenManager:
             ban_reason="429_rate_limit",
             banned_at=datetime.now(timezone.utc)
         )
+        await self._notify_webhook_token_expired(token_id, "触发上游 429 频率限制，已暂时禁用 12 小时")
 
     async def auto_unban_429_tokens(self):
         """自动解禁因429被禁用的token

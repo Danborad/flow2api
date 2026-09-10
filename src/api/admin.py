@@ -17,7 +17,7 @@ from curl_cffi.requests import AsyncSession
 from ..core.auth import AuthManager
 from ..core.database import Database
 from ..core.config import config, get_yescaptcha_min_score, normalize_yescaptcha_task_type
-from ..core.models import Token
+from ..core.models import Token, WebhookConfigRequest
 from ..core.browser_runtime_status import (
     fail_runtime_prepare,
     finish_runtime_prepare,
@@ -2489,3 +2489,81 @@ async def plugin_check_tokens(request: Optional[dict] = None, authorization: Opt
         })
 
     return {"success": True, "tokens": tokens}
+
+
+# ========== WeCom Webhook Configuration Endpoints ==========
+
+@router.get("/api/webhook/config")
+async def get_webhook_config(token: str = Depends(verify_admin_token)):
+    """Get WeCom Webhook notification configuration."""
+    cfg = await db.get_webhook_config()
+    return {
+        "success": True,
+        "config": {
+            "enabled": cfg.enabled,
+            "wecom_webhook_url": cfg.wecom_webhook_url,
+            "notify_on_expired": cfg.notify_on_expired,
+            "daily_report_enabled": cfg.daily_report_enabled,
+            "daily_report_time": cfg.daily_report_time,
+            "updated_at": cfg.updated_at.isoformat() if hasattr(cfg.updated_at, "isoformat") else cfg.updated_at,
+        }
+    }
+
+
+@router.post("/api/webhook/config")
+async def update_webhook_config(
+    request: WebhookConfigRequest,
+    token: str = Depends(verify_admin_token)
+):
+    """Update WeCom Webhook notification configuration."""
+    cfg = await db.update_webhook_config(
+        enabled=request.enabled,
+        wecom_webhook_url=request.wecom_webhook_url,
+        notify_on_expired=request.notify_on_expired,
+        daily_report_enabled=request.daily_report_enabled,
+        daily_report_time=request.daily_report_time,
+    )
+    return {
+        "success": True,
+        "message": "企业微信通知配置已保存",
+        "config": {
+            "enabled": cfg.enabled,
+            "wecom_webhook_url": cfg.wecom_webhook_url,
+            "notify_on_expired": cfg.notify_on_expired,
+            "daily_report_enabled": cfg.daily_report_enabled,
+            "daily_report_time": cfg.daily_report_time,
+            "updated_at": cfg.updated_at.isoformat() if hasattr(cfg.updated_at, "isoformat") else cfg.updated_at,
+        }
+    }
+
+
+@router.post("/api/webhook/test")
+async def test_webhook_notification(
+    request: Optional[dict] = None,
+    token: str = Depends(verify_admin_token)
+):
+    """Send a test message to WeCom Webhook."""
+    from ..services.webhook_service import get_webhook_service
+    custom_url = (request or {}).get("wecom_webhook_url") if isinstance(request, dict) else None
+    ws = get_webhook_service(db)
+    success, msg = await ws.send_test_message(custom_url=custom_url)
+    return {
+        "success": success,
+        "message": msg
+    }
+
+
+@router.post("/api/webhook/send-report")
+async def send_webhook_daily_report_now(
+    request: Optional[dict] = None,
+    token: str = Depends(verify_admin_token)
+):
+    """Trigger daily generation and account summary report immediately."""
+    from ..services.webhook_service import get_webhook_service
+    custom_url = (request or {}).get("wecom_webhook_url") if isinstance(request, dict) else None
+    ws = get_webhook_service(db)
+    success, msg = await ws.send_daily_report(custom_url=custom_url)
+    return {
+        "success": success,
+        "message": msg
+    }
