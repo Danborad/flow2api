@@ -863,7 +863,11 @@ async def import_current_browser_account(
             now = datetime.now(timezone.utc)
             aware_expires = at_expires if at_expires.tzinfo else at_expires.replace(tzinfo=timezone.utc)
             if aware_expires <= now:
-                raise HTTPException(status_code=400, detail="导入的 Labs Session Token 已过期，请重新打开 Flow 页面后再导入")
+                # 容错验证：若 access_token 实测依然可正常调用 get_credits，则不阻断
+                try:
+                    await handler.token_manager.flow_client.get_credits(access_token)
+                except Exception:
+                    raise HTTPException(status_code=400, detail="导入的 Labs Session Token 已过期，请重新打开 Flow 页面后再导入")
 
         existing_by_email = {}
         for existing_token in await handler.token_manager.get_all_tokens():

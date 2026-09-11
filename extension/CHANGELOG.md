@@ -1,5 +1,9 @@
 # Flow2API Captcha Worker 更新记录
 
+## 1.1.19
+
+- 智能失效检测与全自动续期：导入前主动检验 Session Token 状态，检测到失效自动打开背景标签页完成 Google Labs 授权续期（续期 24 小时）；彻底解决“导入的 Labs Session Token 已过期”问题。
+
 ## 1.1.18
 
 - 导入时全自动静默完成 Google Labs 会话激活与握手，无需用户手动打开任何页面。

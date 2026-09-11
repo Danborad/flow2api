@@ -194,9 +194,29 @@ async function getLabsSessionToken() {
     return "";
 }
 
-async function refreshLabsSessionCookie() {
+async function isLabsSessionValid() {
+    try {
+        const res = await fetch("https://labs.google/fx/api/auth/session");
+        if (!res.ok) return false;
+        const data = await res.json();
+        if (!data || !data.user) return false;
+        if (data.expires && new Date(data.expires) <= new Date()) {
+            return false;
+        }
+        return true;
+    } catch (e) {
+        return false;
+    }
+}
+
+async function refreshLabsSessionCookie(force = false) {
     let token = await getLabsSessionToken();
-    if (token) return token;
+    if (token && !force) {
+        const valid = await isLabsSessionValid();
+        if (valid) return token;
+        console.log("[Flow2API] Existing Session Token is expired on Google, initiating auto refresh...");
+        logExtensionEvent("session_token_expired_detected");
+    }
 
     let tabId = null;
     try {
@@ -236,8 +256,9 @@ async function refreshLabsSessionCookie() {
         const deadline = Date.now() + 10000;
         while (Date.now() < deadline) {
             await sleep(600);
-            token = await getLabsSessionToken();
-            if (token) {
+            const valid = await isLabsSessionValid();
+            if (valid) {
+                token = await getLabsSessionToken();
                 logExtensionEvent("auto_login_labs_success");
                 break;
             }
@@ -302,33 +323,60 @@ async function importCurrentAccount(reason = "manual") {
         if (!settings.apiKey) throw new Error("Flow2API API Key is empty");
 
     await refreshLabsSessionCookie();
-        const sessionToken = await getLabsSessionToken();
+        let sessionToken = await getLabsSessionToken();
+        if (!sessionToken) {
+            sessionToken = await refreshLabsSessionCookie(true);
+        }
         if (!sessionToken) {
             throw new Error("未能自动获取到 Flow/Labs 会话凭据。请确认当前浏览器已登录 Google 账号并能正常访问 https://flow.google.com/。");
         }
 
         const googleCookies = await getGoogleCookies();
         const foundNames = new Set(googleCookies.map(cookie => cookie.name));
-    const hasUsableCookieGroup = GOOGLE_AUTH_COOKIE_GROUPS.some(group => group.every(name => foundNames.has(name)));
+        const hasUsableCookieGroup = GOOGLE_AUTH_COOKIE_GROUPS.some(group => group.every(name => foundNames.has(name)));
         if (!hasUsableCookieGroup) {
             throw new Error(`Google login cookies are incomplete. Found: ${Array.from(foundNames).join(", ") || "none"}. Open accounts.google.com and labs.google in this Chrome profile, then import again.`);
         }
 
         const baseUrl = getBackendBaseUrl(settings.serverUrl);
-        const response = await fetch(`${baseUrl}/api/plugin/import-current-account`, {
-        method: "POST",
-        headers: {
-            "Content-Type": "application/json",
-            "Authorization": `Bearer ${settings.apiKey}`
-        },
-        body: JSON.stringify({
-            session_token: sessionToken,
-            google_cookies: JSON.stringify(googleCookies),
-            extension_route_key: settings.routeKey,
-            refresh_interval_minutes: parseInt(settings.refreshIntervalMinutes, 10) || 120
-        })
-    });
-        const payload = await response.json().catch(() => null);
+        let response = await fetch(`${baseUrl}/api/plugin/import-current-account`, {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                "Authorization": `Bearer ${settings.apiKey}`
+            },
+            body: JSON.stringify({
+                session_token: sessionToken,
+                google_cookies: JSON.stringify(googleCookies),
+                extension_route_key: settings.routeKey,
+                refresh_interval_minutes: parseInt(settings.refreshIntervalMinutes, 10) || 120
+            })
+        });
+        let payload = await response.json().catch(() => null);
+
+        // 如果后端依然报告过期，自动强制刷新重试一次
+        if (!response.ok && payload && String(payload.detail || "").includes("过期")) {
+            console.log("[Flow2API] Backend reported expired session token, force refreshing and retrying...");
+            logExtensionEvent("backend_reported_expired_retry");
+            sessionToken = await refreshLabsSessionCookie(true);
+            if (sessionToken) {
+                response = await fetch(`${baseUrl}/api/plugin/import-current-account`, {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                        "Authorization": `Bearer ${settings.apiKey}`
+                    },
+                    body: JSON.stringify({
+                        session_token: sessionToken,
+                        google_cookies: JSON.stringify(googleCookies),
+                        extension_route_key: settings.routeKey,
+                        refresh_interval_minutes: parseInt(settings.refreshIntervalMinutes, 10) || 120
+                    })
+                });
+                payload = await response.json().catch(() => null);
+            }
+        }
+
         if (!response.ok || !payload || payload.success !== true) {
             const detail = payload && (payload.detail || payload.message);
             throw new Error(detail || `Import failed HTTP ${response.status}`);
