@@ -154,15 +154,17 @@ async function getLabsSessionToken() {
     const queries = [
         { domain: "labs.google" },
         { domain: ".labs.google" },
-        { domain: "flow.google.com" },
-        { domain: ".flow.google.com" },
         { url: "https://labs.google/" },
         { url: "https://labs.google/fx" },
         { url: "https://labs.google/fx/tools/flow" },
+        { domain: "flow.google.com" },
+        { domain: ".flow.google.com" },
         { url: "https://flow.google.com/" },
         { url: "https://flow.google.com/project/" }
     ];
-    const cookiesByBaseName = new Map();
+
+    // 按 (domain, baseName) 独立隔离分组，防止不同域名的同名 Cookie 被错误拼接
+    const groups = new Map();
     for (const query of queries) {
         const cookies = await getCookies(query);
         for (const cookie of cookies) {
@@ -170,36 +172,77 @@ async function getLabsSessionToken() {
                 cookie.name === name || cookie.name.startsWith(`${name}.`)
             ));
             if (!baseName || !cookie.value) continue;
-            const candidates = cookiesByBaseName.get(baseName) || [];
-            if (!candidates.some(c => c.name === cookie.name && c.value === cookie.value)) {
-                candidates.push(cookie);
+
+            const domain = (cookie.domain || "").toLowerCase();
+            const groupKey = `${domain}:::${baseName}`;
+            const group = groups.get(groupKey) || [];
+            if (!group.some(c => c.name === cookie.name && c.value === cookie.value)) {
+                group.push(cookie);
             }
-            cookiesByBaseName.set(baseName, candidates);
+            groups.set(groupKey, group);
         }
     }
-    const candidates = Array.from(cookiesByBaseName.entries()).map(([baseName, cookies]) => {
-        const sorted = cookies.sort((left, right) => {
-            const leftIndex = left.name === baseName ? -1 : Number(left.name.split(".").pop());
-            const rightIndex = right.name === baseName ? -1 : Number(right.name.split(".").pop());
-            return leftIndex - rightIndex;
-        });
-        return { baseName, value: sorted.map(cookie => cookie.value).join("") };
-    });
+
+    const candidates = [];
+    for (const [groupKey, cookies] of groups.entries()) {
+        const [domain, baseName] = groupKey.split(":::");
+        // 检查是否有分片 (.0, .1...)
+        const hasChunks = cookies.some(c => c.name.includes("."));
+        let tokenValue = "";
+        let maxExpiry = 0;
+
+        if (hasChunks) {
+            const sortedChunks = cookies
+                .filter(c => c.name.startsWith(`${baseName}.`))
+                .sort((a, b) => {
+                    const idxA = Number(a.name.split(".").pop()) || 0;
+                    const idxB = Number(b.name.split(".").pop()) || 0;
+                    return idxA - idxB;
+                });
+            tokenValue = sortedChunks.map(c => c.value).join("");
+            maxExpiry = Math.max(...sortedChunks.map(c => c.expirationDate || 0));
+        } else {
+            // 没有分片，取最新的单项 Cookie
+            const directCookie = cookies.find(c => c.name === baseName) || cookies[0];
+            if (directCookie) {
+                tokenValue = directCookie.value;
+                maxExpiry = directCookie.expirationDate || 0;
+            }
+        }
+
+        if (tokenValue) {
+            candidates.push({
+                domain,
+                baseName,
+                value: tokenValue,
+                expiry: maxExpiry,
+                isLabs: domain.includes("labs.google")
+            });
+        }
+    }
+
     logExtensionEvent("session_cookie_candidates", {
-        names: candidates.map(candidate => candidate.baseName),
+        candidates: candidates.map(c => ({ domain: c.domain, baseName: c.baseName, len: c.value.length })),
         count: candidates.length,
     });
-    const preferred = candidates.find(candidate => candidate.baseName === LABS_SESSION_COOKIE) || candidates[0];
-    if (preferred && preferred.value) return preferred.value;
-    return "";
+
+    if (!candidates.length) return "";
+
+    // 优先选择 labs.google 域名，其次选择最新的凭据
+    candidates.sort((a, b) => {
+        if (a.isLabs !== b.isLabs) return a.isLabs ? -1 : 1;
+        return (b.expiry || 0) - (a.expiry || 0);
+    });
+
+    return candidates[0].value;
 }
 
 async function isLabsSessionValid() {
     try {
-        const res = await fetch("https://labs.google/fx/api/auth/session");
+        const res = await fetch("https://labs.google/fx/api/auth/session", { credentials: "include" });
         if (!res.ok) return false;
         const data = await res.json();
-        if (!data || !data.user) return false;
+        if (!data || !data.user || !data.access_token) return false;
         if (data.expires && new Date(data.expires) <= new Date()) {
             return false;
         }
@@ -214,7 +257,7 @@ async function refreshLabsSessionCookie(force = false) {
     if (token && !force) {
         const valid = await isLabsSessionValid();
         if (valid) return token;
-        console.log("[Flow2API] Existing Session Token is expired on Google, initiating auto refresh...");
+        console.log("[Flow2API] Existing Session Token is invalid/expired, initiating auto refresh...");
         logExtensionEvent("session_token_expired_detected");
     }
 
@@ -354,10 +397,14 @@ async function importCurrentAccount(reason = "manual") {
         });
         let payload = await response.json().catch(() => null);
 
-        // 如果后端依然报告过期，自动强制刷新重试一次
-        if (!response.ok && payload && String(payload.detail || "").includes("过期")) {
-            console.log("[Flow2API] Backend reported expired session token, force refreshing and retrying...");
-            logExtensionEvent("backend_reported_expired_retry");
+        // 如果后端报告过期或未能获取 access_token，自动强制刷新重试一次
+        if (!response.ok && payload && (
+            String(payload.detail || "").includes("过期") ||
+            String(payload.detail || "").includes("失效") ||
+            String(payload.detail || "").includes("access_token")
+        )) {
+            console.log("[Flow2API] Backend reported expired/invalid session token, force refreshing and retrying...");
+            logExtensionEvent("backend_reported_expired_retry", { detail: payload.detail });
             sessionToken = await refreshLabsSessionCookie(true);
             if (sessionToken) {
                 response = await fetch(`${baseUrl}/api/plugin/import-current-account`, {

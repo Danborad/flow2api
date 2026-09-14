@@ -1,5 +1,10 @@
 # Flow2API Captcha Worker 更新记录
 
+## 1.1.20
+
+- 修复 Cookie 隔离与同名分片误拼问题：按 domain 独立隔离分组提取 Session Token，防止不同域名的同名 Cookie 被错误拼接导致损坏。
+- 完善失效重试机制：当后端返回无效或缺少 access_token 时，自动触发静默刷新授权并重试。
+
 ## 1.1.19
 
 - 智能失效检测与全自动续期：导入前主动检验 Session Token 状态，检测到失效自动打开背景标签页完成 Google Labs 授权续期（续期 24 小时）；彻底解决“导入的 Labs Session Token 已过期”问题。

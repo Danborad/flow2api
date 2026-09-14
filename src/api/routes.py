@@ -846,6 +846,12 @@ async def import_current_browser_account(
 
     try:
         result = await handler.token_manager.flow_client.st_to_at(session_token)
+        if not isinstance(result, dict) or not result.get("access_token"):
+            debug_logger.log_warning(f"[PLUGIN_IMPORT] st_to_at 返回无效响应: {result}")
+            raise HTTPException(
+                status_code=400,
+                detail="Session Token 无效或未登录（未返回 access_token），请在当前浏览器中登录或刷新 Flow 页面"
+            )
         access_token = result["access_token"]
         user_info = result.get("user", {}) or {}
         email = user_info.get("email") or ""

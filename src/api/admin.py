@@ -920,7 +920,9 @@ async def update_token(
     try:
         # 先ST转AT
         result = await token_manager.flow_client.st_to_at(request.st)
-        at = result["access_token"]
+        at = result.get("access_token") if isinstance(result, dict) else None
+        if not at:
+            raise HTTPException(status_code=400, detail="Session Token 无效或未登录（未返回 access_token）")
         expires = result.get("expires")
 
         # 解析过期时间
@@ -1083,10 +1085,13 @@ async def st_to_at(
     """Convert Session Token to Access Token (仅转换,不添加到数据库)"""
     try:
         result = await token_manager.flow_client.st_to_at(request.st)
+        at = result.get("access_token") if isinstance(result, dict) else None
+        if not at:
+            raise HTTPException(status_code=400, detail="Session Token 无效或未登录（未返回 access_token）")
         return {
             "success": True,
             "message": "ST converted to AT successfully",
-            "access_token": result["access_token"],
+            "access_token": at,
             "email": result.get("user", {}).get("email"),
             "expires": result.get("expires")
         }
@@ -1122,7 +1127,10 @@ async def import_tokens(
             # 使用 ST 转 AT 获取用户信息
             try:
                 result = await token_manager.flow_client.st_to_at(st)
-                at = result["access_token"]
+                at = result.get("access_token") if isinstance(result, dict) else None
+                if not at:
+                    errors.append(f"第{idx+1}项: Session Token 无效（未返回 access_token）")
+                    continue
                 email = result.get("user", {}).get("email")
                 expires = result.get("expires")
 
@@ -2359,7 +2367,9 @@ async def plugin_update_token(request: dict, authorization: Optional[str] = Head
     # Step 1: Convert ST to AT to get user info (including email)
     try:
         result = await token_manager.flow_client.st_to_at(session_token)
-        at = result["access_token"]
+        at = result.get("access_token") if isinstance(result, dict) else None
+        if not at:
+            raise HTTPException(status_code=400, detail="Session token invalid or expired (no access_token)")
         expires = result.get("expires")
         user_info = result.get("user", {})
         email = user_info.get("email", "")
