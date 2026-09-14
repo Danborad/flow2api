@@ -154,6 +154,12 @@ async function getLabsSessionToken() {
     const queries = [
         { domain: "labs.google" },
         { domain: ".labs.google" },
+        { domain: "google.com" },
+        { domain: ".google.com" },
+        { domain: "accounts.google.com" },
+        { domain: ".accounts.google.com" },
+        { domain: "www.google.com" },
+        { domain: "ogs.google.com" },
         { url: "https://labs.google/" },
         { url: "https://labs.google/fx" },
         { url: "https://labs.google/fx/tools/flow" },
@@ -242,7 +248,7 @@ async function isLabsSessionValid() {
         const res = await fetch("https://labs.google/fx/api/auth/session", { credentials: "include" });
         if (!res.ok) return false;
         const data = await res.json();
-        if (!data || !data.user || !data.access_token) return false;
+        if (!data || !data.user) return false;
         if (data.expires && new Date(data.expires) <= new Date()) {
             return false;
         }

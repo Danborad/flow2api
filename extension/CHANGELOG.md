@@ -1,5 +1,11 @@
 # Flow2API Captcha Worker 更新记录
 
+## 1.1.21
+
+- 扩展会扫描完整 Google 认证域名（`labs.google`、`flow.google.com`、`accounts.google.com`、`ogs.google.com`）。
+- 修正 Session API 判断：NextAuth Session 不一定包含 `access_token`，不再误判为无效并反复刷新。
+- 清理重复的可选权限声明。
+
 ## 1.1.20
 
 - 修复 Cookie 隔离与同名分片误拼问题：按 domain 独立隔离分组提取 Session Token，防止不同域名的同名 Cookie 被错误拼接导致损坏。
