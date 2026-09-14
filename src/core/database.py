@@ -190,6 +190,7 @@ class Database:
             video_timeout = 1500
             max_retries = 3
             image_fallback_attempts = 1
+            video_fallback_attempts = 1
 
             if config_dict:
                 generation_config = config_dict.get("generation", {})
@@ -198,6 +199,7 @@ class Database:
                 video_timeout = generation_config.get("video_timeout", 1500)
                 max_retries = flow_config.get("max_retries", 3)
                 image_fallback_attempts = generation_config.get("image_fallback_attempts", 1)
+                video_fallback_attempts = generation_config.get("video_fallback_attempts", 1)
 
             try:
                 max_retries = max(1, int(max_retries))
@@ -207,11 +209,15 @@ class Database:
                 image_fallback_attempts = max(0, int(image_fallback_attempts))
             except Exception:
                 image_fallback_attempts = 1
+            try:
+                video_fallback_attempts = max(0, int(video_fallback_attempts))
+            except Exception:
+                video_fallback_attempts = 1
 
             await db.execute("""
-                INSERT INTO generation_config (id, image_timeout, video_timeout, max_retries, image_fallback_attempts)
-                VALUES (1, ?, ?, ?, ?)
-            """, (image_timeout, video_timeout, max_retries, image_fallback_attempts))
+                INSERT INTO generation_config (id, image_timeout, video_timeout, max_retries, image_fallback_attempts, video_fallback_attempts)
+                VALUES (1, ?, ?, ?, ?, ?)
+            """, (image_timeout, video_timeout, max_retries, image_fallback_attempts, video_fallback_attempts))
 
         # Ensure call_logic_config has a row
         cursor = await db.execute("SELECT COUNT(*) FROM call_logic_config")
@@ -594,6 +600,7 @@ class Database:
                 generation_columns_to_add = [
                     ("max_retries", "INTEGER DEFAULT 3"),
                     ("image_fallback_attempts", "INTEGER DEFAULT 1"),
+                    ("video_fallback_attempts", "INTEGER DEFAULT 1"),
                 ]
 
                 for col_name, col_type in generation_columns_to_add:
@@ -848,6 +855,7 @@ class Database:
                     video_timeout INTEGER DEFAULT 1500,
                     max_retries INTEGER DEFAULT 3,
                     image_fallback_attempts INTEGER DEFAULT 1,
+                    video_fallback_attempts INTEGER DEFAULT 1,
                     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
             """)
@@ -1560,6 +1568,7 @@ class Database:
         video_timeout: Optional[int] = None,
         max_retries: Optional[int] = None,
         image_fallback_attempts: Optional[int] = None,
+        video_fallback_attempts: Optional[int] = None,
     ):
         """Update generation configuration"""
         async with self._connect(write=True) as db:
@@ -1594,18 +1603,26 @@ class Database:
                 )
             except Exception:
                 normalized_image_fallback_attempts = 1
+            try:
+                normalized_video_fallback_attempts = (
+                    max(0, int(video_fallback_attempts))
+                    if video_fallback_attempts is not None
+                    else max(0, int(current.get("video_fallback_attempts", 1)))
+                )
+            except Exception:
+                normalized_video_fallback_attempts = 1
 
             if row:
                 await db.execute("""
                     UPDATE generation_config
-                    SET image_timeout = ?, video_timeout = ?, max_retries = ?, image_fallback_attempts = ?, updated_at = CURRENT_TIMESTAMP
+                    SET image_timeout = ?, video_timeout = ?, max_retries = ?, image_fallback_attempts = ?, video_fallback_attempts = ?, updated_at = CURRENT_TIMESTAMP
                     WHERE id = 1
-                """, (normalized_image_timeout, normalized_video_timeout, normalized_max_retries, normalized_image_fallback_attempts))
+                """, (normalized_image_timeout, normalized_video_timeout, normalized_max_retries, normalized_image_fallback_attempts, normalized_video_fallback_attempts))
             else:
                 await db.execute("""
-                    INSERT INTO generation_config (id, image_timeout, video_timeout, max_retries, image_fallback_attempts)
-                    VALUES (1, ?, ?, ?, ?)
-                """, (normalized_image_timeout, normalized_video_timeout, normalized_max_retries, normalized_image_fallback_attempts))
+                    INSERT INTO generation_config (id, image_timeout, video_timeout, max_retries, image_fallback_attempts, video_fallback_attempts)
+                    VALUES (1, ?, ?, ?, ?, ?)
+                """, (normalized_image_timeout, normalized_video_timeout, normalized_max_retries, normalized_image_fallback_attempts, normalized_video_fallback_attempts))
             await db.commit()
 
     async def get_call_logic_config(self) -> CallLogicConfig:
@@ -2277,8 +2294,8 @@ class Database:
                 SELECT
                     COUNT(CASE WHEN operation IN ('generate_image', '图片兜底') AND status_code = 200 THEN 1 END) as img_success,
                     COUNT(CASE WHEN operation IN ('generate_image', '图片兜底') AND status_code >= 400 THEN 1 END) as img_fail,
-                    COUNT(CASE WHEN operation = 'generate_video' AND status_code = 200 THEN 1 END) as vid_success,
-                    COUNT(CASE WHEN operation = 'generate_video' AND status_code >= 400 THEN 1 END) as vid_fail,
+                    COUNT(CASE WHEN operation IN ('generate_video', '视频兜底') AND status_code = 200 THEN 1 END) as vid_success,
+                    COUNT(CASE WHEN operation IN ('generate_video', '视频兜底') AND status_code >= 400 THEN 1 END) as vid_fail,
                     COUNT(CASE WHEN status_code = 200 THEN 1 END) as total_success,
                     COUNT(CASE WHEN status_code >= 400 THEN 1 END) as total_fail,
                     COUNT(*) as total_requests
@@ -2297,8 +2314,8 @@ class Database:
                     COALESCE(t.credits, 0) as credits,
                     COUNT(CASE WHEN r.operation IN ('generate_image', '图片兜底') AND r.status_code = 200 THEN 1 END) as img_success,
                     COUNT(CASE WHEN r.operation IN ('generate_image', '图片兜底') AND r.status_code >= 400 THEN 1 END) as img_fail,
-                    COUNT(CASE WHEN r.operation = 'generate_video' AND r.status_code = 200 THEN 1 END) as vid_success,
-                    COUNT(CASE WHEN r.operation = 'generate_video' AND r.status_code >= 400 THEN 1 END) as vid_fail,
+                    COUNT(CASE WHEN r.operation IN ('generate_video', '视频兜底') AND r.status_code = 200 THEN 1 END) as vid_success,
+                    COUNT(CASE WHEN r.operation IN ('generate_video', '视频兜底') AND r.status_code >= 400 THEN 1 END) as vid_fail,
                     COUNT(CASE WHEN r.status_code = 200 THEN 1 END) as total_success,
                     COUNT(CASE WHEN r.status_code >= 400 THEN 1 END) as total_fail,
                     COUNT(*) as total_requests

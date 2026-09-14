@@ -1296,6 +1296,13 @@ class GenerationHandler:
         if generation_type == "video":
             request_payload["video_duration_seconds"] = model_config.get("reference_duration")
             request_payload["video_credit_cost"] = _estimate_video_credit_cost_for_log(model, model_config)
+            video_fallback_attempts = 1
+            try:
+                generation_config = await self.db.get_generation_config()
+                video_fallback_attempts = max(0, int(getattr(generation_config, "video_fallback_attempts", 1)))
+            except Exception as exc:
+                debug_logger.log_warning(f"[GENERATION] 读取视频兜底配置失败，使用默认值 1: {exc}")
+            request_payload["video_fallback_attempts"] = video_fallback_attempts
         image_fallback_attempts = 1
         if generation_type == "image":
             try:
@@ -1623,16 +1630,183 @@ class GenerationHandler:
                     }
             else:  # video
                 debug_logger.log_info(f"[GENERATION] 开始视频生成流程...")
-                async for chunk in self._handle_video_generation(
-                    token, project_id, model_config, prompt, images, stream,
-                    perf_trace=perf_trace,
-                    generation_result=generation_result,
-                    response_state=response_state,
-                    request_log_state=request_log_state,
-                    pending_token_state=pending_token_state,
-                    video_media_id=video_media_id,
-                ):
-                    yield chunk
+                attempted_token_ids = {token.id}
+                fallback_attempt = 0
+                fallback_log_state = None
+                while True:
+                    generation_result = self._create_generation_result()
+                    response_state = self._create_response_state()
+                    response_state["base_url"] = (base_url_override or "").strip().rstrip("/") or None
+                    try:
+                        async for chunk in self._handle_video_generation(
+                            token, project_id, model_config, prompt, images, stream,
+                            perf_trace=perf_trace,
+                            generation_result=generation_result,
+                            response_state=response_state,
+                            request_log_state=fallback_log_state or request_log_state,
+                            pending_token_state=pending_token_state,
+                            video_media_id=video_media_id,
+                            emit_error_response=fallback_attempt >= video_fallback_attempts,
+                        ):
+                            yield chunk
+                    except Exception as attempt_error:
+                        generation_result["error_message"] = f"生成失败: {attempt_error}"
+                        debug_logger.log_warning(
+                            f"[VIDEO FALLBACK] Token {token.id} 生成失败，兜底尝试 {fallback_attempt}/"
+                            f"{video_fallback_attempts}: {attempt_error}"
+                        )
+
+                    if fallback_log_state and not generation_result.get("success"):
+                        fallback_error = generation_result.get("error_message") or "视频兜底生成失败"
+                        await self._log_request(
+                            token.id,
+                            "视频兜底",
+                            {**request_payload, "fallback_attempt": fallback_attempt},
+                            {"error": fallback_error, "fallback_of": request_log_state.get("id")},
+                            500,
+                            time.time() - fallback_log_state.get("started_at", start_time),
+                            log_id=fallback_log_state.get("id"),
+                            status_text="failed",
+                            progress=fallback_log_state.get("progress", 0),
+                        )
+                        fallback_log_state = None
+
+                    if generation_result.get("success"):
+                        if fallback_log_state:
+                            await self._log_request(
+                                token.id,
+                                "视频兜底",
+                                {**request_payload, "fallback_attempt": fallback_attempt},
+                                {
+                                    "status": "success",
+                                    "fallback_of": request_log_state.get("id"),
+                                    "url": response_state.get("url"),
+                                },
+                                200,
+                                time.time() - fallback_log_state.get("started_at", start_time),
+                                log_id=fallback_log_state.get("id"),
+                                status_text="completed",
+                                progress=100,
+                            )
+                            fallback_log_state = None
+                        break
+
+                    error_msg = generation_result.get("error_message") or "视频生成失败"
+                    if fallback_attempt >= video_fallback_attempts:
+                        break
+
+                    if self._should_count_token_error(Exception(error_msg)):
+                        await self.token_manager.record_error(token.id)
+                    attempted_token_ids.add(token.id)
+                    if pending_token_state.get("active") and self.load_balancer:
+                        await self.load_balancer.release_pending(token.id, for_video_generation=True)
+                        pending_token_state["active"] = False
+
+                    fallback_attempt += 1
+                    await self._update_request_log_progress(
+                        request_log_state,
+                        token_id=token.id,
+                        status_text="video_fallback_switching",
+                        progress=4,
+                        response_extra={
+                            "fallback_attempt": fallback_attempt,
+                            "fallback_max_attempts": video_fallback_attempts,
+                            "previous_token_id": token.id,
+                            "error": error_msg,
+                        },
+                    )
+                    if stream:
+                        yield self._create_stream_chunk(
+                            f"⚠️ 当前账号视频生成失败，正在切换其他账号重试 ({fallback_attempt}/{video_fallback_attempts})...\n"
+                        )
+                    next_token = await self.load_balancer.select_token(
+                        for_video_generation=True,
+                        model=model,
+                        reserve=False,
+                        enforce_concurrency_filter=False,
+                        track_pending=True,
+                        exclude_token_ids=attempted_token_ids,
+                    )
+                    if not next_token:
+                        await self._update_request_log_progress(
+                            request_log_state,
+                            token_id=token.id,
+                            status_text="video_fallback_unavailable",
+                            progress=4,
+                            response_extra={"fallback_attempt": fallback_attempt, "error": "没有其他可用账号"},
+                        )
+                        generation_result["error_message"] = "视频兜底重试失败：没有其他可用账号"
+                        break
+
+                    token = next_token
+                    token = await self.token_manager.ensure_valid_token(token)
+                    if not token:
+                        await self.load_balancer.release_pending(next_token.id, for_video_generation=True)
+                        await self._update_request_log_progress(
+                            request_log_state,
+                            token_id=next_token.id,
+                            status_text="video_fallback_token_invalid",
+                            progress=8,
+                            response_extra={"fallback_attempt": fallback_attempt, "error": "备用账号 Token 无效"},
+                        )
+                        generation_result["error_message"] = "视频兜底重试失败：备用账号 Token 无效"
+                        break
+                    attempted_token_ids.add(token.id)
+                    pending_token_state["active"] = True
+                    try:
+                        project_id = await self.token_manager.ensure_project_exists(token.id)
+                        await self.flow_client.prefill_remote_browser_pool(
+                            project_id=project_id,
+                            action="VIDEO_GENERATION",
+                            token_id=token.id,
+                        )
+                    except Exception as project_error:
+                        if pending_token_state.get("active") and self.load_balancer:
+                            await self.load_balancer.release_pending(token.id, for_video_generation=True)
+                            pending_token_state["active"] = False
+                        generation_result["error_message"] = f"视频兜底账号项目初始化失败: {project_error}"
+                        await self._update_request_log_progress(
+                            request_log_state,
+                            token_id=token.id,
+                            status_text="video_fallback_project_failed",
+                            progress=22,
+                            response_extra={"fallback_attempt": fallback_attempt, "error": str(project_error)},
+                        )
+                        break
+                    await self._update_request_log_progress(
+                        request_log_state,
+                        token_id=token.id,
+                        status_text="fallback_token_selected",
+                        progress=8,
+                        response_extra={"token_email": token.email, "fallback_attempt": fallback_attempt},
+                    )
+                    await self._update_request_log_progress(
+                        request_log_state,
+                        token_id=token.id,
+                        status_text="fallback_project_ready",
+                        progress=22,
+                        response_extra={"project_id": project_id, "fallback_attempt": fallback_attempt},
+                    )
+                    fallback_log_state = {
+                        "id": await self._log_request(
+                            token.id,
+                            "视频兜底",
+                            {**request_payload, "fallback_attempt": fallback_attempt},
+                            {
+                                "status": "processing",
+                                "status_text": "fallback_started",
+                                "progress": 22,
+                                "fallback_of": request_log_state.get("id"),
+                                "fallback_attempt": fallback_attempt,
+                            },
+                            102,
+                            0,
+                            status_text="fallback_started",
+                            progress=22,
+                        ),
+                        "progress": 22,
+                        "started_at": time.time(),
+                    }
             perf_trace["generation_pipeline_ms"] = int((time.time() - generation_pipeline_started_at) * 1000)
 
             # 6. 记录使用
@@ -2134,6 +2308,7 @@ class GenerationHandler:
         request_log_state: Optional[Dict[str, Any]] = None,
         pending_token_state: Optional[Dict[str, bool]] = None,
         video_media_id: Optional[str] = None,
+        emit_error_response: bool = True,
     ) -> AsyncGenerator:
         """处理视频生成 (异步轮询)"""
 
@@ -2195,30 +2370,39 @@ class GenerationHandler:
             elif video_type == "omni":
                 if max_images is not None and image_count > max_images:
                     error_msg = f"Omni 模型最多支持 {max_images} 张参考图，当前提供了 {image_count} 张"
-                    if stream:
+                    if stream and emit_error_response:
                         yield self._create_stream_chunk(f"{error_msg}\n")
                     self._mark_generation_failed(generation_result, error_msg)
-                    yield self._create_error_response(error_msg, status_code=400)
+                    if emit_error_response:
+                        yield self._create_error_response(error_msg, status_code=400)
+                    else:
+                        generation_result["error_emitted"] = False
                     return
 
             # I2V: 首尾帧模型 - 需要1-2张图片
             elif video_type == "i2v":
                 if image_count < min_images or image_count > max_images:
                     error_msg = f"首尾帧模型需要 {min_images}-{max_images} 张图片，当前提供了 {image_count} 张"
-                    if stream:
+                    if stream and emit_error_response:
                         yield self._create_stream_chunk(f"{error_msg}\n")
                     self._mark_generation_failed(generation_result, error_msg)
-                    yield self._create_error_response(error_msg, status_code=400)
+                    if emit_error_response:
+                        yield self._create_error_response(error_msg, status_code=400)
+                    else:
+                        generation_result["error_emitted"] = False
                     return
 
             # R2V: 多图生成 - 当前上游协议最多 3 张参考图
             elif video_type == "r2v":
                 if max_images is not None and image_count > max_images:
                     error_msg = f"多图视频模型最多支持 {max_images} 张参考图，当前提供了 {image_count} 张"
-                    if stream:
+                    if stream and emit_error_response:
                         yield self._create_stream_chunk(f"{error_msg}\n")
                     self._mark_generation_failed(generation_result, error_msg)
-                    yield self._create_error_response(error_msg, status_code=400)
+                    if emit_error_response:
+                        yield self._create_error_response(error_msg, status_code=400)
+                    else:
+                        generation_result["error_emitted"] = False
                     return
 
             # ========== 上传图片 ==========
@@ -2403,10 +2587,13 @@ class GenerationHandler:
             elif video_type == "extend":
                 if not video_media_id:
                     error_msg = "视频续写需要提供源视频的 mediaGenerationId，请在 image_url 中传入 extend://VIDEO_MEDIA_ID"
-                    if stream:
+                    if stream and emit_error_response:
                         yield self._create_stream_chunk(f"{error_msg}\n")
                     self._mark_generation_failed(generation_result, error_msg)
-                    yield self._create_error_response(error_msg, status_code=400)
+                    if emit_error_response:
+                        yield self._create_error_response(error_msg, status_code=400)
+                    else:
+                        generation_result["error_emitted"] = False
                     return
 
                 debug_logger.log_info(f"[EXTEND] 续写视频: {video_media_id}")
@@ -2443,8 +2630,11 @@ class GenerationHandler:
             # 获取task_id和operations
             operations = result.get("operations", [])
             if not operations:
-                self._mark_generation_failed(generation_result, "\u751f\u6210\u4efb\u52a1\u521b\u5efa\u5931\u8d25")
-                yield self._create_error_response("生成任务创建失败", status_code=502)
+                self._mark_generation_failed(generation_result, "生成任务创建失败")
+                if emit_error_response:
+                    yield self._create_error_response("生成任务创建失败", status_code=502)
+                else:
+                    generation_result["error_emitted"] = False
                 return
 
             operation = operations[0]
@@ -2488,6 +2678,7 @@ class GenerationHandler:
                 response_state,
                 request_log_state,
                 extend_source_media_id=extend_source_id,
+                emit_error_response=emit_error_response,
             ):
                 yield chunk
 
@@ -2505,6 +2696,7 @@ class GenerationHandler:
         response_state: Optional[Dict[str, Any]] = None,
         request_log_state: Optional[Dict[str, Any]] = None,
         extend_source_media_id: Optional[str] = None,
+        emit_error_response: bool = True,
     ) -> AsyncGenerator:
         """轮询视频生成结果
         
@@ -2629,7 +2821,10 @@ class GenerationHandler:
                         error_msg = "视频生成成功但未获取到媒体地址"
                         await self._fail_video_task(checked_operations, error_msg)
                         self._mark_generation_failed(generation_result, error_msg)
-                        yield self._create_error_response(error_msg, status_code=502)
+                        if emit_error_response:
+                            yield self._create_error_response(error_msg, status_code=502)
+                        else:
+                            generation_result["error_emitted"] = False
                         return
 
                     video_info["url"] = video_url
@@ -2815,9 +3010,12 @@ class GenerationHandler:
                     # 返回友好的错误消息，提示用户重试
                     friendly_error = f"视频生成失败: {error_message}，请重试"
                     self._mark_generation_failed(generation_result, friendly_error)
-                    if stream:
-                        yield self._create_stream_chunk(f"错误: {friendly_error}\n")
-                    yield self._create_error_response(friendly_error, status_code=502)
+                    if emit_error_response:
+                        if stream:
+                            yield self._create_stream_chunk(f"错误: {friendly_error}\n")
+                        yield self._create_error_response(friendly_error, status_code=502)
+                    else:
+                        generation_result["error_emitted"] = False
                     return
 
                 elif status.startswith("MEDIA_GENERATION_STATUS_ERROR"):
@@ -2825,7 +3023,10 @@ class GenerationHandler:
                     error_msg = f"视频生成失败: {status}"
                     await self._fail_video_task(checked_operations, error_msg)
                     self._mark_generation_failed(generation_result, error_msg)
-                    yield self._create_error_response(error_msg, status_code=502)
+                    if emit_error_response:
+                        yield self._create_error_response(error_msg, status_code=502)
+                    else:
+                        generation_result["error_emitted"] = False
                     return
                     
                 elif status == "MEDIA_GENERATION_STATUS_ACTIVE" and attempt > 80:
@@ -2833,9 +3034,12 @@ class GenerationHandler:
                     error_msg = "视频生成超时 (上游卡顿超过4分钟，已自动取消)"
                     await self._fail_video_task(checked_operations, error_msg)
                     self._mark_generation_failed(generation_result, error_msg)
-                    if stream:
-                        yield self._create_stream_chunk(f"错误: {error_msg}\n")
-                    yield self._create_error_response(error_msg, status_code=504)
+                    if emit_error_response:
+                        if stream:
+                            yield self._create_stream_chunk(f"错误: {error_msg}\n")
+                        yield self._create_error_response(error_msg, status_code=504)
+                    else:
+                        generation_result["error_emitted"] = False
                     return
 
             except Exception as e:
@@ -2846,9 +3050,12 @@ class GenerationHandler:
                     error_msg = f"视频状态查询失败: {self._normalize_error_message(e)}"
                     await self._fail_video_task(operations, error_msg)
                     self._mark_generation_failed(generation_result, error_msg)
-                    if stream:
-                        yield self._create_stream_chunk(f"错误: {error_msg}\n")
-                    yield self._create_error_response(error_msg, status_code=502)
+                    if emit_error_response:
+                        if stream:
+                            yield self._create_stream_chunk(f"错误: {error_msg}\n")
+                        yield self._create_error_response(error_msg, status_code=502)
+                    else:
+                        generation_result["error_emitted"] = False
                     return
                 continue
 
@@ -2859,7 +3066,10 @@ class GenerationHandler:
             error_msg = f"视频生成超时 (已轮询 {max_attempts} 次)"
         await self._fail_video_task(operations, error_msg)
         self._mark_generation_failed(generation_result, error_msg)
-        yield self._create_error_response(error_msg, status_code=504)
+        if emit_error_response:
+            yield self._create_error_response(error_msg, status_code=504)
+        else:
+            generation_result["error_emitted"] = False
 
     # ========== 响应格式化 ==========
 

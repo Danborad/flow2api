@@ -43,6 +43,8 @@ image_timeout = 300
 video_timeout = 1500
 # 图片生成失败后切换其他账号重试的次数；0 表示关闭
 image_fallback_attempts = 1
+# 视频生成失败后切换其他账号重试的次数；0 表示关闭
+video_fallback_attempts = 1
 
 [call_logic]
 call_mode = "default"  # default=随机轮询策略, polling=顺序轮询策略

@@ -268,6 +268,11 @@
                             <input id="cfgImageFallbackAttempts" type="number" class="flex h-9 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" placeholder="1" min="0" max="5">
                             <p class="text-xs text-muted-foreground mt-1">图片生成失败后切换其他账号重新生成的次数；0 表示关闭，默认 1 次</p>
                         </div>
+                        <div>
+                            <label class="text-sm font-medium mb-2 block">视频失败兜底次数</label>
+                            <input id="cfgVideoFallbackAttempts" type="number" class="flex h-9 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" placeholder="1" min="0" max="5">
+                            <p class="text-xs text-muted-foreground mt-1">视频生成失败后切换其他账号重新生成的次数；0 表示关闭，默认 1 次</p>
+                        </div>
                     </div>
                     <button onclick="saveAllGenerationConfig()" class="inline-flex items-center justify-center rounded-md bg-primary text-primary-foreground hover:bg-primary/90 h-9 px-4 w-full mt-4">保存配置</button>
                 </div>
@@ -1026,7 +1031,7 @@
         toggleMediaProxyInput=()=>{const enabled=$('cfgMediaProxyEnabled').checked;$('mediaProxyUrlInput').classList.toggle('hidden',!enabled)},
         toggleCacheOptions=()=>{const enabled=$('cfgCacheEnabled').checked;$('cacheOptions').style.display=enabled?'block':'none'},
         loadCacheConfig=async()=>{try{console.log('开始加载缓存配置...');const r=await apiRequest('/api/cache/config');if(!r){console.error('API请求失败');return}const d=await r.json();console.log('缓存配置数据:',d);if(d.success&&d.config){const enabled=d.config.enabled!==false;const timeout=d.config.timeout??7200;const baseUrl=d.config.base_url||'';const effectiveUrl=d.config.effective_base_url||'';console.log('设置缓存启用:',enabled);console.log('设置超时时间:',timeout);console.log('设置域名:',baseUrl);console.log('生效URL:',effectiveUrl);$('cfgCacheEnabled').checked=enabled;$('cfgCacheTimeout').value=timeout;$('cfgCacheBaseUrl').value=baseUrl;if(effectiveUrl){$('cacheEffectiveUrlValue').textContent=effectiveUrl;$('cacheEffectiveUrl').classList.remove('hidden')}else{$('cacheEffectiveUrl').classList.add('hidden')}toggleCacheOptions();console.log('缓存配置加载成功')}else{console.error('缓存配置数据格式错误:',d)}}catch(e){console.error('加载缓存配置失败:',e);showToast('加载缓存配置失败: '+e.message,'error')}},
-        loadGenerationTimeout=async()=>{try{console.log('开始加载生成配置...');const r=await apiRequest('/api/generation/timeout');if(!r){console.error('API请求失败');return}const d=await r.json();console.log('生成配置数据:',d);if(d.success&&d.config){const imageTimeout=d.config.image_timeout||300;const videoTimeout=d.config.video_timeout||1500;const maxRetries=d.config.max_retries||3;console.log('设置图片超时:',imageTimeout);console.log('设置视频超时:',videoTimeout);console.log('设置最大重试次数:',maxRetries);$('cfgImageTimeout').value=imageTimeout;$('cfgVideoTimeout').value=videoTimeout;$('cfgMaxRetries').value=maxRetries;console.log('生成配置加载成功')}else{console.error('生成配置数据格式错误:',d)}}catch(e){console.error('加载生成配置失败:',e);showToast('加载生成配置失败: '+e.message,'error')}},
+        loadGenerationTimeout=async()=>{try{console.log('开始加载生成配置...');const r=await apiRequest('/api/generation/timeout');if(!r){console.error('API请求失败');return}const d=await r.json();console.log('生成配置数据:',d);if(d.success&&d.config){const imageTimeout=d.config.image_timeout||300;const videoTimeout=d.config.video_timeout||1500;const maxRetries=d.config.max_retries||3;console.log('设置图片超时:',imageTimeout);console.log('设置视频超时:',videoTimeout);console.log('设置最大重试次数:',maxRetries);$('cfgImageTimeout').value=imageTimeout;$('cfgVideoTimeout').value=videoTimeout;$('cfgMaxRetries').value=maxRetries;if($('cfgImageFallbackAttempts'))$('cfgImageFallbackAttempts').value=d.config.image_fallback_attempts??1;if($('cfgVideoFallbackAttempts'))$('cfgVideoFallbackAttempts').value=d.config.video_fallback_attempts??1;console.log('生成配置加载成功')}else{console.error('生成配置数据格式错误:',d)}}catch(e){console.error('加载生成配置失败:',e);showToast('加载生成配置失败: '+e.message,'error')}},
         loadCallLogicConfig=async()=>{try{const r=await apiRequest('/api/call-logic/config');if(!r)return;const d=await r.json();if(d.success&&d.config){const mode=d.config.call_mode||((d.config.polling_mode_enabled||false)?'polling':'default');$('cfgCallLogicMode').value=mode}else{console.error('轮询模式配置数据格式错误:',d)}}catch(e){console.error('加载轮询模式配置失败:',e);showToast('加载轮询模式配置失败: '+e.message,'error')}},
         saveCacheConfig=async()=>{const enabled=$('cfgCacheEnabled').checked,timeoutInput=$('cfgCacheTimeout').value.trim(),timeout=timeoutInput===''?7200:parseInt(timeoutInput,10),baseUrl=$('cfgCacheBaseUrl').value.trim();console.log('保存缓存配置:',{enabled,timeout,baseUrl});if(Number.isNaN(timeout)||timeout<0||timeout>86400)return showToast('缓存超时时间必须在 0-86400 秒之间，0 表示不删除','error');if(baseUrl&&!baseUrl.startsWith('http://')&&!baseUrl.startsWith('https://'))return showToast('域名必须以 http:// 或 https:// 开头','error');try{console.log('保存缓存启用状态...');const r0=await apiRequest('/api/cache/enabled',{method:'POST',body:JSON.stringify({enabled:enabled})});if(!r0){console.error('保存缓存启用状态请求失败');return}const d0=await r0.json();console.log('缓存启用状态保存结果:',d0);if(!d0.success){console.error('保存缓存启用状态失败:',d0);return showToast('保存缓存启用状态失败','error')}console.log('保存超时时间...');const r1=await apiRequest('/api/cache/config',{method:'POST',body:JSON.stringify({timeout:timeout})});if(!r1){console.error('保存超时时间请求失败');return}const d1=await r1.json();console.log('超时时间保存结果:',d1);if(!d1.success){console.error('保存超时时间失败:',d1);return showToast('保存超时时间失败','error')}console.log('保存域名...');const r2=await apiRequest('/api/cache/base-url',{method:'POST',body:JSON.stringify({base_url:baseUrl})});if(!r2){console.error('保存域名请求失败');return}const d2=await r2.json();console.log('域名保存结果:',d2);if(d2.success){showToast('缓存配置保存成功','success');console.log('等待配置文件写入完成...');await new Promise(r=>setTimeout(r,200));console.log('重新加载配置...');await loadCacheConfig()}else{console.error('保存域名失败:',d2);showToast('保存域名失败','error')}}catch(e){console.error('保存失败:',e);showToast('保存失败: '+e.message,'error')}},
         saveGenerationTimeout=async()=>{const imageTimeout=parseInt($('cfgImageTimeout').value)||300,videoTimeout=parseInt($('cfgVideoTimeout').value)||1500,maxRetries=parseInt($('cfgMaxRetries').value)||3;console.log('保存生成配置:',{imageTimeout,videoTimeout,maxRetries});if(imageTimeout<60||imageTimeout>3600)return showToast('图片超时时间必须在 60-3600 秒之间','error');if(videoTimeout<60||videoTimeout>7200)return showToast('视频超时时间必须在 60-7200 秒之间','error');if(maxRetries<1)return showToast('最大重试次数不能小于 1','error');try{const r=await apiRequest('/api/generation/timeout',{method:'POST',body:JSON.stringify({image_timeout:imageTimeout,video_timeout:videoTimeout,max_retries:maxRetries})});if(!r){console.error('保存请求失败');return}const d=await r.json();console.log('保存结果:',d);if(d.success){showToast('生成配置保存成功','success');await new Promise(r=>setTimeout(r,200));await loadGenerationTimeout()}else{console.error('保存失败:',d);showToast('保存失败','error')}}catch(e){console.error('保存失败:',e);showToast('保存失败: '+e.message,'error')}},
@@ -1038,10 +1043,10 @@
         saveCaptchaConfig=async()=>{const method=$('cfgCaptchaMethod').value,yesApiKey=$('cfgYescaptchaApiKey').value.trim(),yesBaseUrl=$('cfgYescaptchaBaseUrl').value.trim(),yesTaskType=$('cfgYescaptchaTaskType').value,capApiKey=$('cfgCapmonsterApiKey').value.trim(),capBaseUrl=$('cfgCapmonsterBaseUrl').value.trim(),ezApiKey=$('cfgEzcaptchaApiKey').value.trim(),ezBaseUrl=$('cfgEzcaptchaBaseUrl').value.trim(),solverApiKey=$('cfgCapsolverApiKey').value.trim(),solverBaseUrl=$('cfgCapsolverBaseUrl').value.trim(),remoteBaseUrl=$('cfgRemoteBrowserBaseUrl').value.trim(),remoteApiKey=$('cfgRemoteBrowserApiKey').value.trim(),remoteTimeout=parseInt($('cfgRemoteBrowserTimeout').value)||60,browserProxyEnabled=$('cfgBrowserProxyEnabled').checked,browserProxyUrl=$('cfgBrowserProxyUrl').value.trim(),personalProxyEnabled=$('cfgPersonalProxyEnabled').checked,personalProxyUrl=$('cfgPersonalProxyUrl').value.trim(),browserCount=parseInt($('cfgBrowserCount').value)||1,personalBrowserCount=parseInt($('cfgPersonalBrowserCount').value)||1,personalProjectPoolSize=parseInt($('cfgPersonalProjectPoolSize').value)||4,personalMaxTabs=parseInt($('cfgPersonalMaxTabs').value)||5,personalFreshRestartEveryNSolves=Math.max(0,parseInt($('cfgPersonalFreshRestartEveryNSolves').value)||0),personalIdleTTL=parseInt($('cfgPersonalIdleTTL').value)||600;const finalProxyEnabled=method==='personal'?personalProxyEnabled:browserProxyEnabled;const finalProxyUrl=method==='personal'?personalProxyUrl:browserProxyUrl;const finalBrowserCount=method==='personal'?personalBrowserCount:browserCount;console.log('保存验证码配置:',{method,yesApiKey,yesBaseUrl,yesTaskType,capApiKey,capBaseUrl,ezApiKey,ezBaseUrl,solverApiKey,solverBaseUrl,remoteBaseUrl,remoteApiKey,remoteTimeout,browserProxyEnabled,browserProxyUrl,personalProxyEnabled,personalProxyUrl,finalProxyEnabled,finalProxyUrl,browserCount,personalBrowserCount,finalBrowserCount,personalProjectPoolSize,personalMaxTabs,personalFreshRestartEveryNSolves,personalIdleTTL});try{const r=await apiRequest('/api/captcha/config',{method:'POST',body:JSON.stringify({captcha_method:method,yescaptcha_api_key:yesApiKey,yescaptcha_base_url:yesBaseUrl,yescaptcha_task_type:yesTaskType,capmonster_api_key:capApiKey,capmonster_base_url:capBaseUrl,ezcaptcha_api_key:ezApiKey,ezcaptcha_base_url:ezBaseUrl,capsolver_api_key:solverApiKey,capsolver_base_url:solverBaseUrl,remote_browser_base_url:remoteBaseUrl,remote_browser_api_key:remoteApiKey,remote_browser_timeout:remoteTimeout,browser_proxy_enabled:finalProxyEnabled,browser_proxy_url:finalProxyUrl,browser_count:finalBrowserCount,personal_project_pool_size:personalProjectPoolSize,personal_max_resident_tabs:personalMaxTabs,browser_personal_fresh_restart_every_n_solves:personalFreshRestartEveryNSolves,personal_idle_tab_ttl_seconds:personalIdleTTL})});if(!r){console.error('保存请求失败');return}const d=await r.json();console.log('保存结果:',d);if(d.success){showToast('验证码配置保存成功','success');if(d.runtime_status_method){startCaptchaRuntimeStatusPolling(d.runtime_status_method,d.runtime_prepare_message||'已开始准备浏览器运行环境，安装进度将自动显示。')}else{stopCaptchaRuntimeStatusPolling()}await new Promise(r=>setTimeout(r,200));await loadCaptchaConfig()}else{console.error('保存失败:',d);showToast(d.message||'保存失败','error')}}catch(e){console.error('保存失败:',e);showToast('保存失败: '+e.message,'error')}},
         toggleATAutoRefresh=async()=>{try{const enabled=$('atAutoRefreshToggle').checked;const r=await apiRequest('/api/token-refresh/enabled',{method:'POST',body:JSON.stringify({enabled:enabled})});if(!r){$('atAutoRefreshToggle').checked=!enabled;return}const d=await r.json();if(d.success){showToast(enabled?'AT自动刷新已启用':'AT自动刷新已禁用','success')}else{showToast('操作失败: '+(d.detail||'未知错误'),'error');$('atAutoRefreshToggle').checked=!enabled}}catch(e){showToast('操作失败: '+e.message,'error');$('atAutoRefreshToggle').checked=!enabled}},
         loadATAutoRefreshConfig=async()=>{try{const r=await apiRequest('/api/token-refresh/config');if(!r)return;const d=await r.json();if(d.success&&d.config){$('atAutoRefreshToggle').checked=d.config.at_auto_refresh_enabled||false}else{console.error('AT自动刷新配置数据格式错误:',d)}}catch(e){console.error('加载AT自动刷新配置失败:',e)}},
-        formatLogStatus=l=>{const statusText=(l.status_text||'').trim();if(statusText){const map={started:'\u5df2\u542f\u52a8',token_selected:'\u5df2\u9009\u4e2d\u8d26\u53f7',token_ready:'\u51c6\u5907\u751f\u6210\u73af\u5883',project_ready:'\u9879\u76ee\u5df2\u5c31\u7eea',uploading_images:'\u4e0a\u4f20\u53c2\u8003\u56fe\u4e2d',solving_image_captcha:'\u56fe\u7247\u6253\u7801\u9a8c\u8bc1\u4e2d',submitting_image:'\u56fe\u7247\u63d0\u4ea4\u4e2d',image_generated:'\u56fe\u7247\u751f\u6210\u5b8c\u6210',preparing_video:'\u51c6\u5907\u89c6\u9891\u4efb\u52a1',submitting_video:'\u89c6\u9891\u63d0\u4ea4\u4e2d',video_submitted:'\u89c6\u9891\u4efb\u52a1\u5df2\u63d0\u4ea4',video_polling:'\u89c6\u9891\u751f\u6210\u4e2d',caching_image:'\u7f13\u5b58\u56fe\u7247\u4e2d',caching_video:'\u7f13\u5b58\u89c6\u9891\u4e2d',completed:'\u5df2\u5b8c\u6210',failed:'\u5931\u8d25',processing:'\u5904\u7406\u4e2d',upsampling_2k:'\u6b63\u5728\u653e\u5927\u52302K',upsampling_4k:'\u6b63\u5728\u653e\u5927\u52304K',upsampling_1080p:'\u6b63\u5728\u653e\u5927\u52301080P'};return map[statusText]||statusText}if(l.status_code===102)return'\u5904\u7406\u4e2d';if(l.status_code===200)return'\u5df2\u5b8c\u6210';if(l.status_code&&l.status_code>=400)return'\u5931\u8d25';return'-'},
+        formatLogStatus=l=>{const statusText=(l.status_text||'').trim();if(statusText){const map={started:'\u5df2\u542f\u52a8',token_selected:'\u5df2\u9009\u4e2d\u8d26\u53f7',token_ready:'\u51c6\u5907\u751f\u6210\u73af\u5883',project_ready:'\u9879\u76ee\u5df2\u5c31\u7eea',uploading_images:'\u4e0a\u4f20\u53c2\u8003\u56fe\u4e2d',solving_image_captcha:'\u56fe\u7247\u6253\u7801\u9a8c\u8bc1\u4e2d',submitting_image:'\u56fe\u7247\u63d0\u4ea4\u4e2d',image_generated:'\u56fe\u7247\u751f\u6210\u5b8c\u6210',image_fallback_switching:'切换账号重试',video_fallback_switching:'切换账号重试',fallback_started:'兜底进行中',fallback_token_selected:'已切换备用账号',fallback_project_ready:'备用项目已就绪',image_fallback_unavailable:'无可用备用账号',video_fallback_unavailable:'无可用备用账号',image_fallback_token_invalid:'备用账号无效',video_fallback_token_invalid:'备用账号无效',image_fallback_project_failed:'备用项目失败',video_fallback_project_failed:'备用项目失败',preparing_video:'\u51c6\u5907\u89c6\u9891\u4efb\u52a1',submitting_video:'\u89c6\u9891\u63d0\u4ea4\u4e2d',video_submitted:'\u89c6\u9891\u4efb\u52a1\u5df2\u63d0\u4ea4',video_polling:'\u89c6\u9891\u751f\u6210\u4e2d',caching_image:'\u7f13\u5b58\u56fe\u7247\u4e2d',caching_video:'\u7f13\u5b58\u89c6\u9891\u4e2d',completed:'\u5df2\u5b8c\u6210',failed:'\u5931\u8d25',processing:'\u5904\u7406\u4e2d',upsampling_2k:'\u6b63\u5728\u653e\u5927\u52302K',upsampling_4k:'\u6b63\u5728\u653e\u5927\u52304K',upsampling_1080p:'\u6b63\u5728\u653e\u5927\u52301080P'};return map[statusText]||statusText}if(l.status_code===102)return'\u5904\u7406\u4e2d';if(l.status_code===200)return'\u5df2\u5b8c\u6210';if(l.status_code&&l.status_code>=400)return'\u5931\u8d25';return'-'},
         formatLogStatusClass=l=>{const statusText=formatLogStatus(l);if(statusText==='\u5904\u7406\u4e2d')return'bg-amber-50 text-amber-700';if(statusText==='\u5df2\u5b8c\u6210')return'bg-green-50 text-green-700';if(statusText==='\u5931\u8d25')return'bg-red-50 text-red-700';return'bg-gray-100 text-gray-700'},
         formatLogProgress=l=>{if(l.progress===null||l.progress===undefined||l.progress==='')return'-';const progress=Number(l.progress);return Number.isFinite(progress)?`${Math.max(0,Math.min(100,progress))}%`:'-'},
-        getLogOperationLabel=l=>{const operation=String(l&&l.operation||'').trim();if(operation==='generate_image')return'图片';if(operation==='generate_video')return'视频';return''},
+        getLogOperationLabel=l=>{const operation=String(l&&l.operation||'').trim();if(operation==='generate_image'||operation==='图片兜底')return'图片';if(operation==='generate_video'||operation==='视频兜底')return'视频';return operation||''},
         formatLogOutcome=l=>{const statusCode=Number(l&&l.status_code);if(statusCode===200){const operationLabel=getLogOperationLabel(l);return operationLabel?`${operationLabel}结果已返回`:'已返回结果'}if(statusCode===102)return'处理中';const errorSummary=extractLogErrorSummary(l);if(errorSummary)return truncateLogText(errorSummary,96);return statusCode>=400?'请求失败':'-'},
         formatLogOutcomeClass=l=>{if((l.status_code||0)>=400)return'text-red-600';if(l.status_code===200)return'text-green-700';if(l.status_code===102)return'text-amber-700';return'text-muted-foreground'},
         startLogsAutoRefresh=()=>{stopLogsAutoRefresh();window.logsAutoRefreshTimer=setInterval(()=>loadLogs({silent:true}),2000)},
@@ -1330,9 +1335,10 @@
         window.addEventListener('DOMContentLoaded',()=>{if(typeof checkAuth==='function')checkAuth();refreshTokens();loadATAutoRefreshConfig()});
     </script>
     <script>
-        async function loadImageFallbackAttempts() {
-            const input = document.getElementById('cfgImageFallbackAttempts');
-            if (!input) return;
+        async function loadFallbackAttempts() {
+            const imgInput = document.getElementById('cfgImageFallbackAttempts');
+            const vidInput = document.getElementById('cfgVideoFallbackAttempts');
+            if (!imgInput && !vidInput) return;
             try {
                 const response = await fetch('/api/generation/timeout', { credentials: 'include' });
                 if (response.status === 401) {
@@ -1342,54 +1348,60 @@
                 if (!response.ok) return;
                 const data = await response.json();
                 if (data.success && data.config) {
-                    input.value = data.config.image_fallback_attempts ?? 1;
+                    if (imgInput) imgInput.value = data.config.image_fallback_attempts ?? 1;
+                    if (vidInput) vidInput.value = data.config.video_fallback_attempts ?? 1;
                 }
             } catch (error) {
-                console.error('加载图片失败兜底配置失败:', error);
-            }
-        }
-
-        async function saveImageFallbackAttempts() {
-            const input = document.getElementById('cfgImageFallbackAttempts');
-            if (!input) return;
-            const raw = input.value.trim();
-            const attempts = raw === '' ? 1 : Number.parseInt(raw, 10);
-            if (!Number.isInteger(attempts) || attempts < 0 || attempts > 5) {
-                showToast('图片失败兜底次数必须在 0-5 之间', 'error');
-                return;
-            }
-            try {
-                const response = await fetch('/api/generation/timeout', {
-                    method: 'POST',
-                    credentials: 'include',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ image_fallback_attempts: attempts })
-                });
-                if (response.status === 401) {
-                    window.location.href = '/login';
-                    return;
-                }
-                const data = await response.json();
-                if (data.success) {
-                    showToast('图片失败兜底配置保存成功', 'success');
-                } else {
-                    showToast('图片失败兜底配置保存失败', 'error');
-                }
-            } catch (error) {
-                showToast('图片失败兜底配置保存失败: ' + error.message, 'error');
+                console.error('加载兜底配置失败:', error);
             }
         }
 
         async function saveAllGenerationConfig() {
-            const input = document.getElementById('cfgImageFallbackAttempts');
-            const raw = input ? input.value.trim() : '';
-            const attempts = raw === '' ? 1 : Number.parseInt(raw, 10);
-            if (!Number.isInteger(attempts) || attempts < 0 || attempts > 5) {
+            const imgInput = document.getElementById('cfgImageFallbackAttempts');
+            const imgRaw = imgInput ? imgInput.value.trim() : '';
+            const imgAttempts = imgRaw === '' ? 1 : Number.parseInt(imgRaw, 10);
+            if (!Number.isInteger(imgAttempts) || imgAttempts < 0 || imgAttempts > 5) {
                 showToast('图片失败兜底次数必须在 0-5 之间', 'error');
                 return;
             }
-            await saveGenerationTimeout();
-            await saveImageFallbackAttempts();
+
+            const vidInput = document.getElementById('cfgVideoFallbackAttempts');
+            const vidRaw = vidInput ? vidInput.value.trim() : '';
+            const vidAttempts = vidRaw === '' ? 1 : Number.parseInt(vidRaw, 10);
+            if (!Number.isInteger(vidAttempts) || vidAttempts < 0 || vidAttempts > 5) {
+                showToast('视频失败兜底次数必须在 0-5 之间', 'error');
+                return;
+            }
+
+            const imageTimeout = parseInt($('cfgImageTimeout').value) || 300;
+            const videoTimeout = parseInt($('cfgVideoTimeout').value) || 1500;
+            const maxRetries = parseInt($('cfgMaxRetries').value) || 3;
+            if (imageTimeout < 60 || imageTimeout > 3600) return showToast('图片超时时间必须在 60-3600 秒之间', 'error');
+            if (videoTimeout < 60 || videoTimeout > 7200) return showToast('视频超时时间必须在 60-7200 秒之间', 'error');
+            if (maxRetries < 1) return showToast('最大重试次数不能小于 1', 'error');
+
+            try {
+                const r = await apiRequest('/api/generation/timeout', {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        image_timeout: imageTimeout,
+                        video_timeout: videoTimeout,
+                        max_retries: maxRetries,
+                        image_fallback_attempts: imgAttempts,
+                        video_fallback_attempts: vidAttempts
+                    })
+                });
+                if (!r) return;
+                const d = await r.json();
+                if (d.success) {
+                    showToast('生成与兜底配置保存成功', 'success');
+                    await loadFallbackAttempts();
+                } else {
+                    showToast('保存失败: ' + (d.message || d.detail || '未知错误'), 'error');
+                }
+            } catch (e) {
+                showToast('保存失败: ' + e.message, 'error');
+            }
         }
 
         function toggleWebhookOptions() {
@@ -1564,11 +1576,14 @@
         }
 
         window.addEventListener('DOMContentLoaded', () => {
-            loadImageFallbackAttempts();
+            loadFallbackAttempts();
             loadWebhookConfig();
             updateEmailMaskButtons();
             const tabBtn = document.getElementById('tabSettings');
-            if (tabBtn) tabBtn.addEventListener('click', () => setTimeout(loadWebhookConfig, 100));
+            if (tabBtn) tabBtn.addEventListener('click', () => {
+                setTimeout(loadWebhookConfig, 100);
+                setTimeout(loadFallbackAttempts, 100);
+            });
         });
     </script>
 </body>
