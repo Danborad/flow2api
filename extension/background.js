@@ -245,12 +245,82 @@ async function getLabsSessionToken() {
     return candidates[0].value;
 }
 
+async function getOAuthSignInUrl() {
+    try {
+        const csrfRes = await fetch("https://labs.google/fx/api/auth/csrf");
+        if (!csrfRes.ok) return null;
+        const csrfData = await csrfRes.json();
+        const csrfToken = csrfData.csrfToken;
+        if (!csrfToken) return null;
+
+        const signinRes = await fetch("https://labs.google/fx/api/auth/signin/google", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/x-www-form-urlencoded",
+                "Referer": "https://labs.google/fx",
+                "Origin": "https://labs.google"
+            },
+            body: new URLSearchParams({
+                csrfToken: csrfToken,
+                callbackUrl: "https://labs.google/fx",
+                json: "true"
+            })
+        });
+        if (!signinRes.ok) return null;
+        const signinData = await signinRes.json();
+        return signinData.url || null;
+    } catch (e) {
+        console.warn("[Flow2API] Failed to get OAuth signin url:", e);
+        return null;
+    }
+}
+
+async function triggerOAuthFlow() {
+    logExtensionEvent("oauth_flow_start");
+    const oauthUrl = await getOAuthSignInUrl();
+    if (!oauthUrl) {
+        logExtensionEvent("oauth_url_failed");
+        return null;
+    }
+
+    logExtensionEvent("oauth_flow_navigating", { url: oauthUrl.slice(0, 80) });
+    let tabId = null;
+    try {
+        const tab = await chrome.tabs.create({ url: oauthUrl, active: false });
+        tabId = tab.id;
+
+        const deadline = Date.now() + 15000;
+        let token = "";
+        while (Date.now() < deadline) {
+            await sleep(800);
+            token = await getLabsSessionToken();
+            if (token) {
+                logExtensionEvent("oauth_flow_success");
+                break;
+            }
+        }
+        return token || null;
+    } catch (e) {
+        logExtensionEvent("oauth_flow_error", { error: e.message });
+        return null;
+    } finally {
+        if (tabId) {
+            try { await chrome.tabs.remove(tabId); } catch (e) {}
+        }
+    }
+}
+
 async function refreshLabsSessionCookie(force = false) {
     let token = await getLabsSessionToken();
     if (token && !force) {
         return token;
     }
 
+    // 1. 尝试全自动 NextAuth OAuth 握手
+    token = await triggerOAuthFlow();
+    if (token) return token;
+
+    // 2. 如果 OAuth 接口未成功，尝试直接打开页面点击授权
     let tabId = null;
     try {
         logExtensionEvent("auto_login_labs_start");
@@ -818,6 +888,17 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         connectWS()
             .then(() => sendResponse({ success: true }))
             .catch(error => sendResponse({ success: false, error: error.message }));
+        return true;
+    }
+    if (message && message.type === "flow2api_open_oauth") {
+        getOAuthSignInUrl().then(url => {
+            const targetUrl = url || "https://labs.google/fx";
+            chrome.tabs.create({ url: targetUrl, active: true });
+            sendResponse({ success: true });
+        }).catch(err => {
+            chrome.tabs.create({ url: "https://labs.google/fx", active: true });
+            sendResponse({ success: true });
+        });
         return true;
     }
     if (!message || message.type !== "flow2api_import_current_account") return false;

@@ -1,5 +1,10 @@
 # Flow2API Captcha Worker 更新记录
 
+## 1.1.23
+
+- 全自动标准 OAuth 握手：当未检测到会话 Cookie 时，后台自动请求 NextAuth 标准登录接口获取官方授权 URL 并自动完成重定向握手。
+- 界面增加一键直达官方授权辅助按钮，针对多账号选择环境可一键打开 Google 官方授权。
+
 ## 1.1.22
 
 - 优化 Cookie 获取：采用 `chrome.cookies.getAll({})` 无过滤抓取所有权限内 Cookie，解决 Host-only Cookie 无法通过 domain 查询返回的问题。
