@@ -1,5 +1,11 @@
 # Flow2API Captcha Worker 更新记录
 
+## 1.1.25
+
+- 彻底移除后台静默 OAuth 重定向与脆弱脚本注入，杜绝后台标签页自动开启/关闭导致的卡死与刷屏错误。
+- 恢复精准直接 Cookie 读取，支持 `https://labs.google/fx`、`flow.google.com` 多源 Cookie。
+- 错误时提供显式“一键打开授权页”辅助按钮，用户前台加载后即可秒级成功导入。
+
 ## 1.1.24
 
 - 使用 `<all_urls>` 完整授权，避免 Chrome 细分域名开关被置灰导致权限被剥离。

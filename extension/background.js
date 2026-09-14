@@ -151,231 +151,84 @@ function getCookies(details) {
 }
 
 async function getLabsSessionToken() {
-    // 1. 优先使用 chrome.cookies.getAll({}) 读取扩展已授权的所有 Cookie（包含 Host-only Cookie）
-    let allCookies = await getCookies({});
+    const urls = [
+        "https://labs.google/fx",
+        "https://labs.google/fx/tools/flow",
+        "https://labs.google/",
+        "https://flow.google.com/",
+        "https://flow.google.com/project/"
+    ];
 
-    // 2. 若 getAll({}) 为空，补全指定 URL 查询
-    if (!allCookies || !allCookies.length) {
-        const queries = [
-            { domain: "labs.google" },
-            { domain: ".labs.google" },
-            { url: "https://labs.google/" },
-            { url: "https://labs.google/fx" },
-            { url: "https://labs.google/fx/tools/flow" },
-            { domain: "flow.google.com" },
-            { domain: ".flow.google.com" },
-            { url: "https://flow.google.com/" },
-            { url: "https://flow.google.com/project/" }
-        ];
-        allCookies = [];
-        for (const query of queries) {
-            const list = await getCookies(query);
-            allCookies.push(...list);
+    // 1. 优先使用 url 查询（最精准，可直接匹配 Host-only 与 Domain Cookie）
+    for (const url of urls) {
+        for (const baseName of SESSION_COOKIE_BASE_NAMES) {
+            try {
+                const cookie = await getCookie({ url, name: baseName });
+                if (cookie && cookie.value && cookie.value.length > 30) {
+                    logExtensionEvent("session_cookie_found", { url, name: baseName, len: cookie.value.length });
+                    return cookie.value;
+                }
+            } catch (e) {}
         }
     }
 
-    // 按 (domain, baseName) 独立隔离分组，防止不同域名的同名 Cookie 被错误拼接
-    const groups = new Map();
-    for (const cookie of allCookies) {
-        const baseName = SESSION_COOKIE_BASE_NAMES.find((name) => (
-            cookie.name === name || cookie.name.startsWith(`${name}.`)
-        ));
-        if (!baseName || !cookie.value) continue;
-
-        const domain = (cookie.domain || "").toLowerCase();
-        const groupKey = `${domain}:::${baseName}`;
-        const group = groups.get(groupKey) || [];
-        if (!group.some(c => c.name === cookie.name && c.value === cookie.value)) {
-            group.push(cookie);
-        }
-        groups.set(groupKey, group);
+    // 2. 按 Cookie 名称全局匹配
+    for (const baseName of SESSION_COOKIE_BASE_NAMES) {
+        try {
+            const cookies = await getCookies({ name: baseName });
+            if (cookies && cookies.length > 0) {
+                // 优先取 labs.google 的
+                const labsCookie = cookies.find(c => (c.domain || "").includes("labs.google") && c.value && c.value.length > 30);
+                if (labsCookie) {
+                    logExtensionEvent("session_cookie_found", { domain: labsCookie.domain, name: baseName, len: labsCookie.value.length });
+                    return labsCookie.value;
+                }
+                const anyCookie = cookies.find(c => c.value && c.value.length > 30);
+                if (anyCookie) {
+                    logExtensionEvent("session_cookie_found", { domain: anyCookie.domain, name: baseName, len: anyCookie.value.length });
+                    return anyCookie.value;
+                }
+            }
+        } catch (e) {}
     }
 
-    const candidates = [];
-    for (const [groupKey, cookies] of groups.entries()) {
-        const [domain, baseName] = groupKey.split(":::");
-        const hasChunks = cookies.some(c => c.name.includes("."));
-        let tokenValue = "";
-        let maxExpiry = 0;
-
-        if (hasChunks) {
-            const sortedChunks = cookies
-                .filter(c => c.name.startsWith(`${baseName}.`))
-                .sort((a, b) => {
-                    const idxA = Number(a.name.split(".").pop()) || 0;
-                    const idxB = Number(b.name.split(".").pop()) || 0;
-                    return idxA - idxB;
-                });
-            tokenValue = sortedChunks.map(c => c.value).join("");
-            maxExpiry = Math.max(...sortedChunks.map(c => c.expirationDate || 0));
-        } else {
-            const directCookie = cookies.find(c => c.name === baseName) || cookies[0];
-            if (directCookie) {
-                tokenValue = directCookie.value;
-                maxExpiry = directCookie.expirationDate || 0;
+    // 3. 检查是否有分片 Cookie (__Secure-next-auth.session-token.0, .1...)
+    try {
+        const allCookies = await getCookies({});
+        const chunks = allCookies
+            .filter(c => c.name.startsWith("__Secure-next-auth.session-token.") && c.value)
+            .sort((a, b) => (Number(a.name.split(".").pop()) || 0) - (Number(b.name.split(".").pop()) || 0));
+        if (chunks.length > 0) {
+            const fullVal = chunks.map(c => c.value).join("");
+            if (fullVal.length > 30) {
+                logExtensionEvent("session_cookie_found", { type: "chunked", len: fullVal.length });
+                return fullVal;
             }
         }
 
-        if (tokenValue && tokenValue.length > 30) {
-            candidates.push({
-                domain,
-                baseName,
-                value: tokenValue,
-                expiry: maxExpiry,
-                isLabs: domain.includes("labs.google")
-            });
-        }
-    }
-
-    if (!candidates.length) return "";
-
-    logExtensionEvent("session_token_found", {
-        count: candidates.length,
-        domain: candidates[0].domain
-    });
-
-    // 优先选择 labs.google 域名，其次选择最新的凭据
-    candidates.sort((a, b) => {
-        if (a.isLabs !== b.isLabs) return a.isLabs ? -1 : 1;
-        return (b.expiry || 0) - (a.expiry || 0);
-    });
-
-    return candidates[0].value;
-}
-
-async function getOAuthSignInUrl() {
-    try {
-        const csrfRes = await fetch("https://labs.google/fx/api/auth/csrf");
-        if (!csrfRes.ok) return null;
-        const csrfData = await csrfRes.json();
-        const csrfToken = csrfData.csrfToken;
-        if (!csrfToken) return null;
-
-        const signinRes = await fetch("https://labs.google/fx/api/auth/signin/google", {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/x-www-form-urlencoded",
-                "Referer": "https://labs.google/fx",
-                "Origin": "https://labs.google"
-            },
-            body: new URLSearchParams({
-                csrfToken: csrfToken,
-                callbackUrl: "https://labs.google/fx",
-                json: "true"
-            })
-        });
-        if (!signinRes.ok) return null;
-        const signinData = await signinRes.json();
-        return signinData.url || null;
-    } catch (e) {
-        console.warn("[Flow2API] Failed to get OAuth signin url:", e);
-        return null;
-    }
-}
-
-async function triggerOAuthFlow() {
-    logExtensionEvent("oauth_flow_start");
-    const oauthUrl = await getOAuthSignInUrl();
-    if (!oauthUrl) {
-        logExtensionEvent("oauth_url_failed");
-        return null;
-    }
-
-    logExtensionEvent("oauth_flow_navigating", { url: oauthUrl.slice(0, 80) });
-    let tabId = null;
-    try {
-        const tab = await chrome.tabs.create({ url: oauthUrl, active: false });
-        tabId = tab.id;
-
-        const deadline = Date.now() + 15000;
-        let token = "";
-        while (Date.now() < deadline) {
-            await sleep(800);
-            token = await getLabsSessionToken();
-            if (token) {
-                logExtensionEvent("oauth_flow_success");
-                break;
+        for (const c of allCookies) {
+            if (SESSION_COOKIE_BASE_NAMES.includes(c.name) && c.value && c.value.length > 30) {
+                logExtensionEvent("session_cookie_found", { domain: c.domain, name: c.name, len: c.value.length });
+                return c.value;
             }
         }
-        return token || null;
-    } catch (e) {
-        logExtensionEvent("oauth_flow_error", { error: e.message });
-        return null;
-    } finally {
-        if (tabId) {
-            try { await chrome.tabs.remove(tabId); } catch (e) {}
-        }
-    }
+    } catch (e) {}
+
+    return "";
 }
 
-async function refreshLabsSessionCookie(force = false) {
+async function refreshLabsSessionCookie() {
     let token = await getLabsSessionToken();
-    if (token && !force) {
-        return token;
-    }
-
-    // 1. 尝试全自动 NextAuth OAuth 握手
-    token = await triggerOAuthFlow();
     if (token) return token;
 
-    // 2. 如果 OAuth 接口未成功，尝试直接打开页面点击授权
-    let tabId = null;
+    // 尝试静默请求一次会话接口（如果浏览器已有认证凭证，会更新 cookie）
     try {
-        logExtensionEvent("auto_login_labs_start");
-        const tab = await chrome.tabs.create({ url: "https://labs.google/fx", active: false });
-        tabId = tab.id;
-        await waitForTabReady(tabId);
-        await sleep(1500);
+        await fetch("https://labs.google/fx/api/auth/session", { credentials: "include" });
+        token = await getLabsSessionToken();
+        if (token) return token;
+    } catch (e) {}
 
-        try {
-            await chrome.scripting.executeScript({
-                target: { tabId },
-                func: () => {
-                    const directBtn = document.getElementById("sign-in-now-button");
-                    if (directBtn) {
-                        directBtn.click();
-                        return "clicked_direct";
-                    }
-                    const openDialogBtn = Array.from(document.querySelectorAll("button, a")).find(
-                        el => el.innerText && (el.innerText.includes("Sign in") || el.innerText.includes("登录"))
-                    );
-                    if (openDialogBtn) {
-                        openDialogBtn.click();
-                        setTimeout(() => {
-                            const modalBtn = document.getElementById("sign-in-now-button");
-                            if (modalBtn) modalBtn.click();
-                        }, 500);
-                        return "clicked_dialog_then_modal";
-                    }
-                    return "not_found";
-                }
-            });
-        } catch (scriptErr) {
-            console.warn("[Flow2API] Auto-signin script failed:", scriptErr);
-        }
-
-        const deadline = Date.now() + 10000;
-        while (Date.now() < deadline) {
-            await sleep(600);
-            token = await getLabsSessionToken();
-            if (token) {
-                logExtensionEvent("auto_login_labs_success");
-                break;
-            }
-        }
-    } catch (e) {
-        logExtensionEvent("auto_login_labs_failed", { error: e.message });
-        console.warn("[Flow2API] Failed to refresh Labs session tab", e);
-    } finally {
-        if (tabId) {
-            try {
-                await chrome.tabs.remove(tabId);
-            } catch (e) {
-                // ignore
-            }
-        }
-    }
-    return token;
+    return "";
 }
 
 async function getGoogleCookies() {
@@ -425,10 +278,7 @@ async function importCurrentAccount(reason = "manual") {
     await refreshLabsSessionCookie();
         let sessionToken = await getLabsSessionToken();
         if (!sessionToken) {
-            sessionToken = await refreshLabsSessionCookie(true);
-        }
-        if (!sessionToken) {
-            throw new Error("未能自动获取到 Flow/Labs 会话凭据。请确认当前浏览器已登录 Google 账号并能正常访问 https://flow.google.com/。");
+            throw new Error("未在当前浏览器检测到有效会话凭据。请在浏览器中打开一次 https://labs.google/fx（确认页面正常加载进入），然后再次点击导入即可。");
         }
 
         const googleCookies = await getGoogleCookies();
@@ -439,7 +289,7 @@ async function importCurrentAccount(reason = "manual") {
         }
 
         const baseUrl = getBackendBaseUrl(settings.serverUrl);
-        let response = await fetch(`${baseUrl}/api/plugin/import-current-account`, {
+        const response = await fetch(`${baseUrl}/api/plugin/import-current-account`, {
             method: "POST",
             headers: {
                 "Content-Type": "application/json",
@@ -452,34 +302,7 @@ async function importCurrentAccount(reason = "manual") {
                 refresh_interval_minutes: parseInt(settings.refreshIntervalMinutes, 10) || 120
             })
         });
-        let payload = await response.json().catch(() => null);
-
-        // 如果后端报告过期或未能获取 access_token，自动强制刷新重试一次
-        if (!response.ok && payload && (
-            String(payload.detail || "").includes("过期") ||
-            String(payload.detail || "").includes("失效") ||
-            String(payload.detail || "").includes("access_token")
-        )) {
-            console.log("[Flow2API] Backend reported expired/invalid session token, force refreshing and retrying...");
-            logExtensionEvent("backend_reported_expired_retry", { detail: payload.detail });
-            sessionToken = await refreshLabsSessionCookie(true);
-            if (sessionToken) {
-                response = await fetch(`${baseUrl}/api/plugin/import-current-account`, {
-                    method: "POST",
-                    headers: {
-                        "Content-Type": "application/json",
-                        "Authorization": `Bearer ${settings.apiKey}`
-                    },
-                    body: JSON.stringify({
-                        session_token: sessionToken,
-                        google_cookies: JSON.stringify(googleCookies),
-                        extension_route_key: settings.routeKey,
-                        refresh_interval_minutes: parseInt(settings.refreshIntervalMinutes, 10) || 120
-                    })
-                });
-                payload = await response.json().catch(() => null);
-            }
-        }
+        const payload = await response.json().catch(() => null);
 
         if (!response.ok || !payload || payload.success !== true) {
             const detail = payload && (payload.detail || payload.message);

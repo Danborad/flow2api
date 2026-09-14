@@ -225,13 +225,11 @@ async function importCurrentAccount() {
       return;
     }
     setStatus(`导入完成，新增 ${payload.added || 0}，更新 ${payload.updated || 0}，账号 ${payload.email || "未知"}`);
-    if ($("oauthBtn")) $("oauthBtn").style.display = "none";
+    if ($("openLabsBtn")) $("openLabsBtn").style.display = "none";
     chrome.storage.local.get(DEFAULT_SETTINGS, renderAutoImportStatus);
   } catch (e) {
     setStatus(`导入失败：${e.message || e}`, true);
-    if (String(e.message || e).includes("未能自动获取到 Flow/Labs 会话凭据") && $("oauthBtn")) {
-      $("oauthBtn").style.display = "block";
-    }
+    if ($("openLabsBtn")) $("openLabsBtn").style.display = "block";
   } finally {
     importBtn.disabled = false;
   }
@@ -242,10 +240,10 @@ document.addEventListener("DOMContentLoaded", () => {
   loadSettings();
   $("saveBtn").addEventListener("click", saveSettings);
   $("importBtn").addEventListener("click", importCurrentAccount);
-  if ($("oauthBtn")) {
-    $("oauthBtn").addEventListener("click", async () => {
-      setStatus("正在打开 Google 官方授权页，请在弹出的页面中确认登录/选择账号后，再点击“导入当前 Google 账号”...");
-      await chrome.runtime.sendMessage({ type: "flow2api_open_oauth" });
+  if ($("openLabsBtn")) {
+    $("openLabsBtn").addEventListener("click", () => {
+      window.open("https://labs.google/fx", "_blank");
+      setStatus("已在浏览器中打开授权页面。页面加载完毕确认已进入后，请返回此处再次点击“导入当前 Google 账号”。");
     });
   }
   $("reconnectBtn").addEventListener("click", async () => {
