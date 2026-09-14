@@ -151,48 +151,51 @@ function getCookies(details) {
 }
 
 async function getLabsSessionToken() {
-    const queries = [
-        { domain: "labs.google" },
-        { domain: ".labs.google" },
-        { domain: "google.com" },
-        { domain: ".google.com" },
-        { domain: "accounts.google.com" },
-        { domain: ".accounts.google.com" },
-        { domain: "www.google.com" },
-        { domain: "ogs.google.com" },
-        { url: "https://labs.google/" },
-        { url: "https://labs.google/fx" },
-        { url: "https://labs.google/fx/tools/flow" },
-        { domain: "flow.google.com" },
-        { domain: ".flow.google.com" },
-        { url: "https://flow.google.com/" },
-        { url: "https://flow.google.com/project/" }
-    ];
+    // 1. 优先使用 chrome.cookies.getAll({}) 读取扩展已授权的所有 Cookie（包含 Host-only Cookie）
+    let allCookies = await getCookies({});
+
+    // 2. 若 getAll({}) 为空，补全指定 URL 查询
+    if (!allCookies || !allCookies.length) {
+        const queries = [
+            { domain: "labs.google" },
+            { domain: ".labs.google" },
+            { url: "https://labs.google/" },
+            { url: "https://labs.google/fx" },
+            { url: "https://labs.google/fx/tools/flow" },
+            { domain: "flow.google.com" },
+            { domain: ".flow.google.com" },
+            { url: "https://flow.google.com/" },
+            { url: "https://flow.google.com/project/" }
+        ];
+        allCookies = [];
+        for (const query of queries) {
+            const list = await getCookies(query);
+            allCookies.push(...list);
+        }
+    }
+
+    logExtensionEvent("cookie_scan_total", { total_cookies_found: allCookies.length });
 
     // 按 (domain, baseName) 独立隔离分组，防止不同域名的同名 Cookie 被错误拼接
     const groups = new Map();
-    for (const query of queries) {
-        const cookies = await getCookies(query);
-        for (const cookie of cookies) {
-            const baseName = SESSION_COOKIE_BASE_NAMES.find((name) => (
-                cookie.name === name || cookie.name.startsWith(`${name}.`)
-            ));
-            if (!baseName || !cookie.value) continue;
+    for (const cookie of allCookies) {
+        const baseName = SESSION_COOKIE_BASE_NAMES.find((name) => (
+            cookie.name === name || cookie.name.startsWith(`${name}.`)
+        ));
+        if (!baseName || !cookie.value) continue;
 
-            const domain = (cookie.domain || "").toLowerCase();
-            const groupKey = `${domain}:::${baseName}`;
-            const group = groups.get(groupKey) || [];
-            if (!group.some(c => c.name === cookie.name && c.value === cookie.value)) {
-                group.push(cookie);
-            }
-            groups.set(groupKey, group);
+        const domain = (cookie.domain || "").toLowerCase();
+        const groupKey = `${domain}:::${baseName}`;
+        const group = groups.get(groupKey) || [];
+        if (!group.some(c => c.name === cookie.name && c.value === cookie.value)) {
+            group.push(cookie);
         }
+        groups.set(groupKey, group);
     }
 
     const candidates = [];
     for (const [groupKey, cookies] of groups.entries()) {
         const [domain, baseName] = groupKey.split(":::");
-        // 检查是否有分片 (.0, .1...)
         const hasChunks = cookies.some(c => c.name.includes("."));
         let tokenValue = "";
         let maxExpiry = 0;
@@ -208,7 +211,6 @@ async function getLabsSessionToken() {
             tokenValue = sortedChunks.map(c => c.value).join("");
             maxExpiry = Math.max(...sortedChunks.map(c => c.expirationDate || 0));
         } else {
-            // 没有分片，取最新的单项 Cookie
             const directCookie = cookies.find(c => c.name === baseName) || cookies[0];
             if (directCookie) {
                 tokenValue = directCookie.value;
@@ -216,7 +218,7 @@ async function getLabsSessionToken() {
             }
         }
 
-        if (tokenValue) {
+        if (tokenValue && tokenValue.length > 30) {
             candidates.push({
                 domain,
                 baseName,
@@ -243,28 +245,10 @@ async function getLabsSessionToken() {
     return candidates[0].value;
 }
 
-async function isLabsSessionValid() {
-    try {
-        const res = await fetch("https://labs.google/fx/api/auth/session", { credentials: "include" });
-        if (!res.ok) return false;
-        const data = await res.json();
-        if (!data || !data.user) return false;
-        if (data.expires && new Date(data.expires) <= new Date()) {
-            return false;
-        }
-        return true;
-    } catch (e) {
-        return false;
-    }
-}
-
 async function refreshLabsSessionCookie(force = false) {
     let token = await getLabsSessionToken();
     if (token && !force) {
-        const valid = await isLabsSessionValid();
-        if (valid) return token;
-        console.log("[Flow2API] Existing Session Token is invalid/expired, initiating auto refresh...");
-        logExtensionEvent("session_token_expired_detected");
+        return token;
     }
 
     let tabId = null;
@@ -305,9 +289,8 @@ async function refreshLabsSessionCookie(force = false) {
         const deadline = Date.now() + 10000;
         while (Date.now() < deadline) {
             await sleep(600);
-            const valid = await isLabsSessionValid();
-            if (valid) {
-                token = await getLabsSessionToken();
+            token = await getLabsSessionToken();
+            if (token) {
                 logExtensionEvent("auto_login_labs_success");
                 break;
             }

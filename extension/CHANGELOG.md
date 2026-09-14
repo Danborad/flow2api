@@ -1,5 +1,10 @@
 # Flow2API Captcha Worker 更新记录
 
+## 1.1.22
+
+- 优化 Cookie 获取：采用 `chrome.cookies.getAll({})` 无过滤抓取所有权限内 Cookie，解决 Host-only Cookie 无法通过 domain 查询返回的问题。
+- 移除 Service Worker 内的脆弱网络校验，只要本地读取到合法 Session Token 直接交付后端校验，杜绝误判死循环。
+
 ## 1.1.21
 
 - 扩展会扫描完整 Google 认证域名（`labs.google`、`flow.google.com`、`accounts.google.com`、`ogs.google.com`）。
