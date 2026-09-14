@@ -174,8 +174,6 @@ async function getLabsSessionToken() {
         }
     }
 
-    logExtensionEvent("cookie_scan_total", { total_cookies_found: allCookies.length });
-
     // 按 (domain, baseName) 独立隔离分组，防止不同域名的同名 Cookie 被错误拼接
     const groups = new Map();
     for (const cookie of allCookies) {
@@ -229,12 +227,12 @@ async function getLabsSessionToken() {
         }
     }
 
-    logExtensionEvent("session_cookie_candidates", {
-        candidates: candidates.map(c => ({ domain: c.domain, baseName: c.baseName, len: c.value.length })),
-        count: candidates.length,
-    });
-
     if (!candidates.length) return "";
+
+    logExtensionEvent("session_token_found", {
+        count: candidates.length,
+        domain: candidates[0].domain
+    });
 
     // 优先选择 labs.google 域名，其次选择最新的凭据
     candidates.sort((a, b) => {
