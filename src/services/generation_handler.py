@@ -1448,11 +1448,18 @@ class GenerationHandler:
                 token_id=token.id,
             )
 
-            # 5. 根据类型处理
+            # 5. 根据类型处理（支持账号失败自动兜底切换）
+            primary_token = token
+            primary_token_id = token.id
+            primary_token_email = token.email
+            current_token = token
+            current_project_id = project_id
+            attempted_tokens_info = [{"token_id": token.id, "email": token.email, "role": "primary"}]
+
             generation_pipeline_started_at = time.time()
             if generation_type == "image":
                 debug_logger.log_info(f"[GENERATION] 开始图片生成流程...")
-                attempted_token_ids = {token.id}
+                attempted_token_ids = {primary_token_id}
                 fallback_attempt = 0
                 fallback_log_state = None
                 while True:
@@ -1461,7 +1468,7 @@ class GenerationHandler:
                     response_state["base_url"] = (base_url_override or "").strip().rstrip("/") or None
                     try:
                         async for chunk in self._handle_image_generation(
-                            token, project_id, model_config, prompt, images, stream,
+                            current_token, current_project_id, model_config, prompt, images, stream,
                             perf_trace=perf_trace,
                             generation_result=generation_result,
                             response_state=response_state,
@@ -1473,17 +1480,27 @@ class GenerationHandler:
                     except Exception as attempt_error:
                         generation_result["error_message"] = f"生成失败: {attempt_error}"
                         debug_logger.log_warning(
-                            f"[IMAGE FALLBACK] Token {token.id} 生成失败，兜底尝试 {fallback_attempt}/"
+                            f"[IMAGE FALLBACK] Token {current_token.id} 生成失败，兜底尝试 {fallback_attempt}/"
                             f"{image_fallback_attempts}: {attempt_error}"
                         )
 
                     if fallback_log_state and not generation_result.get("success"):
                         fallback_error = generation_result.get("error_message") or "图片兜底生成失败"
                         await self._log_request(
-                            token.id,
+                            current_token.id,
                             "图片兜底",
-                            {**request_payload, "fallback_attempt": fallback_attempt},
-                            {"error": fallback_error, "fallback_of": request_log_state.get("id")},
+                            {
+                                **request_payload,
+                                "fallback_attempt": fallback_attempt,
+                                "primary_token_id": primary_token_id,
+                                "primary_token_email": primary_token_email,
+                            },
+                            {
+                                "error": fallback_error,
+                                "fallback_of": request_log_state.get("id"),
+                                "primary_token_id": primary_token_id,
+                                "primary_token_email": primary_token_email,
+                            },
                             500,
                             time.time() - fallback_log_state.get("started_at", start_time),
                             log_id=fallback_log_state.get("id"),
@@ -1495,13 +1512,20 @@ class GenerationHandler:
                     if generation_result.get("success"):
                         if fallback_log_state:
                             await self._log_request(
-                                token.id,
+                                current_token.id,
                                 "图片兜底",
-                                {**request_payload, "fallback_attempt": fallback_attempt},
+                                {
+                                    **request_payload,
+                                    "fallback_attempt": fallback_attempt,
+                                    "primary_token_id": primary_token_id,
+                                    "primary_token_email": primary_token_email,
+                                },
                                 {
                                     "status": "success",
                                     "fallback_of": request_log_state.get("id"),
                                     "url": response_state.get("url"),
+                                    "primary_token_id": primary_token_id,
+                                    "primary_token_email": primary_token_email,
                                 },
                                 200,
                                 time.time() - fallback_log_state.get("started_at", start_time),
@@ -1517,22 +1541,24 @@ class GenerationHandler:
                         break
 
                     if self._should_count_token_error(Exception(error_msg)):
-                        await self.token_manager.record_error(token.id)
-                    attempted_token_ids.add(token.id)
+                        await self.token_manager.record_error(current_token.id)
+                    attempted_token_ids.add(current_token.id)
                     if pending_token_state.get("active") and self.load_balancer:
-                        await self.load_balancer.release_pending(token.id, for_image_generation=True)
+                        await self.load_balancer.release_pending(current_token.id, for_image_generation=True)
                         pending_token_state["active"] = False
 
                     fallback_attempt += 1
                     await self._update_request_log_progress(
                         request_log_state,
-                        token_id=token.id,
+                        token_id=primary_token_id,
                         status_text="image_fallback_switching",
                         progress=4,
                         response_extra={
                             "fallback_attempt": fallback_attempt,
                             "fallback_max_attempts": image_fallback_attempts,
-                            "previous_token_id": token.id,
+                            "primary_token_email": primary_token_email,
+                            "previous_token_id": current_token.id,
+                            "previous_token_email": current_token.email,
                             "error": error_msg,
                         },
                     )
@@ -1551,7 +1577,7 @@ class GenerationHandler:
                     if not next_token:
                         await self._update_request_log_progress(
                             request_log_state,
-                            token_id=token.id,
+                            token_id=primary_token_id,
                             status_text="image_fallback_unavailable",
                             progress=4,
                             response_extra={"fallback_attempt": fallback_attempt, "error": "没有其他可用账号"},
@@ -1559,66 +1585,65 @@ class GenerationHandler:
                         generation_result["error_message"] = "图片兜底重试失败：没有其他可用账号"
                         break
 
-                    token = next_token
-                    token = await self.token_manager.ensure_valid_token(token)
-                    if not token:
+                    current_token = next_token
+                    current_token = await self.token_manager.ensure_valid_token(current_token)
+                    if not current_token:
                         await self.load_balancer.release_pending(next_token.id, for_image_generation=True)
                         await self._update_request_log_progress(
                             request_log_state,
-                            token_id=next_token.id,
+                            token_id=primary_token_id,
                             status_text="image_fallback_token_invalid",
                             progress=8,
                             response_extra={"fallback_attempt": fallback_attempt, "error": "备用账号 Token 无效"},
                         )
                         generation_result["error_message"] = "图片兜底重试失败：备用账号 Token 无效"
                         break
-                    attempted_token_ids.add(token.id)
+                    attempted_token_ids.add(current_token.id)
+                    attempted_tokens_info.append({
+                        "token_id": current_token.id,
+                        "email": current_token.email,
+                        "role": f"fallback_{fallback_attempt}"
+                    })
                     pending_token_state["active"] = True
                     try:
-                        project_id = await self.token_manager.ensure_project_exists(token.id)
+                        current_project_id = await self.token_manager.ensure_project_exists(current_token.id)
                         await self.flow_client.prefill_remote_browser_pool(
-                            project_id=project_id,
+                            project_id=current_project_id,
                             action="IMAGE_GENERATION",
-                            token_id=token.id,
+                            token_id=current_token.id,
                         )
                     except Exception as project_error:
                         if pending_token_state.get("active") and self.load_balancer:
-                            await self.load_balancer.release_pending(token.id, for_image_generation=True)
+                            await self.load_balancer.release_pending(current_token.id, for_image_generation=True)
                             pending_token_state["active"] = False
                         generation_result["error_message"] = f"图片兜底账号项目初始化失败: {project_error}"
                         await self._update_request_log_progress(
                             request_log_state,
-                            token_id=token.id,
+                            token_id=primary_token_id,
                             status_text="image_fallback_project_failed",
                             progress=22,
                             response_extra={"fallback_attempt": fallback_attempt, "error": str(project_error)},
                         )
                         break
-                    await self._update_request_log_progress(
-                        request_log_state,
-                        token_id=token.id,
-                        status_text="fallback_token_selected",
-                        progress=8,
-                        response_extra={"token_email": token.email, "fallback_attempt": fallback_attempt},
-                    )
-                    await self._update_request_log_progress(
-                        request_log_state,
-                        token_id=token.id,
-                        status_text="fallback_project_ready",
-                        progress=22,
-                        response_extra={"project_id": project_id, "fallback_attempt": fallback_attempt},
-                    )
+
                     fallback_log_state = {
                         "id": await self._log_request(
-                            token.id,
+                            current_token.id,
                             "图片兜底",
-                            {**request_payload, "fallback_attempt": fallback_attempt},
+                            {
+                                **request_payload,
+                                "fallback_attempt": fallback_attempt,
+                                "primary_token_id": primary_token_id,
+                                "primary_token_email": primary_token_email,
+                            },
                             {
                                 "status": "processing",
                                 "status_text": "fallback_started",
                                 "progress": 22,
                                 "fallback_of": request_log_state.get("id"),
                                 "fallback_attempt": fallback_attempt,
+                                "primary_token_id": primary_token_id,
+                                "primary_token_email": primary_token_email,
                             },
                             102,
                             0,
@@ -1630,7 +1655,7 @@ class GenerationHandler:
                     }
             else:  # video
                 debug_logger.log_info(f"[GENERATION] 开始视频生成流程...")
-                attempted_token_ids = {token.id}
+                attempted_token_ids = {primary_token_id}
                 fallback_attempt = 0
                 fallback_log_state = None
                 while True:
@@ -1639,7 +1664,7 @@ class GenerationHandler:
                     response_state["base_url"] = (base_url_override or "").strip().rstrip("/") or None
                     try:
                         async for chunk in self._handle_video_generation(
-                            token, project_id, model_config, prompt, images, stream,
+                            current_token, current_project_id, model_config, prompt, images, stream,
                             perf_trace=perf_trace,
                             generation_result=generation_result,
                             response_state=response_state,
@@ -1652,17 +1677,27 @@ class GenerationHandler:
                     except Exception as attempt_error:
                         generation_result["error_message"] = f"生成失败: {attempt_error}"
                         debug_logger.log_warning(
-                            f"[VIDEO FALLBACK] Token {token.id} 生成失败，兜底尝试 {fallback_attempt}/"
+                            f"[VIDEO FALLBACK] Token {current_token.id} 生成失败，兜底尝试 {fallback_attempt}/"
                             f"{video_fallback_attempts}: {attempt_error}"
                         )
 
                     if fallback_log_state and not generation_result.get("success"):
                         fallback_error = generation_result.get("error_message") or "视频兜底生成失败"
                         await self._log_request(
-                            token.id,
+                            current_token.id,
                             "视频兜底",
-                            {**request_payload, "fallback_attempt": fallback_attempt},
-                            {"error": fallback_error, "fallback_of": request_log_state.get("id")},
+                            {
+                                **request_payload,
+                                "fallback_attempt": fallback_attempt,
+                                "primary_token_id": primary_token_id,
+                                "primary_token_email": primary_token_email,
+                            },
+                            {
+                                "error": fallback_error,
+                                "fallback_of": request_log_state.get("id"),
+                                "primary_token_id": primary_token_id,
+                                "primary_token_email": primary_token_email,
+                            },
                             500,
                             time.time() - fallback_log_state.get("started_at", start_time),
                             log_id=fallback_log_state.get("id"),
@@ -1674,13 +1709,20 @@ class GenerationHandler:
                     if generation_result.get("success"):
                         if fallback_log_state:
                             await self._log_request(
-                                token.id,
+                                current_token.id,
                                 "视频兜底",
-                                {**request_payload, "fallback_attempt": fallback_attempt},
+                                {
+                                    **request_payload,
+                                    "fallback_attempt": fallback_attempt,
+                                    "primary_token_id": primary_token_id,
+                                    "primary_token_email": primary_token_email,
+                                },
                                 {
                                     "status": "success",
                                     "fallback_of": request_log_state.get("id"),
                                     "url": response_state.get("url"),
+                                    "primary_token_id": primary_token_id,
+                                    "primary_token_email": primary_token_email,
                                 },
                                 200,
                                 time.time() - fallback_log_state.get("started_at", start_time),
@@ -1696,22 +1738,24 @@ class GenerationHandler:
                         break
 
                     if self._should_count_token_error(Exception(error_msg)):
-                        await self.token_manager.record_error(token.id)
-                    attempted_token_ids.add(token.id)
+                        await self.token_manager.record_error(current_token.id)
+                    attempted_token_ids.add(current_token.id)
                     if pending_token_state.get("active") and self.load_balancer:
-                        await self.load_balancer.release_pending(token.id, for_video_generation=True)
+                        await self.load_balancer.release_pending(current_token.id, for_video_generation=True)
                         pending_token_state["active"] = False
 
                     fallback_attempt += 1
                     await self._update_request_log_progress(
                         request_log_state,
-                        token_id=token.id,
+                        token_id=primary_token_id,
                         status_text="video_fallback_switching",
                         progress=4,
                         response_extra={
                             "fallback_attempt": fallback_attempt,
                             "fallback_max_attempts": video_fallback_attempts,
-                            "previous_token_id": token.id,
+                            "primary_token_email": primary_token_email,
+                            "previous_token_id": current_token.id,
+                            "previous_token_email": current_token.email,
                             "error": error_msg,
                         },
                     )
@@ -1730,7 +1774,7 @@ class GenerationHandler:
                     if not next_token:
                         await self._update_request_log_progress(
                             request_log_state,
-                            token_id=token.id,
+                            token_id=primary_token_id,
                             status_text="video_fallback_unavailable",
                             progress=4,
                             response_extra={"fallback_attempt": fallback_attempt, "error": "没有其他可用账号"},
@@ -1738,66 +1782,65 @@ class GenerationHandler:
                         generation_result["error_message"] = "视频兜底重试失败：没有其他可用账号"
                         break
 
-                    token = next_token
-                    token = await self.token_manager.ensure_valid_token(token)
-                    if not token:
+                    current_token = next_token
+                    current_token = await self.token_manager.ensure_valid_token(current_token)
+                    if not current_token:
                         await self.load_balancer.release_pending(next_token.id, for_video_generation=True)
                         await self._update_request_log_progress(
                             request_log_state,
-                            token_id=next_token.id,
+                            token_id=primary_token_id,
                             status_text="video_fallback_token_invalid",
                             progress=8,
                             response_extra={"fallback_attempt": fallback_attempt, "error": "备用账号 Token 无效"},
                         )
                         generation_result["error_message"] = "视频兜底重试失败：备用账号 Token 无效"
                         break
-                    attempted_token_ids.add(token.id)
+                    attempted_token_ids.add(current_token.id)
+                    attempted_tokens_info.append({
+                        "token_id": current_token.id,
+                        "email": current_token.email,
+                        "role": f"fallback_{fallback_attempt}"
+                    })
                     pending_token_state["active"] = True
                     try:
-                        project_id = await self.token_manager.ensure_project_exists(token.id)
+                        current_project_id = await self.token_manager.ensure_project_exists(current_token.id)
                         await self.flow_client.prefill_remote_browser_pool(
-                            project_id=project_id,
+                            project_id=current_project_id,
                             action="VIDEO_GENERATION",
-                            token_id=token.id,
+                            token_id=current_token.id,
                         )
                     except Exception as project_error:
                         if pending_token_state.get("active") and self.load_balancer:
-                            await self.load_balancer.release_pending(token.id, for_video_generation=True)
+                            await self.load_balancer.release_pending(current_token.id, for_video_generation=True)
                             pending_token_state["active"] = False
                         generation_result["error_message"] = f"视频兜底账号项目初始化失败: {project_error}"
                         await self._update_request_log_progress(
                             request_log_state,
-                            token_id=token.id,
+                            token_id=primary_token_id,
                             status_text="video_fallback_project_failed",
                             progress=22,
                             response_extra={"fallback_attempt": fallback_attempt, "error": str(project_error)},
                         )
                         break
-                    await self._update_request_log_progress(
-                        request_log_state,
-                        token_id=token.id,
-                        status_text="fallback_token_selected",
-                        progress=8,
-                        response_extra={"token_email": token.email, "fallback_attempt": fallback_attempt},
-                    )
-                    await self._update_request_log_progress(
-                        request_log_state,
-                        token_id=token.id,
-                        status_text="fallback_project_ready",
-                        progress=22,
-                        response_extra={"project_id": project_id, "fallback_attempt": fallback_attempt},
-                    )
+
                     fallback_log_state = {
                         "id": await self._log_request(
-                            token.id,
+                            current_token.id,
                             "视频兜底",
-                            {**request_payload, "fallback_attempt": fallback_attempt},
+                            {
+                                **request_payload,
+                                "fallback_attempt": fallback_attempt,
+                                "primary_token_id": primary_token_id,
+                                "primary_token_email": primary_token_email,
+                            },
                             {
                                 "status": "processing",
                                 "status_text": "fallback_started",
                                 "progress": 22,
                                 "fallback_of": request_log_state.get("id"),
                                 "fallback_attempt": fallback_attempt,
+                                "primary_token_id": primary_token_id,
+                                "primary_token_email": primary_token_email,
                             },
                             102,
                             0,
@@ -1813,19 +1856,25 @@ class GenerationHandler:
             if not generation_result.get("success"):
                 error_msg = generation_result.get("error_message") or "生成未成功完成"
                 debug_logger.log_warning(f"[GENERATION] 生成未成功，不扣次数: {error_msg}")
-                if token and self._should_count_token_error(error_msg):
-                    await self.token_manager.record_error(token.id)
+                if current_token and self._should_count_token_error(error_msg):
+                    await self.token_manager.record_error(current_token.id)
                 duration = time.time() - start_time
                 record_generation_result(generation_type, "failed", duration)
                 perf_trace["status"] = "failed"
                 perf_trace["total_ms"] = int(duration * 1000)
                 perf_trace["error"] = error_msg
                 prompt_for_log = prompt if len(prompt) <= 2000 else f"{prompt[:2000]}...(truncated)"
+
+                final_error_body = {"error": error_msg, "performance": perf_trace}
+                if fallback_attempt > 0:
+                    final_error_body["fallback_attempted"] = fallback_attempt
+                    final_error_body["attempted_tokens"] = attempted_tokens_info
+
                 await self._log_request(
-                    token.id if token else None,
+                    primary_token_id,
                     request_operation,
                     request_payload,
-                    {"error": error_msg, "performance": perf_trace},
+                    final_error_body,
                     500,
                     duration,
                     log_id=request_log_state.get("id"),
@@ -1839,10 +1888,10 @@ class GenerationHandler:
                 return
 
             is_video = (generation_type == "video")
-            await self.token_manager.record_usage(token.id, is_video=is_video)
+            await self.token_manager.record_usage(current_token.id, is_video=is_video)
 
             # 重置错误计数 (请求成功时清空连续错误计数)
-            await self.token_manager.record_success(token.id)
+            await self.token_manager.record_success(current_token.id)
 
             debug_logger.log_info(f"[GENERATION] ✅ 生成成功完成")
 
@@ -1867,6 +1916,12 @@ class GenerationHandler:
                 response_data["url"] = response_state["url"]
             if response_state.get("generated_assets"):
                 response_data["generated_assets"] = response_state["generated_assets"]
+            if fallback_attempt > 0:
+                response_data["fallback_success"] = True
+                response_data["fallback_token_id"] = current_token.id
+                response_data["fallback_token_email"] = current_token.email
+                response_data["attempted_tokens"] = attempted_tokens_info
+
             image_perf = perf_trace.get("image_generation", {}) if isinstance(perf_trace, dict) else {}
             video_perf = perf_trace.get("video_generation", {}) if isinstance(perf_trace, dict) else {}
             debug_logger.log_info(
@@ -1882,7 +1937,7 @@ class GenerationHandler:
             )
 
             await self._log_request(
-                token.id,
+                primary_token_id,
                 request_operation,
                 request_payload,
                 response_data,
@@ -1892,6 +1947,7 @@ class GenerationHandler:
                 status_text="completed",
                 progress=100,
             )
+            return
 
         except asyncio.CancelledError:
             error_msg = "生成已取消: 客户端连接已断开"
@@ -1903,7 +1959,7 @@ class GenerationHandler:
             perf_trace["error"] = error_msg
             prompt_for_log = prompt if len(prompt) <= 2000 else f"{prompt[:2000]}...(truncated)"
             await self._log_request(
-                token.id if token else None,
+                primary_token_id if 'primary_token_id' in locals() else (token.id if token else None),
                 request_operation if generation_type else "generate_unknown",
                 request_payload if 'request_payload' in locals() else {"model": model},
                 {"error": error_msg, "performance": perf_trace},
@@ -1917,12 +1973,13 @@ class GenerationHandler:
         except Exception as e:
             error_msg = f"生成失败: {str(e)}"
             debug_logger.log_error(f"[GENERATION] 生成失败: {error_msg}")
-            if token:
+            current_active_token = current_token if 'current_token' in locals() else token
+            if current_active_token:
                 if self._should_count_token_error(e):
-                    await self.token_manager.record_error(token.id)
+                    await self.token_manager.record_error(current_active_token.id)
                 else:
                     debug_logger.log_info(
-                        f"[GENERATION] 跳过 token 错误计数: token_id={token.id}, reason={str(e)[:200]}"
+                        f"[GENERATION] 跳过 token 错误计数: token_id={current_active_token.id}, reason={str(e)[:200]}"
                     )
 
             # 先将最终失败状态落库，再返回错误响应，避免日志停在 102。
@@ -1933,7 +1990,7 @@ class GenerationHandler:
             perf_trace["error"] = error_msg
             prompt_for_log = prompt if len(prompt) <= 2000 else f"{prompt[:2000]}...(truncated)"
             await self._log_request(
-                token.id if token else None,
+                primary_token_id if 'primary_token_id' in locals() else (token.id if token else None),
                 request_operation if generation_type else "generate_unknown",
                 request_payload if 'request_payload' in locals() else {"model": model},
                 {"error": error_msg, "performance": perf_trace},
@@ -1947,9 +2004,10 @@ class GenerationHandler:
                 yield self._create_stream_chunk(f"错误: {error_msg}\n")
             yield self._create_error_response(error_msg, status_code=500)
         finally:
-            if pending_token_state.get("active") and token and self.load_balancer:
+            active_tok = current_token if 'current_token' in locals() else token
+            if pending_token_state.get("active") and active_tok and self.load_balancer:
                 await self.load_balancer.release_pending(
-                    token.id,
+                    active_tok.id,
                     for_image_generation=(generation_type == "image"),
                     for_video_generation=(generation_type == "video"),
                 )
