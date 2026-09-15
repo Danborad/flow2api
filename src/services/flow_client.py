@@ -931,7 +931,8 @@ class FlowClient:
         error_str = str(error)
         error_lower = error_str.lower()
         if "recaptcha evaluation failed" in error_lower or "recaptcha 验证失败" in error_str:
-            return max(effective_max_retries, int(config.browser_captcha_generation_retries or 6))
+            # 对于 Google 报 unusual activity / evaluation failed，最多原地重试1次，避免短时间频繁请求加重风控，转由多账号兜底机制切换账号
+            return min(effective_max_retries, 2)
         return effective_max_retries
 
     def _build_realistic_video_submit_headers(self) -> Dict[str, str]:
@@ -1655,7 +1656,7 @@ class FlowClient:
             attempt_trace["recaptcha_ms"] = int((time.time() - recaptcha_started_at) * 1000)
             attempt_trace["recaptcha_ok"] = bool(recaptcha_token)
             if not recaptcha_token:
-                last_error = Exception("Failed to obtain reCAPTCHA token")
+                last_error = self._make_missing_recaptcha_error()
                 attempt_trace["success"] = False
                 attempt_trace["error"] = str(last_error)
                 attempt_trace["duration_ms"] = int((time.time() - attempt_started_at) * 1000)
@@ -1783,7 +1784,7 @@ class FlowClient:
                 token_id=token_id
             )
             if not recaptcha_token:
-                last_error = Exception("Failed to obtain reCAPTCHA token")
+                last_error = self._make_missing_recaptcha_error()
                 should_retry = await self._handle_missing_recaptcha_token(
                     retry_attempt=retry_attempt,
                     max_retries=max_retries,
@@ -2187,7 +2188,7 @@ class FlowClient:
                 if launch_gate_acquired:
                     await self._release_video_launch_gate(token_id)
             if not recaptcha_token:
-                last_error = Exception("Failed to obtain reCAPTCHA token")
+                last_error = self._make_missing_recaptcha_error()
                 should_retry = await self._handle_missing_recaptcha_token(
                     retry_attempt=retry_attempt,
                     max_retries=max_retries,
@@ -2807,7 +2808,7 @@ class FlowClient:
                     await self._release_video_launch_gate(token_id)
 
             if not recaptcha_token:
-                last_error = Exception("Failed to obtain reCAPTCHA token")
+                last_error = self._make_missing_recaptcha_error()
                 should_retry = await self._handle_missing_recaptcha_token(
                     retry_attempt=retry_attempt,
                     max_retries=max_retries,
@@ -3045,7 +3046,7 @@ class FlowClient:
                 if launch_gate_acquired:
                     await self._release_video_launch_gate(token_id)
             if not recaptcha_token:
-                last_error = Exception("Failed to obtain reCAPTCHA token")
+                last_error = self._make_missing_recaptcha_error()
                 should_retry = await self._handle_missing_recaptcha_token(
                     retry_attempt=retry_attempt,
                     max_retries=max_retries,
@@ -3187,7 +3188,7 @@ class FlowClient:
                 if launch_gate_acquired:
                     await self._release_video_launch_gate(token_id)
             if not recaptcha_token:
-                last_error = Exception("Failed to obtain reCAPTCHA token")
+                last_error = self._make_missing_recaptcha_error()
                 should_retry = await self._handle_missing_recaptcha_token(
                     retry_attempt=retry_attempt,
                     max_retries=max_retries,
@@ -3334,7 +3335,7 @@ class FlowClient:
                 if launch_gate_acquired:
                     await self._release_video_launch_gate(token_id)
             if not recaptcha_token:
-                last_error = Exception("Failed to obtain reCAPTCHA token")
+                last_error = self._make_missing_recaptcha_error()
                 should_retry = await self._handle_missing_recaptcha_token(
                     retry_attempt=retry_attempt,
                     max_retries=max_retries,
@@ -3480,7 +3481,7 @@ class FlowClient:
                 if launch_gate_acquired:
                     await self._release_video_launch_gate(token_id)
             if not recaptcha_token:
-                last_error = Exception("Failed to obtain reCAPTCHA token")
+                last_error = self._make_missing_recaptcha_error()
                 should_retry = await self._handle_missing_recaptcha_token(
                     retry_attempt=retry_attempt,
                     max_retries=max_retries,
@@ -3780,7 +3781,7 @@ class FlowClient:
                 if launch_gate_acquired:
                     await self._release_video_launch_gate(token_id)
             if not recaptcha_token:
-                last_error = Exception("Failed to obtain reCAPTCHA token")
+                last_error = self._make_missing_recaptcha_error()
                 should_retry = await self._handle_missing_recaptcha_token(
                     retry_attempt=retry_attempt,
                     max_retries=max_retries,
@@ -4083,6 +4084,10 @@ class FlowClient:
         await asyncio.sleep(retry_delay)
         return True
 
+    def _make_missing_recaptcha_error(self) -> Exception:
+        detail = f" ({self._last_recaptcha_error})" if getattr(self, "_last_recaptcha_error", None) else ""
+        return Exception(f"Failed to obtain reCAPTCHA token{detail}")
+
     async def _handle_missing_recaptcha_token(
         self,
         retry_attempt: int,
@@ -4091,7 +4096,7 @@ class FlowClient:
         project_id: str,
         log_prefix: str,
     ) -> bool:
-        token_error = Exception("Failed to obtain reCAPTCHA token")
+        token_error = self._make_missing_recaptcha_error()
         return await self._handle_retryable_generation_error(
             error=token_error,
             retry_attempt=retry_attempt,
@@ -4138,10 +4143,10 @@ class FlowClient:
         if "error_no_slot_available" in error_lower:
             index = max(0, min(retry_attempt, len(self.YESCAPTCHA_SLOT_BACKOFF_SECONDS) - 1))
             return self.YESCAPTCHA_SLOT_BACKOFF_SECONDS[index]
-        if "recaptcha evaluation failed" in error_lower:
-            return 2
+        if "recaptcha evaluation failed" in error_lower or "recaptcha 验证失败" in error_str:
+            return 4
         if "recaptcha" in error_lower:
-            return 2
+            return 3
         return 1
 
     def _resolve_recaptcha_runtime_settings(
@@ -4549,10 +4554,15 @@ class FlowClient:
                     token_id=token_id
                 )
                 self._set_request_fingerprint(None)
-                return token, None
+                if token:
+                    self._last_recaptcha_error = None
+                    return token, None
+                self._last_recaptcha_error = service.last_error or "插件未返回有效验证码"
+                return None, None
             except Exception as e:
                 debug_logger.log_error(f"[reCAPTCHA Extension] 错误: {str(e)}")
                 self._set_request_fingerprint(None)
+                self._last_recaptcha_error = str(e)
                 return None, None
 
         # 内置浏览器打码 (nodriver)

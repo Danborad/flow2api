@@ -518,9 +518,8 @@ async function handleGetToken(data) {
             ? existingTabs.find(tab => tab.url && tab.url.includes(`/project/${projectId}`))
             : null;
         const anyProjectTab = existingTabs.find(tab => tab.url && (tab.url.includes("/project/") || tab.url.includes("/projects/")));
-        const anyFlowTab = existingTabs.find(tab => tab.url && (tab.url.includes("flow.google.com") || tab.url.includes("labs.google")));
 
-        let targetTab = projectTab || anyProjectTab || anyFlowTab;
+        let targetTab = projectTab || anyProjectTab;
         if (!targetTab) {
             targetTab = await chrome.tabs.create({
                 url: projectUrl || FLOW_HOME_URL,

@@ -28,6 +28,7 @@ class ExtensionCaptchaService:
         self.active_connections: list[ExtensionConnection] = []
         self.pending_requests: dict[str, tuple[asyncio.Future, WebSocket]] = {}
         self._sync_notifications_at: dict[int, float] = {}
+        self.last_error: Optional[str] = None
 
     @classmethod
     async def get_instance(cls, db=None) -> "ExtensionCaptchaService":
@@ -234,16 +235,20 @@ class ExtensionCaptchaService:
             result = await asyncio.wait_for(future, timeout=timeout)
 
             if result.get("status") == "success":
+                self.last_error = None
                 return result.get("token")
 
-            error_msg = result.get("error")
+            error_msg = result.get("error") or "Unknown error from extension"
+            self.last_error = error_msg
             debug_logger.log_error(f"[Extension Captcha] Error from extension: {error_msg}")
             return None
 
         except asyncio.TimeoutError:
+            self.last_error = f"等待插件打码超时 ({timeout}秒)"
             debug_logger.log_error(f"[Extension Captcha] Timeout waiting for token (req_id: {req_id})")
             return None
         except Exception as e:
+            self.last_error = str(e)
             debug_logger.log_error(f"[Extension Captcha] Communication error: {e}")
             return None
         finally:
