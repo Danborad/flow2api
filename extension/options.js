@@ -9,7 +9,9 @@ const DEFAULT_SETTINGS = {
   autoImportIntervalMinutes: "30",
   lastAutoImportAt: "",
   lastAutoImportStatus: "",
-  lastAutoImportMessage: ""
+  lastAutoImportMessage: "",
+  lastImportExpires: "",
+  lastImportEmail: ""
 };
 
 const $ = (id) => document.getElementById(id);
@@ -48,18 +50,40 @@ function normalizeSettings(values) {
   };
 }
 
+function formatExpiresDisplay(expiresStr) {
+  if (!expiresStr) return "";
+  const d = new Date(expiresStr);
+  if (isNaN(d.getTime())) return "";
+  const now = new Date();
+  const diff = d - now;
+  if (diff < 0) return "已过期";
+  const hours = Math.floor(diff / 36e5);
+  const dateStr = d.toLocaleDateString("zh-CN", { year: "numeric", month: "2-digit", day: "2-digit" }).replace(/\//g, "-");
+  const timeStr = d.toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit", hour12: false });
+  if (hours < 1) return `${Math.floor(diff / 6e4)}分钟（${dateStr} ${timeStr}）`;
+  if (hours < 24) return `${hours}小时（${dateStr} ${timeStr}）`;
+  return `${Math.floor(diff / 864e5)}天（${dateStr} ${timeStr}）`;
+}
+
 function renderAutoImportStatus(stored) {
   const el = $("lastAutoImportStatus");
   if (!el) return;
   const at = stored.lastAutoImportAt || "";
   const status = stored.lastAutoImportStatus || "";
   const message = stored.lastAutoImportMessage || "";
+  const expires = stored.lastImportExpires || "";
   if (!at) {
     el.textContent = "自动导入状态：尚未运行";
     return;
   }
   const time = new Date(at).toLocaleString("zh-CN", { hour12: false });
-  el.textContent = `自动导入状态：${status === "success" ? "成功" : "失败"}，${time}${message ? `，${message}` : ""}`;
+  let text = `自动导入状态：${status === "success" ? "成功" : "失败"}，${time}`;
+  if (message) text += `，${message}`;
+  if (expires && status === "success") {
+    const expiryText = formatExpiresDisplay(expires);
+    if (expiryText) text += `，凭据过期时间：${expiryText}`;
+  }
+  el.textContent = text;
 }
 
 function renderConnectionStatus(stored) {

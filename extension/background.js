@@ -228,7 +228,64 @@ async function refreshLabsSessionCookie() {
         if (token) return token;
     } catch (e) {}
 
-    return "";
+    // 自动打开 Google Flow 页面，利用浏览器已登录的 Google 账号自动完成授权
+    // 并写入 labs.google 的 Session Token Cookie
+    let tabId = null;
+    try {
+        logExtensionEvent("auto_open_flow_for_session");
+        const tab = await chrome.tabs.create({ url: "https://labs.google/fx", active: false });
+        tabId = tab.id;
+        await waitForTabReady(tabId);
+        await sleep(2500);
+
+        // 尝试点击页面上可能出现的 "Sign in" / "登录" 按钮
+        try {
+            await chrome.scripting.executeScript({
+                target: { tabId },
+                func: () => {
+                    const directBtn = document.getElementById("sign-in-now-button");
+                    if (directBtn) {
+                        directBtn.click();
+                        return "clicked_direct";
+                    }
+                    const btn = Array.from(document.querySelectorAll("button, a")).find(
+                        el => el.innerText && (el.innerText.includes("Sign in") || el.innerText.includes("登录"))
+                    );
+                    if (btn) {
+                        btn.click();
+                        setTimeout(() => {
+                            const modalBtn = document.getElementById("sign-in-now-button");
+                            if (modalBtn) modalBtn.click();
+                        }, 500);
+                        return "clicked_dialog";
+                    }
+                    return "not_found";
+                }
+            });
+        } catch (scriptErr) {
+            console.warn("[Flow2API] Auto-signin click failed:", scriptErr);
+        }
+
+        // 轮询等待 Session Cookie 写入（最多 20 秒）
+        const deadline = Date.now() + 20000;
+        while (Date.now() < deadline) {
+            await sleep(1000);
+            token = await getLabsSessionToken();
+            if (token) {
+                logExtensionEvent("auto_open_flow_session_success");
+                break;
+            }
+        }
+    } catch (e) {
+        logExtensionEvent("auto_open_flow_session_failed", { error: e.message });
+        console.warn("[Flow2API] Failed to auto-open flow for session:", e);
+    } finally {
+        if (tabId) {
+            try { await chrome.tabs.remove(tabId); } catch (e) {}
+        }
+    }
+
+    return token || "";
 }
 
 async function getGoogleCookies() {
@@ -278,7 +335,10 @@ async function importCurrentAccount(reason = "manual") {
     await refreshLabsSessionCookie();
         let sessionToken = await getLabsSessionToken();
         if (!sessionToken) {
-            throw new Error("未在当前浏览器检测到有效会话凭据。请在浏览器中打开一次 https://labs.google/fx（确认页面正常加载进入），然后再次点击导入即可。");
+            // 自动打开前台授权页面，Google 已登录时通常秒级完成自动登录
+            logExtensionEvent("session_token_missing_opening_auth_page");
+            chrome.tabs.create({ url: "https://labs.google/fx", active: true });
+            throw new Error("正在自动打开 Google 授权页面（https://labs.google/fx）。页面加载完成后会自动写入登录凭据，请稍候几秒后再次点击导入。");
         }
 
         const googleCookies = await getGoogleCookies();
@@ -312,13 +372,16 @@ async function importCurrentAccount(reason = "manual") {
         chrome.storage.local.set({
             lastAutoImportAt: new Date().toISOString(),
             lastAutoImportStatus: "success",
-            lastAutoImportMessage: `${reason}: ${payload.email || "unknown"}`
+            lastAutoImportMessage: `${reason}: ${payload.email || "unknown"}`,
+            lastImportExpires: payload.expires || "",
+            lastImportEmail: payload.email || "unknown"
         });
         logExtensionEvent("account_import_success", {
             reason,
             email: payload.email || "unknown",
             added: payload.added || 0,
             updated: payload.updated || 0,
+            expires: payload.expires || "",
         });
         console.log("[Flow2API] Account import success", reason, payload);
         return payload;
@@ -333,7 +396,7 @@ async function runScheduledAccountImport() {
     try {
         await importCurrentAccount("auto");
     } catch (e) {
-        logExtensionEvent("account_import_failed", { reason, error: e.message || String(e) });
+        logExtensionEvent("account_import_failed", { reason: "auto", error: e.message || String(e) });
         console.warn("[Flow2API] Auto account import failed", e);
         chrome.storage.local.set({
             lastAutoImportAt: new Date().toISOString(),
