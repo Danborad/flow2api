@@ -210,7 +210,7 @@ async function saveSettings() {
 async function importCurrentAccount() {
   const importBtn = $("importBtn");
   importBtn.disabled = true;
-  setStatus("正在导入当前浏览器账号...");
+  setStatus("正在导入当前浏览器账号（如检测到凭据过期将自动开启授权页完成自动续期）...");
 
   try {
     const stored = await new Promise((resolve) => chrome.storage.local.get(DEFAULT_SETTINGS, resolve));

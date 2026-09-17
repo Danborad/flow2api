@@ -217,28 +217,48 @@ async function getLabsSessionToken() {
     return "";
 }
 
-async function refreshLabsSessionCookie() {
-    let token = await getLabsSessionToken();
-    if (token) return token;
+async function clearLabsSessionCookies() {
+    logExtensionEvent("clear_expired_session_cookies");
+    const urls = [
+        "https://labs.google/",
+        "https://labs.google/fx",
+        "https://labs.google/fx/tools/flow",
+        "https://flow.google.com/"
+    ];
+    for (const url of urls) {
+        for (const name of SESSION_COOKIE_BASE_NAMES) {
+            try {
+                await new Promise(r => chrome.cookies.remove({ url, name }, r));
+            } catch (e) {}
+            for (let i = 0; i < 10; i++) {
+                try {
+                    await new Promise(r => chrome.cookies.remove({ url, name: `${name}.${i}` }, r));
+                } catch (e) {}
+            }
+        }
+    }
+}
 
-    // 尝试静默请求一次会话接口（如果浏览器已有认证凭证，会更新 cookie）
-    try {
-        await fetch("https://labs.google/fx/api/auth/session", { credentials: "include" });
-        token = await getLabsSessionToken();
+async function refreshLabsSessionCookie(force = false) {
+    if (!force) {
+        let token = await getLabsSessionToken();
         if (token) return token;
-    } catch (e) {}
+    }
 
-    // 自动打开 Google Flow 页面，利用浏览器已登录的 Google 账号自动完成授权
-    // 并写入 labs.google 的 Session Token Cookie
+    logExtensionEvent("auto_open_flow_for_session", { force });
+    if (force) {
+        await clearLabsSessionCookies();
+    }
+
     let tabId = null;
+    let freshToken = "";
     try {
-        logExtensionEvent("auto_open_flow_for_session");
-        const tab = await chrome.tabs.create({ url: "https://labs.google/fx", active: false });
+        const tab = await chrome.tabs.create({ url: "https://labs.google/fx", active: true });
         tabId = tab.id;
         await waitForTabReady(tabId);
-        await sleep(2500);
+        await sleep(2000);
 
-        // 尝试点击页面上可能出现的 "Sign in" / "登录" 按钮
+        // 尝试自动点击登录授权按钮
         try {
             await chrome.scripting.executeScript({
                 target: { tabId },
@@ -266,13 +286,13 @@ async function refreshLabsSessionCookie() {
             console.warn("[Flow2API] Auto-signin click failed:", scriptErr);
         }
 
-        // 轮询等待 Session Cookie 写入（最多 20 秒）
-        const deadline = Date.now() + 20000;
+        // 轮询等待 Session Cookie 写入（最多等 15 秒）
+        const deadline = Date.now() + 15000;
         while (Date.now() < deadline) {
             await sleep(1000);
-            token = await getLabsSessionToken();
-            if (token) {
-                logExtensionEvent("auto_open_flow_session_success");
+            freshToken = await getLabsSessionToken();
+            if (freshToken) {
+                logExtensionEvent("auto_open_flow_session_success", { len: freshToken.length });
                 break;
             }
         }
@@ -281,11 +301,14 @@ async function refreshLabsSessionCookie() {
         console.warn("[Flow2API] Failed to auto-open flow for session:", e);
     } finally {
         if (tabId) {
-            try { await chrome.tabs.remove(tabId); } catch (e) {}
+            try {
+                await chrome.tabs.remove(tabId);
+                logExtensionEvent("auto_open_flow_session_tab_closed");
+            } catch (e) {}
         }
     }
 
-    return token || "";
+    return freshToken || "";
 }
 
 async function getGoogleCookies() {
@@ -349,7 +372,7 @@ async function importCurrentAccount(reason = "manual") {
         }
 
         const baseUrl = getBackendBaseUrl(settings.serverUrl);
-        const response = await fetch(`${baseUrl}/api/plugin/import-current-account`, {
+        let response = await fetch(`${baseUrl}/api/plugin/import-current-account`, {
             method: "POST",
             headers: {
                 "Content-Type": "application/json",
@@ -362,7 +385,35 @@ async function importCurrentAccount(reason = "manual") {
                 refresh_interval_minutes: parseInt(settings.refreshIntervalMinutes, 10) || 120
             })
         });
-        const payload = await response.json().catch(() => null);
+        let payload = await response.json().catch(() => null);
+
+        // 如果后端报告 Session Token 已过期或无效，自动开启页面换取新 Token 并自动重试
+        if (!response.ok && payload && (
+            String(payload.detail || "").includes("过期") ||
+            String(payload.detail || "").includes("失效") ||
+            String(payload.detail || "").includes("access_token")
+        )) {
+            console.log("[Flow2API] Backend reported token expired. Automatically opening auth page and retrying...");
+            logExtensionEvent("token_expired_auto_refresh_retry", { detail: payload.detail });
+
+            sessionToken = await refreshLabsSessionCookie(true);
+            if (sessionToken) {
+                response = await fetch(`${baseUrl}/api/plugin/import-current-account`, {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                        "Authorization": `Bearer ${settings.apiKey}`
+                    },
+                    body: JSON.stringify({
+                        session_token: sessionToken,
+                        google_cookies: JSON.stringify(googleCookies),
+                        extension_route_key: settings.routeKey,
+                        refresh_interval_minutes: parseInt(settings.refreshIntervalMinutes, 10) || 120
+                    })
+                });
+                payload = await response.json().catch(() => null);
+            }
+        }
 
         if (!response.ok || !payload || payload.success !== true) {
             const detail = payload && (payload.detail || payload.message);
