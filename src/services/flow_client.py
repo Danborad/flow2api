@@ -481,6 +481,10 @@ class FlowClient:
                 proxy=proxy_url
             )
 
+        import logging
+        logging.getLogger("uvicorn.error").info(
+            f"[ACTUAL_SUBMIT_HEADERS] Method={method}, URL={url}, Origin={headers.get('Origin')}, Referer={headers.get('Referer')}, UA={headers.get('User-Agent', '')[:80]}"
+        )
         start_time = time.time()
 
         try:
@@ -1683,6 +1687,22 @@ class FlowClient:
                 raise last_error
             if progress_callback is not None:
                 await progress_callback("submitting_image", 48)
+
+            if config.captcha_method == "extension":
+                try:
+                    from .browser_captcha_extension import ExtensionCaptchaService
+                    ext_svc = await ExtensionCaptchaService.get_instance(self.db)
+                    real_pid = getattr(ext_svc, "last_project_id", None)
+                    if real_pid and self._is_uuid(real_pid):
+                        if real_pid != project_id:
+                            debug_logger.log_info(f"[IMAGE] 对齐插件页面真实项目ID: {real_pid} (原: {project_id})")
+                            project_id = real_pid
+                            url = f"{self.api_base_url}/projects/{project_id}/flowMedia:batchGenerateImages"
+                            if token_id and self.db:
+                                await self.db.update_token(token_id, current_project_id=project_id)
+                except Exception:
+                    pass
+
             session_id = self._generate_session_id()
 
             # 构建请求 - 新版接口在外层和 requests 内都带 clientContext

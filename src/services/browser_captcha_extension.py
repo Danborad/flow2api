@@ -239,6 +239,7 @@ class ExtensionCaptchaService:
                 self.last_user_agent = result.get("user_agent")
                 self.last_origin = result.get("origin")
                 self.last_referer = result.get("referer")
+                self.last_project_id = result.get("project_id")
                 return result.get("token")
 
             error_msg = result.get("error") or "Unknown error from extension"
