@@ -16,6 +16,7 @@ function getRecaptchaToken(action, timeoutMs = 25000) {
                     return;
                 }
                 try {
+                    await new Promise(r => setTimeout(r, 4000));
                     grecaptcha.enterprise.ready(() => {
                         grecaptcha.enterprise.execute(siteKey, {action: '${action}'})
                             .then(token => {

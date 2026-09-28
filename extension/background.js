@@ -746,6 +746,8 @@ async function handleGetToken(data) {
                                 return fail("captcha_load", "grecaptcha.enterprise 未由 Flow 页面加载");
                             }
 
+                            await new Promise(r => setTimeout(r, 4000));
+
                             await Promise.race([
                                 new Promise(resolve => window.grecaptcha.enterprise.ready(resolve)),
                                 new Promise((_, reject) => setTimeout(() => reject(new Error("enterprise.ready timeout")), timeoutMs)),

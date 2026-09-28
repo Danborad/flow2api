@@ -286,7 +286,7 @@ class FlowClient:
     def _build_current_flow_media_headers(
         self,
         *,
-        content_type: str = "application/json",
+        content_type: str = "text/plain;charset=UTF-8",
     ) -> Dict[str, str]:
         headers = {
             "Accept": "*/*",

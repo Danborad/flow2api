@@ -1,5 +1,10 @@
 # Flow2API Captcha Worker 更新记录
 
+## 1.1.45
+
+- 对齐 Google 官方出图请求规范：请求头采用 text/plain 避免 CORS 预检，sessionId 采用分号毫秒时间戳规范。
+- 增加打码前 4 秒的环境遥测充分收集，确保 Google reCAPTCHA Enterprise 评分达到高信誉区间。
+
 ## 1.1.44
 
 - 优先通过 content_scripts 原生消息通道在网页主环境安全生成 reCAPTCHA，彻底规避 executeScript 跨域与标签页权限拦截。
