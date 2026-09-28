@@ -1,5 +1,10 @@
 # Flow2API Captcha Worker 更新记录
 
+## 1.1.44
+
+- 优先通过 content_scripts 原生消息通道在网页主环境安全生成 reCAPTCHA，彻底规避 executeScript 跨域与标签页权限拦截。
+- 回传打码页面关联的真实 Google Flow 项目 ID，解决项目 ID 错配导致的 403 权限拒绝。
+
 ## 1.1.43
 
 - 过滤 Chrome 自动休眠（discarded）的标签页，杜绝向休眠标签页注入脚本导致的 Chrome 底层权限报错。

@@ -668,130 +668,147 @@ async function handleGetToken(data) {
 
         let successResponse = null;
         let lastErrorMsg = "No response from tab.";
-        const scriptTimeoutMs = data.action === "VIDEO_GENERATION" ? 120000 : 30000;
-        const executeScriptTimeoutMs = scriptTimeoutMs + 5000;
 
+        // 1. 优先通过已注入在页面内部的 content_scripts (content.js) 消息通道获取 Token，彻底绕过 executeScript 跨域权限拦截
         try {
-            const executeScriptPromise = chrome.scripting.executeScript({
-                target: { tabId: targetTab.id },
-                world: "MAIN",
-                func: async (action, timeoutMs) => {
-                    const siteKey = "6LdsFiUsAAAAAIjVDZcuLhaHiDn5nnHVXVRQGeMV";
-                    const fail = (stage, error) => ({
-                        ok: false,
-                        stage,
-                        error: String(error || "unknown error"),
-                        href: location.href,
-                    });
-                    try {
-                        if (!location.hostname.endsWith("labs.google") && location.hostname !== "flow.google.com") {
-                            return fail("page_check", `unexpected page: ${location.href}`);
-                        }
-
-                        // 如果当前不在项目页且没有验证码环境，尝试自动从首页链接进入项目
-                        if (!location.pathname.includes("/project") && !location.pathname.includes("/projects") && !(window.grecaptcha && window.grecaptcha.enterprise)) {
-                            const link = document.querySelector('a[href*="/project/"]');
-                            if (link && link.href) {
-                                location.href = link.href;
-                                return fail("navigating_to_project", `页面在首页，已触发自动跳转到项目页: ${link.href}，请稍候重试`);
-                            }
-                        }
-
-                        // Flow 项目页面自身会加载 reCAPTCHA。
-                        const captchaDeadline = Date.now() + Math.min(timeoutMs, 20000);
-                        while (!(window.grecaptcha && window.grecaptcha.enterprise) && Date.now() < captchaDeadline) {
-                            await new Promise(resolve => setTimeout(resolve, 250));
-                        }
-                        if (!(window.grecaptcha && window.grecaptcha.enterprise)) {
-                            return fail("captcha_load", "grecaptcha.enterprise 未由 Flow 页面加载");
-                        }
-
-                        await Promise.race([
-                            new Promise(resolve => window.grecaptcha.enterprise.ready(resolve)),
-                            new Promise((_, reject) => setTimeout(() => reject(new Error("enterprise.ready timeout")), timeoutMs)),
-                        ]);
-
-                        const token = await Promise.race([
-                            window.grecaptcha.enterprise.execute(siteKey, { action }),
-                            new Promise((_, reject) => setTimeout(() => reject(new Error("enterprise.execute timeout")), timeoutMs)),
-                        ]);
-                        if (!token) return fail("captcha_execute", "empty reCAPTCHA token");
-                        let realProjectId = "";
-                        const m = location.pathname.match(/\/project\/([0-9a-fA-F-]+)/);
-                        if (m) realProjectId = m[1];
-                        return { ok: true, token, href: location.href, origin: location.origin, userAgent: navigator.userAgent, projectId: realProjectId };
-                    } catch (error) {
-                        return fail("captcha_execute", error && error.message ? error.message : error);
+            const msgRes = await new Promise((resolve, reject) => {
+                chrome.tabs.sendMessage(targetTab.id, { type: "get_token", action: data.action || "IMAGE_GENERATION" }, (resp) => {
+                    if (chrome.runtime.lastError) {
+                        reject(new Error(chrome.runtime.lastError.message));
+                        return;
                     }
-                },
-                args: [data.action || "IMAGE_GENERATION", scriptTimeoutMs]
+                    resolve(resp);
+                });
             });
-            const results = await Promise.race([
-                executeScriptPromise,
-                new Promise((_, reject) => setTimeout(
-                    () => reject(new Error(`executeScript timeout after ${executeScriptTimeoutMs}ms`)),
-                    executeScriptTimeoutMs
-                )),
-            ]);
-
-            const scriptResult = results && results[0] ? results[0].result : null;
-            if (scriptResult && scriptResult.ok && scriptResult.token) {
+            if (msgRes && msgRes.status === "success" && msgRes.token) {
+                let pid = msgRes.projectId || "";
+                if (!pid && targetTab.url) {
+                    const m = targetTab.url.match(/\/project\/([0-9a-fA-F-]+)/);
+                    if (m) pid = m[1];
+                }
                 successResponse = {
                     status: "success",
-                    token: scriptResult.token,
-                    user_agent: scriptResult.userAgent || navigator.userAgent,
-                    origin: scriptResult.origin || "https://flow.google.com",
-                    referer: scriptResult.href || "https://flow.google.com/",
-                    project_id: scriptResult.projectId || "",
+                    token: msgRes.token,
+                    user_agent: msgRes.userAgent || navigator.userAgent,
+                    origin: msgRes.origin || "https://flow.google.com",
+                    referer: msgRes.href || targetTab.url || "https://flow.google.com/",
+                    project_id: pid || projectId,
                 };
-            } else if (scriptResult) {
-                lastErrorMsg = `${scriptResult.stage || "script"}: ${scriptResult.error || "empty result"}`;
-                logExtensionEvent("captcha_page_failed", {
+                logExtensionEvent("captcha_content_script_success", {
                     action: data.action || "IMAGE_GENERATION",
-                    request_id: data.req_id ? String(data.req_id).slice(-12) : "",
-                    stage: scriptResult.stage || "unknown",
-                    error: scriptResult.error || "empty result",
-                    href: scriptResult.href || "",
+                    token_length: msgRes.token.length,
+                    project_id: pid,
                 });
-            } else {
-                lastErrorMsg = `empty executeScript result (count=${results ? results.length : 0})`;
-                logExtensionEvent("captcha_page_failed", {
-                    action: data.action || "IMAGE_GENERATION",
-                    request_id: data.req_id ? String(data.req_id).slice(-12) : "",
-                    stage: "execute_script",
-                    error: lastErrorMsg,
-                });
+            } else if (msgRes && msgRes.error) {
+                lastErrorMsg = msgRes.error;
             }
-        } catch (e) {
-            lastErrorMsg = `${e.message || "Script execution failed"} [target: ${targetTab ? targetTab.url : "null"}]`;
-            logExtensionEvent("captcha_script_exception", {
-                action: data.action || "IMAGE_GENERATION",
-                request_id: data.req_id ? String(data.req_id).slice(-12) : "",
-                error: lastErrorMsg,
-            });
-            // executeScript 若被 Chrome 安全拦截，尝试通过原生已加载的 content.js 再次通信
+        } catch (msgErr) {
+            console.log("[Flow2API] Primary sendMessage missed, fallback to executeScript:", msgErr.message);
+        }
+
+        // 2. 备选方案：若页面尚未加载 content.js，降级尝试 executeScript 注入
+        if (!successResponse) {
+            const scriptTimeoutMs = data.action === "VIDEO_GENERATION" ? 120000 : 30000;
+            const executeScriptTimeoutMs = scriptTimeoutMs + 5000;
+
             try {
-                const msgRes = await new Promise((resolve, reject) => {
-                    chrome.tabs.sendMessage(targetTab.id, { type: "get_token", action: data.action || "IMAGE_GENERATION" }, (resp) => {
-                        if (chrome.runtime.lastError) {
-                            reject(new Error(chrome.runtime.lastError.message));
-                            return;
+                const executeScriptPromise = chrome.scripting.executeScript({
+                    target: { tabId: targetTab.id },
+                    world: "MAIN",
+                    func: async (action, timeoutMs) => {
+                        const siteKey = "6LdsFiUsAAAAAIjVDZcuLhaHiDn5nnHVXVRQGeMV";
+                        const fail = (stage, error) => ({
+                            ok: false,
+                            stage,
+                            error: String(error || "unknown error"),
+                            href: location.href,
+                        });
+                        try {
+                            if (!location.hostname.endsWith("labs.google") && location.hostname !== "flow.google.com") {
+                                return fail("page_check", `unexpected page: ${location.href}`);
+                            }
+
+                            // 如果当前不在项目页且没有验证码环境，尝试自动从首页链接进入项目
+                            if (!location.pathname.includes("/project") && !location.pathname.includes("/projects") && !(window.grecaptcha && window.grecaptcha.enterprise)) {
+                                const link = document.querySelector('a[href*="/project/"]');
+                                if (link && link.href) {
+                                    location.href = link.href;
+                                    return fail("navigating_to_project", `页面在首页，已触发自动跳转到项目页: ${link.href}，请稍候重试`);
+                                }
+                            }
+
+                            // Flow 项目页面自身会加载 reCAPTCHA。
+                            const captchaDeadline = Date.now() + Math.min(timeoutMs, 20000);
+                            while (!(window.grecaptcha && window.grecaptcha.enterprise) && Date.now() < captchaDeadline) {
+                                await new Promise(resolve => setTimeout(resolve, 250));
+                            }
+                            if (!(window.grecaptcha && window.grecaptcha.enterprise)) {
+                                return fail("captcha_load", "grecaptcha.enterprise 未由 Flow 页面加载");
+                            }
+
+                            await Promise.race([
+                                new Promise(resolve => window.grecaptcha.enterprise.ready(resolve)),
+                                new Promise((_, reject) => setTimeout(() => reject(new Error("enterprise.ready timeout")), timeoutMs)),
+                            ]);
+
+                            const token = await Promise.race([
+                                window.grecaptcha.enterprise.execute(siteKey, { action }),
+                                new Promise((_, reject) => setTimeout(() => reject(new Error("enterprise.execute timeout")), timeoutMs)),
+                            ]);
+                            if (!token) return fail("captcha_execute", "empty reCAPTCHA token");
+                            let realProjectId = "";
+                            const m = location.pathname.match(/\/project\/([0-9a-fA-F-]+)/);
+                            if (m) realProjectId = m[1];
+                            return { ok: true, token, href: location.href, origin: location.origin, userAgent: navigator.userAgent, projectId: realProjectId };
+                        } catch (error) {
+                            return fail("captcha_execute", error && error.message ? error.message : error);
                         }
-                        resolve(resp);
-                    });
+                    },
+                    args: [data.action || "IMAGE_GENERATION", scriptTimeoutMs]
                 });
-                if (msgRes && msgRes.status === "success" && msgRes.token) {
+                const results = await Promise.race([
+                    executeScriptPromise,
+                    new Promise((_, reject) => setTimeout(
+                        () => reject(new Error(`executeScript timeout after ${executeScriptTimeoutMs}ms`)),
+                        executeScriptTimeoutMs
+                    )),
+                ]);
+
+                const scriptResult = results && results[0] ? results[0].result : null;
+                if (scriptResult && scriptResult.ok && scriptResult.token) {
                     successResponse = {
                         status: "success",
-                        token: msgRes.token,
-                        user_agent: navigator.userAgent,
-                        origin: "https://flow.google.com",
-                        referer: targetTab ? targetTab.url : "https://flow.google.com/",
-                        project_id: projectId,
+                        token: scriptResult.token,
+                        user_agent: scriptResult.userAgent || navigator.userAgent,
+                        origin: scriptResult.origin || "https://flow.google.com",
+                        referer: scriptResult.href || "https://flow.google.com/",
+                        project_id: scriptResult.projectId || "",
                     };
+                } else if (scriptResult) {
+                    lastErrorMsg = `${scriptResult.stage || "script"}: ${scriptResult.error || "empty result"}`;
+                    logExtensionEvent("captcha_page_failed", {
+                        action: data.action || "IMAGE_GENERATION",
+                        request_id: data.req_id ? String(data.req_id).slice(-12) : "",
+                        stage: scriptResult.stage || "unknown",
+                        error: scriptResult.error || "empty result",
+                        href: scriptResult.href || "",
+                    });
+                } else {
+                    lastErrorMsg = `empty executeScript result (count=${results ? results.length : 0})`;
+                    logExtensionEvent("captcha_page_failed", {
+                        action: data.action || "IMAGE_GENERATION",
+                        request_id: data.req_id ? String(data.req_id).slice(-12) : "",
+                        stage: "execute_script",
+                        error: lastErrorMsg,
+                    });
                 }
-            } catch (msgErr) {
-                console.warn("[Flow2API] Fallback sendMessage failed:", msgErr);
+            } catch (e) {
+                lastErrorMsg = `${e.message || "Script execution failed"} [target: ${targetTab ? targetTab.url : "null"}]`;
+                logExtensionEvent("captcha_script_exception", {
+                    action: data.action || "IMAGE_GENERATION",
+                    request_id: data.req_id ? String(data.req_id).slice(-12) : "",
+                    error: lastErrorMsg,
+                });
             }
         }
 
