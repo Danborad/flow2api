@@ -487,10 +487,6 @@ class FlowClient:
                 proxy=proxy_url
             )
 
-        import logging
-        logging.getLogger("uvicorn.error").info(
-            f"[ACTUAL_SUBMIT_HEADERS] Method={method}, URL={url}, Origin={headers.get('Origin')}, Referer={headers.get('Referer')}, UA={headers.get('User-Agent', '')[:80]}"
-        )
         start_time = time.time()
 
         try:
