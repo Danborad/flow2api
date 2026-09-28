@@ -1152,6 +1152,50 @@ async def poll_video_operation(operation_id: str, raw_request: Request, model: O
     return operation
 
 
+@router.post("/v1/chat/completions")
+async def create_chat_completion(
+    request: ChatCompletionRequest,
+    raw_request: Request,
+    api_key: str = Depends(verify_api_key_flexible),
+):
+    """OpenAI-compatible unified generation endpoint."""
+    try:
+        normalized = await _normalize_openai_request(request)
+        if not normalized.prompt:
+            raise HTTPException(status_code=400, detail="Prompt cannot be empty")
+
+        request_base_url = _get_request_base_url(raw_request)
+
+        if request.stream:
+            return StreamingResponse(
+                _iterate_openai_stream(normalized, base_url_override=request_base_url),
+                media_type="text/event-stream",
+                headers={
+                    "Cache-Control": "no-cache",
+                    "Connection": "keep-alive",
+                    "X-Accel-Buffering": "no",
+                },
+            )
+
+        payload = _enrich_payload_with_direct_url(
+            _parse_handler_result(
+                await _collect_non_stream_result(
+                    normalized.model,
+                    normalized.prompt,
+                    normalized.images,
+                    base_url_override=request_base_url,
+                    video_media_id=normalized.video_media_id,
+                )
+            )
+        )
+        return _build_openai_json_response(payload)
+
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
 @router.post("/v1beta/models/{model}:generateContent")
 @router.post("/models/{model}:generateContent")
 async def generate_content(
