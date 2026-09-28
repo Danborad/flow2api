@@ -1,5 +1,9 @@
 # Flow2API Captcha Worker 更新记录
 
+## 1.1.46
+
+- 彻底移除任何自动 reload 重启代码，坚决杜绝扩展不断自我重启的死循环。
+
 ## 1.1.45
 
 - 对齐 Google 官方出图请求规范：请求头采用 text/plain 避免 CORS 预检，sessionId 采用分号毫秒时间戳规范。
