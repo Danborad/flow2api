@@ -466,13 +466,11 @@ class FlowClient:
             if derived_project_id:
                 headers.setdefault("Referer", f"https://flow.google.com/project/{derived_project_id}")
 
-        # 针对图片/媒体生成强校验接口，确保 Origin 与 Referer 中的项目ID 100% 绝对一致
+        # 针对图片/媒体生成强校验接口，与 Labs 官方前端保持 100% 同源对齐
         if "/projects/" in url and "/flowMedia:" in url:
-            m = re.search(r"/projects/([^/]+)/", url)
-            if m:
-                exact_pid = m.group(1)
-                headers["Origin"] = "https://flow.google.com"
-                headers["Referer"] = f"https://flow.google.com/project/{exact_pid}"
+            headers["Origin"] = "https://labs.google"
+            headers["Referer"] = "https://labs.google/"
+            headers["Content-Type"] = "text/plain;charset=UTF-8"
 
         request_body_for_log = raw_body if raw_body is not None else json_data
         if config.debug_enabled:

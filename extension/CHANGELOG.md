@@ -1,5 +1,9 @@
 # Flow2API Captcha Worker 更新记录
 
+## 1.1.47
+
+- 恢复在 Google Labs 域（labs.google/fx/tools/flow）执行打码，使签发的 reCAPTCHA Token 与后台 REST 请求头（Origin: https://labs.google）100% 保持同源，杜绝跨站风控拦截。
+
 ## 1.1.46
 
 - 彻底移除任何自动 reload 重启代码，坚决杜绝扩展不断自我重启的死循环。

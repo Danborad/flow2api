@@ -624,21 +624,20 @@ async function handleGetToken(data) {
             : "https://flow.google.com/";
         const rawTabs = await chrome.tabs.query({
             url: [
-                "https://flow.google.com/*",
-                "https://labs.google/fx/*"
+                "https://labs.google/fx/*",
+                "https://labs.google/*",
+                "https://flow.google.com/*"
             ]
         });
         const existingTabs = rawTabs.filter(t => !t.discarded);
-        const projectTab = projectId
-            ? existingTabs.find(tab => tab.url && tab.url.includes(`/project/${projectId}`))
-            : null;
+        const labsTab = existingTabs.find(tab => tab.url && tab.url.includes("labs.google"));
         const anyProjectTab = existingTabs.find(tab => tab.url && (tab.url.includes("/project/") || tab.url.includes("/projects/")));
-        const anyFlowTab = existingTabs.find(tab => tab.url && (tab.url.includes("flow.google.com") || tab.url.includes("labs.google")));
+        const anyFlowTab = existingTabs.find(tab => tab.url && tab.url.includes("flow.google.com"));
 
-        let targetTab = projectTab || anyProjectTab || anyFlowTab;
+        let targetTab = labsTab || anyProjectTab || anyFlowTab;
         if (!targetTab) {
             targetTab = await chrome.tabs.create({
-                url: projectUrl || FLOW_HOME_URL,
+                url: "https://labs.google/fx/tools/flow",
                 active: false
             });
             newTabId = targetTab.id;
