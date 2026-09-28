@@ -1,5 +1,9 @@
 # Flow2API Captcha Worker 更新记录
 
+## 1.1.49
+
+- 关键修复：账号导入时补充采集 flow.google.com 域名 Cookie（OSID / __Secure-OSID 等），此前遗漏导致后台无法以登录态访问 Flow，所有生成因 Cookie 缺失被判定未登录而失败。
+
 ## 1.1.48
 
 - 导入时自动捕获当前浏览器已打开的真实 Flow 项目 ID，确保数据库内项目 ID 真实有效。

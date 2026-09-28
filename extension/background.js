@@ -43,6 +43,8 @@ const SESSION_COOKIE_BASE_NAMES = [
     "__Host-authjs.session-token",
 ];
 const GOOGLE_COOKIE_NAMES = [
+    "OSID",
+    "__Secure-OSID",
     "SID",
     "HSID",
     "SSID",
@@ -314,6 +316,9 @@ async function refreshLabsSessionCookie(force = false) {
 async function getGoogleCookies() {
     const cookieMap = new Map();
     const cookieQueries = [
+        { url: "https://flow.google.com/" },
+        { domain: "flow.google.com" },
+        { domain: ".flow.google.com" },
         { domain: "google.com" },
         { url: "https://accounts.google.com/" },
         { url: "https://www.google.com/" },
