@@ -533,6 +533,8 @@ class FlowClient:
                     except Exception:
                         error_reason = f"HTTP Error {response.status_code}: {response.text[:200]}"
 
+                    import logging
+                    logging.getLogger("uvicorn.error").error(f"[API FAILED HTTP {response.status_code}] URL: {url} | Response: {response.text[:200]}")
                     debug_logger.log_error(f"[API FAILED] URL: {url}")
                     debug_logger.log_error(f"[API FAILED] Request Body: {request_body_for_log}")
                     debug_logger.log_error(f"[API FAILED] Response: {response.text}")

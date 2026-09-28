@@ -313,7 +313,7 @@ class TokenManager:
                 except Exception:
                     pass
         except Exception as e:
-            raise ValueError(f"ST?AT??: {str(e)}")
+            raise ValueError(f"ST换取AT失败: {str(e)}")
 
         try:
             credits_result = await self.flow_client.get_credits(at)
@@ -348,7 +348,7 @@ class TokenManager:
                     tool_name="PINHOLE"
                 ))
             except Exception as e:
-                raise ValueError(f"??????: {str(e)}")
+                raise ValueError(f"创建默认项目失败: {str(e)}")
 
         token = Token(
             st=st,
