@@ -710,7 +710,7 @@ async function handleGetToken(data) {
                             new Promise((_, reject) => setTimeout(() => reject(new Error("enterprise.execute timeout")), timeoutMs)),
                         ]);
                         if (!token) return fail("captcha_execute", "empty reCAPTCHA token");
-                        return { ok: true, token, href: location.href, userAgent: navigator.userAgent };
+                        return { ok: true, token, href: location.href, origin: location.origin, userAgent: navigator.userAgent };
                     } catch (error) {
                         return fail("captcha_execute", error && error.message ? error.message : error);
                     }
@@ -731,6 +731,8 @@ async function handleGetToken(data) {
                     status: "success",
                     token: scriptResult.token,
                     user_agent: scriptResult.userAgent || navigator.userAgent,
+                    origin: scriptResult.origin || "https://flow.google.com",
+                    referer: scriptResult.href || "https://flow.google.com/",
                 };
             } else if (scriptResult) {
                 lastErrorMsg = `${scriptResult.stage || "script"}: ${scriptResult.error || "empty result"}`;
@@ -767,7 +769,9 @@ async function handleGetToken(data) {
                 req_id: data.req_id,
                 status: successResponse.status,
                 token: successResponse.token,
-                user_agent: successResponse.user_agent || ""
+                user_agent: successResponse.user_agent || "",
+                origin: successResponse.origin || "https://flow.google.com",
+                referer: successResponse.referer || "https://flow.google.com/"
             }));
             logExtensionEvent("captcha_success", {
                 action: data.action || "IMAGE_GENERATION",

@@ -1,5 +1,9 @@
 # Flow2API Captcha Worker 更新记录
 
+## 1.1.41
+
+- 将打码页面真实 Origin（如 flow.google.com）与 Referer 连同 User-Agent 完整回传并强覆盖服务端请求头，保证 Google 验证码校验 100% 同源同环境通过。
+
 ## 1.1.40
 
 - 打码脚本执行完毕后将浏览器真实 User-Agent 回传至服务端，使 Google 官方 REST 请求头与打码客户端 100% 对齐，彻底解决 `reCAPTCHA evaluation failed`。

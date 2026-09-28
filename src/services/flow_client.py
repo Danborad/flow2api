@@ -443,16 +443,16 @@ class FlowClient:
             headers["sec-ch-ua-mobile"] = inferred_fingerprint["sec_ch_ua_mobile"]
 
         if isinstance(fingerprint, dict) and self._should_attach_runtime_session_cookies(url):
-            origin = str(fingerprint.get("origin") or "").strip() or "https://labs.google"
+            origin = str(fingerprint.get("origin") or "").strip() or "https://flow.google.com"
             referer = str(fingerprint.get("referer") or "").strip()
             if not referer:
                 fingerprint_project_id = str(fingerprint.get("project_id") or "").strip()
                 if fingerprint_project_id:
-                    referer = self._build_flow_project_page_url(fingerprint_project_id)
+                    referer = f"https://flow.google.com/project/{fingerprint_project_id}"
             if origin:
-                headers.setdefault("Origin", origin)
+                headers["Origin"] = origin
             if referer:
-                headers.setdefault("Referer", referer)
+                headers["Referer"] = referer
             merged_cookie_header = self._merge_cookie_header(
                 headers.get("Cookie"),
                 fingerprint.get("session_cookies"),
@@ -462,9 +462,9 @@ class FlowClient:
 
         if self._should_attach_runtime_session_cookies(url):
             derived_project_id = self._extract_project_id_from_request_payload(json_data)
-            headers.setdefault("Origin", "https://labs.google")
+            headers.setdefault("Origin", "https://flow.google.com")
             if derived_project_id:
-                headers.setdefault("Referer", self._build_flow_project_page_url(derived_project_id))
+                headers.setdefault("Referer", f"https://flow.google.com/project/{derived_project_id}")
 
         request_body_for_log = raw_body if raw_body is not None else json_data
         if config.debug_enabled:
@@ -4566,14 +4566,17 @@ class FlowClient:
                 if token:
                     self._last_recaptcha_error = None
                     captcha_ua = getattr(service, "last_user_agent", None)
-                    if captcha_ua:
-                        merged_fp = {"user_agent": captcha_ua}
-                        self._set_request_fingerprint(merged_fp)
-                        debug_logger.log_info(
-                            f"[reCAPTCHA extension] 已将插件打码真实 UA 注入请求指纹: {captcha_ua[:80]}"
-                        )
-                    else:
-                        self._set_request_fingerprint(None)
+                    captcha_origin = getattr(service, "last_origin", None) or "https://flow.google.com"
+                    captcha_referer = getattr(service, "last_referer", None) or f"{captcha_origin}/"
+                    merged_fp = {
+                        "user_agent": captcha_ua,
+                        "origin": captcha_origin,
+                        "referer": captcha_referer,
+                    }
+                    self._set_request_fingerprint(merged_fp)
+                    debug_logger.log_info(
+                        f"[reCAPTCHA extension] 已将插件打码真实环境注入请求指纹: UA={captcha_ua[:50] if captcha_ua else 'None'}, Origin={captcha_origin}"
+                    )
                     return token, None
                 self._last_recaptcha_error = service.last_error or "插件未返回有效验证码"
                 self._set_request_fingerprint(None)
