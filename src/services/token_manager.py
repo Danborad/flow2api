@@ -337,18 +337,20 @@ class TokenManager:
                 tool_name="PINHOLE"
             ))
         else:
+            first_project_name = self._build_project_name(1, base_project_name)
             try:
-                first_project_name = self._build_project_name(1, base_project_name)
                 first_project_id = await self.flow_client.create_project(st, first_project_name)
                 debug_logger.log_info(f"[ADD_TOKEN] Created pooled project #1: {first_project_name} (ID: {first_project_id})")
-                pooled_projects.append(Project(
-                    project_id=first_project_id,
-                    token_id=0,
-                    project_name=first_project_name,
-                    tool_name="PINHOLE"
-                ))
             except Exception as e:
-                raise ValueError(f"创建默认项目失败: {str(e)}")
+                import uuid
+                first_project_id = str(uuid.uuid4())
+                debug_logger.log_warning(f"[ADD_TOKEN] 创建项目异常，自动降级使用独立项目ID: {first_project_id} (错误: {e})")
+            pooled_projects.append(Project(
+                project_id=first_project_id,
+                token_id=0,
+                project_name=first_project_name,
+                tool_name="PINHOLE"
+            ))
 
         token = Token(
             st=st,

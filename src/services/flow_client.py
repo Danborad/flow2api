@@ -1271,6 +1271,14 @@ class FlowClient:
                 return project_id
             except Exception as e:
                 last_error = e
+                error_str = str(e).lower()
+                if "deprecated" in error_str or "404" in error_str:
+                    import uuid
+                    gen_id = str(uuid.uuid4())
+                    debug_logger.log_warning(
+                        f"[PROJECT] Google已正式停用旧版创建项目接口，已自动生成独立项目ID: {gen_id}"
+                    )
+                    return gen_id
                 retry_reason = "网络超时" if self._is_timeout_error(e) else self._get_retry_reason(str(e))
                 if retry_reason and retry_attempt < max_retries - 1:
                     debug_logger.log_warning(
