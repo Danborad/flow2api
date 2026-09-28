@@ -372,6 +372,17 @@ async function importCurrentAccount(reason = "manual") {
         }
 
         const baseUrl = getBackendBaseUrl(settings.serverUrl);
+        let detectedProjectId = "";
+        try {
+            const allBrowserTabs = await chrome.tabs.query({});
+            for (const t of allBrowserTabs) {
+                if (t.url && t.url.includes("/project/") && !t.url.includes("404")) {
+                    const m = t.url.match(/\/project\/([0-9a-fA-F-]+)/);
+                    if (m) { detectedProjectId = m[1]; break; }
+                }
+            }
+        } catch (e) {}
+
         let response = await fetch(`${baseUrl}/api/plugin/import-current-account`, {
             method: "POST",
             headers: {
@@ -382,7 +393,8 @@ async function importCurrentAccount(reason = "manual") {
                 session_token: sessionToken,
                 google_cookies: JSON.stringify(googleCookies),
                 extension_route_key: settings.routeKey,
-                refresh_interval_minutes: parseInt(settings.refreshIntervalMinutes, 10) || 120
+                refresh_interval_minutes: parseInt(settings.refreshIntervalMinutes, 10) || 120,
+                project_id: detectedProjectId,
             })
         });
         let payload = await response.json().catch(() => null);
@@ -651,6 +663,16 @@ async function handleGetToken(data) {
         if (currentTab && currentTab.url) targetTab = currentTab;
         if (targetTab.url && targetTab.url.includes("accounts.google.com")) {
             throw new Error("打码标签页被 Google 重定向至登录页，请在 Chrome 中登录对应 Google 账号并保持 Flow 页面打开");
+        }
+        if (targetTab.url && targetTab.url.includes("404")) {
+            const normalTab = (await chrome.tabs.query({})).find(t => t.url && (t.url.includes("/project/") || t.url.includes("flow")) && !t.url.includes("404") && !t.discarded);
+            if (normalTab) {
+                targetTab = normalTab;
+            } else {
+                await chrome.tabs.update(targetTab.id, { url: "https://flow.google.com/" });
+                await waitForTabReady(targetTab.id);
+                await sleep(2500);
+            }
         }
 
         logExtensionEvent("captcha_tab_selected", {

@@ -80,6 +80,7 @@ class PluginAccountImportRequest(BaseModel):
     google_cookies: str = ""
     extension_route_key: Optional[str] = None
     refresh_interval_minutes: int = 120
+    project_id: Optional[str] = None
 
 
 @dataclass
@@ -892,19 +893,24 @@ async def import_current_browser_account(
         added = 0
         updated = 0
         token_id = None
+        imported_project_id = str(request.project_id or "").strip() or None
         if existing:
+            update_data = dict(**common_kwargs)
+            if imported_project_id:
+                update_data["current_project_id"] = imported_project_id
             await handler.token_manager.update_token(
                 token_id=existing.id,
                 st=session_token,
                 at=access_token,
                 at_expires=at_expires,
-                **common_kwargs,
+                **update_data,
             )
             token_id = existing.id
             updated = 1
         else:
             new_token = await handler.token_manager.add_token(
                 st=session_token,
+                project_id=imported_project_id,
                 image_enabled=True,
                 video_enabled=True,
                 image_concurrency=-1,

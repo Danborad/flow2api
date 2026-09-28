@@ -1,5 +1,10 @@
 # Flow2API Captcha Worker 更新记录
 
+## 1.1.48
+
+- 导入时自动捕获当前浏览器已打开的真实 Flow 项目 ID，确保数据库内项目 ID 真实有效。
+- 打码标签页避开 404 错误页，自动切回正常项目页或 Flow 首页。
+
 ## 1.1.47
 
 - 恢复在 Google Labs 域（labs.google/fx/tools/flow）执行打码，使签发的 reCAPTCHA Token 与后台 REST 请求头（Origin: https://labs.google）100% 保持同源，杜绝跨站风控拦截。
