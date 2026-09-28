@@ -106,6 +106,7 @@ class Task(BaseModel):
     scene_id: Optional[str] = None  # Flow API的sceneId
     project_id: Optional[str] = None
     media_name: Optional[str] = None
+    request_log_id: Optional[int] = None
     created_at: Optional[datetime] = None
     completed_at: Optional[datetime] = None
 

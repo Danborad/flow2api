@@ -1178,10 +1178,36 @@ class GenerationHandler:
             operation_id = (operation.get("operation") or {}).get("name")
             if not operation_id:
                 raise RuntimeError("Video submission returned no operation ID")
+
+            request_payload = {
+                "model": model,
+                "prompt": prompt,
+                "has_images": bool(images),
+                "protocol": "gemini_predictLongRunning",
+                "operation_name": f"operations/{operation_id}",
+            }
+            response_payload = {
+                "status": "processing",
+                "status_text": "video_submitting",
+                "progress": 25,
+                "name": f"operations/{operation_id}",
+            }
+            log_id = await self._log_request(
+                token_id=token.id,
+                operation="generate_video",
+                request_data=request_payload,
+                response_data=response_payload,
+                status_code=102,
+                duration=0.0,
+                status_text="video_submitting",
+                progress=25,
+            )
+
             await self.db.create_task(Task(
                 task_id=operation_id, token_id=token.id, model=model_key, prompt=prompt,
                 status="processing", scene_id=operation.get("sceneId"), project_id=project_id,
                 media_name=operation.get("mediaName") or operation_id,
+                request_log_id=log_id,
             ))
             return f"operations/{operation_id}"
         finally:
@@ -1209,7 +1235,14 @@ class GenerationHandler:
             if checked:
                 checked_operation = checked[0]
                 status = checked_operation.get("status") or ""
-                if status == "MEDIA_GENERATION_STATUS_SUCCESSFUL":
+                if status == "MEDIA_GENERATION_STATUS_ACTIVE":
+                    if task.request_log_id:
+                        await self.db.update_request_log(
+                            task.request_log_id,
+                            status_text="video_polling",
+                            progress=50,
+                        )
+                elif status == "MEDIA_GENERATION_STATUS_SUCCESSFUL":
                     media_name = checked_operation.get("mediaName") or task.media_name or operation_id
                     try:
                         video = await self._resolve_video_asset(token, checked_operation)
@@ -1230,12 +1263,73 @@ class GenerationHandler:
                         )
                         await self.token_manager.record_usage(token.id, is_video=True)
                         await self.token_manager.record_success(token.id)
+
+                        if task.request_log_id:
+                            duration = 0.0
+                            if task.created_at:
+                                if isinstance(task.created_at, datetime):
+                                    duration = max(0.0, time.time() - task.created_at.timestamp())
+                                elif isinstance(task.created_at, (int, float)):
+                                    duration = max(0.0, time.time() - float(task.created_at))
+                            response_payload = {
+                                "status": "success",
+                                "model": task.model,
+                                "prompt": task.prompt,
+                                "url": video_url,
+                                "generated_assets": {
+                                    "type": "video",
+                                    "final_video_url": video_url,
+                                    "mediaGenerationId": media_name,
+                                    "mediaName": media_name,
+                                    "model": task.model,
+                                },
+                            }
+                            await self._log_request(
+                                token_id=token.id,
+                                operation="generate_video",
+                                request_data={
+                                    "model": task.model,
+                                    "prompt": task.prompt,
+                                    "protocol": "gemini_predictLongRunning",
+                                    "operation_name": name,
+                                },
+                                response_data=response_payload,
+                                status_code=200,
+                                duration=duration,
+                                status_text="completed",
+                                progress=100,
+                                log_id=task.request_log_id,
+                            )
                 elif status == "MEDIA_GENERATION_STATUS_FAILED" or status.startswith("MEDIA_GENERATION_STATUS_ERROR"):
                     error = (checked_operation.get("operation") or {}).get("error") or {}
+                    error_msg = error.get("message") or status
                     await self.db.update_task(
                         operation_id, status="failed", completed_at=time.time(),
-                        error_message=error.get("message") or status,
+                        error_message=error_msg,
                     )
+                    if task.request_log_id:
+                        duration = 0.0
+                        if task.created_at:
+                            if isinstance(task.created_at, datetime):
+                                duration = max(0.0, time.time() - task.created_at.timestamp())
+                            elif isinstance(task.created_at, (int, float)):
+                                duration = max(0.0, time.time() - float(task.created_at))
+                        await self._log_request(
+                            token_id=task.token_id,
+                            operation="generate_video",
+                            request_data={
+                                "model": task.model,
+                                "prompt": task.prompt,
+                                "protocol": "gemini_predictLongRunning",
+                                "operation_name": name,
+                            },
+                            response_data={"error": error_msg, "status": "failed"},
+                            status_code=500,
+                            duration=duration,
+                            status_text="failed",
+                            progress=0,
+                            log_id=task.request_log_id,
+                        )
             task = await self.db.get_task(operation_id)
         if task.status == "completed" and task.result_urls:
             video_url = task.result_urls[0]

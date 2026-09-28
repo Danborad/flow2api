@@ -536,9 +536,9 @@ class Database:
 
             # ========== Step 2: Add missing columns to existing tables ==========
             if await self._table_exists(db, "tasks"):
-                for column in ("project_id", "media_name"):
+                for column, col_type in (("project_id", "TEXT"), ("media_name", "TEXT"), ("request_log_id", "INTEGER")):
                     if not await self._column_exists(db, "tasks", column):
-                        await db.execute(f"ALTER TABLE tasks ADD COLUMN {column} TEXT")
+                        await db.execute(f"ALTER TABLE tasks ADD COLUMN {column} {col_type}")
             # Check and add missing columns to tokens table
             if await self._table_exists(db, "tokens"):
                 columns_to_add = [
@@ -805,6 +805,7 @@ class Database:
                     scene_id TEXT,
                     project_id TEXT,
                     media_name TEXT,
+                    request_log_id INTEGER,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     completed_at TIMESTAMP,
                     FOREIGN KEY (token_id) REFERENCES tokens(id)
@@ -1301,10 +1302,10 @@ class Database:
         """Create a new task"""
         async with self._connect(write=True) as db:
             cursor = await db.execute("""
-                INSERT INTO tasks (task_id, token_id, model, prompt, status, progress, scene_id, project_id, media_name)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO tasks (task_id, token_id, model, prompt, status, progress, scene_id, project_id, media_name, request_log_id)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (task.task_id, task.token_id, task.model, task.prompt,
-                  task.status, task.progress, task.scene_id, task.project_id, task.media_name))
+                  task.status, task.progress, task.scene_id, task.project_id, task.media_name, task.request_log_id))
             await db.commit()
             return cursor.lastrowid
 
