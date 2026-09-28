@@ -535,6 +535,10 @@ class Database:
                         print(f"  ✗ Failed to add column 'msg_type': {e}")
 
             # ========== Step 2: Add missing columns to existing tables ==========
+            if await self._table_exists(db, "tasks"):
+                for column in ("project_id", "media_name"):
+                    if not await self._column_exists(db, "tasks", column):
+                        await db.execute(f"ALTER TABLE tasks ADD COLUMN {column} TEXT")
             # Check and add missing columns to tokens table
             if await self._table_exists(db, "tokens"):
                 columns_to_add = [
@@ -799,6 +803,8 @@ class Database:
                     result_urls TEXT,
                     error_message TEXT,
                     scene_id TEXT,
+                    project_id TEXT,
+                    media_name TEXT,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     completed_at TIMESTAMP,
                     FOREIGN KEY (token_id) REFERENCES tokens(id)
@@ -1290,32 +1296,15 @@ class Database:
             await db.execute("DELETE FROM projects WHERE project_id = ?", (project_id,))
             await db.commit()
 
-    async def replace_projects_for_token(self, token_id: int, project_id: str, project_name: str = "") -> None:
-        """Replace a token's project pool with a single verified project id.
-
-        Used after importing the real Flow project id from the browser, since the
-        legacy project.createProject RPC has been disabled by Google.
-        """
-        async with self._connect(write=True) as db:
-            await db.execute("DELETE FROM projects WHERE token_id = ?", (token_id,))
-            await db.execute(
-                """
-                INSERT INTO projects (project_id, token_id, project_name)
-                VALUES (?, ?, ?)
-                """,
-                (project_id, token_id, project_name or ""),
-            )
-            await db.commit()
-
     # Task operations
     async def create_task(self, task: Task) -> int:
         """Create a new task"""
         async with self._connect(write=True) as db:
             cursor = await db.execute("""
-                INSERT INTO tasks (task_id, token_id, model, prompt, status, progress, scene_id)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO tasks (task_id, token_id, model, prompt, status, progress, scene_id, project_id, media_name)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (task.task_id, task.token_id, task.model, task.prompt,
-                  task.status, task.progress, task.scene_id))
+                  task.status, task.progress, task.scene_id, task.project_id, task.media_name))
             await db.commit()
             return cursor.lastrowid
 

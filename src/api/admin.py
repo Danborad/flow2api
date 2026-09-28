@@ -2381,6 +2381,14 @@ async def plugin_update_token(request: dict, authorization: Optional[str] = Head
         if not email:
             raise HTTPException(status_code=400, detail="Failed to get email from session token")
 
+        try:
+            credits_result = await token_manager.flow_client.get_credits(at)
+        except Exception as credit_error:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Access Token validation failed: {credit_error}",
+            )
+
         # Parse expiration time
         from datetime import datetime
         at_expires = None
@@ -2412,6 +2420,13 @@ async def plugin_update_token(request: dict, authorization: Optional[str] = Head
                 proxy_url=request.get("proxy_url"),
                 auto_refresh_enabled=request.get("auto_refresh_enabled"),
                 refresh_interval_minutes=request.get("refresh_interval_minutes"),
+                last_st_refresh_at=datetime.now(timezone.utc),
+                last_st_refresh_result="success",
+            )
+            await db.update_token(
+                existing_token.id,
+                credits=credits_result.get("credits", 0),
+                user_paygate_tier=credits_result.get("userPaygateTier"),
             )
 
             # Check if auto-enable is enabled and token is disabled

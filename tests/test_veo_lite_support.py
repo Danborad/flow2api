@@ -637,6 +637,5 @@ class RouteNormalizationTests(unittest.IsolatedAsyncioTestCase):
             "变身猫猫",
         )
 
-
 if __name__ == "__main__":
     unittest.main()

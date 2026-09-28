@@ -2,12 +2,14 @@
 
 from dataclasses import dataclass
 from datetime import datetime, timezone
+import logging
 from typing import Any, Dict, List, Optional
 import base64
 import json
 import mimetypes
 import re
 from urllib.parse import urlparse
+from types import SimpleNamespace
 
 from curl_cffi.requests import AsyncSession
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, WebSocket, WebSocketDisconnect
@@ -78,9 +80,10 @@ class PluginAccountImportRequest(BaseModel):
 
     session_token: str
     google_cookies: str = ""
+    project_id: Optional[str] = None
+    project_name: Optional[str] = None
     extension_route_key: Optional[str] = None
     refresh_interval_minutes: int = 120
-    project_id: Optional[str] = None
 
 
 @dataclass
@@ -155,6 +158,12 @@ def _get_internal_gemini_model_catalog() -> Dict[str, str]:
 
 def _build_gemini_model_resource(model_id: str, description: str) -> Dict[str, Any]:
     """Build a Gemini-compatible model resource payload."""
+    resolved = resolve_model_name(model_id, model_config=MODEL_CONFIG)
+    video_config = MODEL_CONFIG.get(resolved, {})
+    long_running = model_id in {"Omni 1.1 Flash", "Veo 3.1 - Fast", "Veo 3.1 - Lite", "Veo 3.1 - Quality"} or (
+        video_config.get("type") == "video" and video_config.get("video_type") in {"t2v", "omni"}
+        and not video_config.get("upsample")
+    )
     return {
         "name": f"models/{model_id}",
         "displayName": model_id,
@@ -162,10 +171,7 @@ def _build_gemini_model_resource(model_id: str, description: str) -> Dict[str, A
         "version": "flow2api",
         "inputTokenLimit": 0,
         "outputTokenLimit": 0,
-        "supportedGenerationMethods": [
-            "generateContent",
-            "streamGenerateContent",
-        ],
+        "supportedGenerationMethods": ["generateContent", "streamGenerateContent"] + (["predictLongRunning"] if long_running else []),
     }
 
 
@@ -387,7 +393,7 @@ async def _append_openai_reference_images(
 
 async def _extract_prompt_and_images_from_gemini_contents(
     contents: List[GeminiContent],
-) -> tuple[str, List[bytes]]:
+) -> tuple[str, List[bytes], Optional[str]]:
     if not contents:
         raise HTTPException(status_code=400, detail="contents cannot be empty")
 
@@ -398,6 +404,7 @@ async def _extract_prompt_and_images_from_gemini_contents(
 
     prompt_parts: List[str] = []
     images: List[bytes] = []
+    video_media_id: Optional[str] = None
 
     for part in target_content.parts:
         if part.text:
@@ -414,6 +421,11 @@ async def _extract_prompt_and_images_from_gemini_contents(
             images.append(base64.b64decode(part.inlineData.data))
         elif part.fileData is not None:
             mime_type = (part.fileData.mimeType or "").lower()
+            if mime_type == "video/mp4" and part.fileData.fileUri.startswith("extend://"):
+                video_media_id = part.fileData.fileUri[len("extend://"):].strip()
+                if not video_media_id:
+                    raise HTTPException(status_code=400, detail="Video media ID cannot be empty")
+                continue
             if mime_type and not mime_type.startswith("image/"):
                 raise HTTPException(
                     status_code=400,
@@ -422,7 +434,7 @@ async def _extract_prompt_and_images_from_gemini_contents(
             images.append(await _load_image_bytes_from_uri(part.fileData.fileUri))
 
     prompt = "\n".join(part for part in prompt_parts if part).strip()
-    return prompt, images
+    return prompt, images, video_media_id
 
 
 def _resolve_request_model(model: str, request: Any, images: Optional[List[bytes]] = None) -> str:
@@ -483,7 +495,7 @@ async def _normalize_gemini_request(
     model: str,
     request: GeminiGenerateContentRequest,
 ) -> NormalizedGenerationRequest:
-    prompt, images = await _extract_prompt_and_images_from_gemini_contents(request.contents)
+    prompt, images, video_media_id = await _extract_prompt_and_images_from_gemini_contents(request.contents)
     resolved_model = _resolve_request_model(model, request, images=images)
     system_instruction = _extract_text_from_gemini_content(request.systemInstruction)
     model_config = MODEL_CONFIG.get(resolved_model)
@@ -506,6 +518,7 @@ async def _normalize_gemini_request(
         model=resolved_model,
         prompt=prompt,
         images=images,
+        video_media_id=video_media_id,
     )
 
 
@@ -813,22 +826,6 @@ async def _iterate_gemini_stream(
             yield event
 
 
-@router.get("/v1/models")
-async def list_models(api_key: str = Depends(verify_api_key_flexible)):
-    """List compact public models for client apps."""
-    models = [
-        {
-            "id": model["id"],
-            "object": "model",
-            "owned_by": "flow2api",
-            "description": model["description"],
-        }
-        for model in _get_openai_model_catalog()
-    ]
-
-    return {"object": "list", "data": models}
-
-
 @router.post("/api/plugin/import-current-account")
 async def import_current_browser_account(
     request: PluginAccountImportRequest,
@@ -882,6 +879,27 @@ async def import_current_browser_account(
                 existing_by_email[existing_token.email] = existing_token
 
         existing = existing_by_email.get(email)
+        project_id = (request.project_id or "").strip() or None
+        project_name = (request.project_name or "").strip() or None
+        if project_id and not re.fullmatch(
+            r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}",
+            project_id,
+        ):
+            raise HTTPException(status_code=400, detail="Flow 项目 ID 格式无效")
+        if not existing and not project_id:
+            raise HTTPException(
+                status_code=400,
+                detail="首次导入前请先在 flow.google.com 打开一个 Flow 项目页，再点击导入",
+            )
+
+        try:
+            credits_result = await handler.token_manager.flow_client.get_credits(access_token)
+        except Exception as credit_error:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Access Token 验证失败: {credit_error}",
+            )
+
         common_kwargs = dict(
             extension_route_key=(request.extension_route_key or "").strip() or None,
             protocol_mode="protocol",
@@ -893,24 +911,21 @@ async def import_current_browser_account(
         added = 0
         updated = 0
         token_id = None
-        imported_project_id = str(request.project_id or "").strip() or None
         if existing:
-            update_data = dict(**common_kwargs)
-            if imported_project_id:
-                update_data["project_id"] = imported_project_id
             await handler.token_manager.update_token(
                 token_id=existing.id,
                 st=session_token,
                 at=access_token,
                 at_expires=at_expires,
-                **update_data,
+                **common_kwargs,
             )
             token_id = existing.id
             updated = 1
         else:
             new_token = await handler.token_manager.add_token(
                 st=session_token,
-                project_id=imported_project_id,
+                project_id=project_id,
+                project_name=project_name,
                 image_enabled=True,
                 video_enabled=True,
                 image_concurrency=-1,
@@ -923,12 +938,8 @@ async def import_current_browser_account(
         update_fields: Dict[str, Any] = {
             "last_st_refresh_result": "插件已导入当前浏览器账号信息",
         }
-        try:
-            credits_result = await handler.token_manager.flow_client.get_credits(access_token)
-            update_fields["credits"] = credits_result.get("credits", 0)
-            update_fields["user_paygate_tier"] = credits_result.get("userPaygateTier")
-        except Exception as credit_error:
-            debug_logger.log_warning(f"[PLUGIN_IMPORT] 获取账号余额失败: {credit_error}")
+        update_fields["credits"] = credits_result.get("credits", 0)
+        update_fields["user_paygate_tier"] = credits_result.get("userPaygateTier")
 
         if token_id is not None:
             await handler.token_manager.db.update_token(token_id, **update_fields)
@@ -954,38 +965,16 @@ async def import_current_browser_account(
         raise HTTPException(status_code=400, detail=str(e))
 
 
-@router.get("/v1/models/internal")
-async def list_internal_models(api_key: str = Depends(verify_api_key_flexible)):
-    """List all internal long model IDs for debugging."""
-    models = [
-        {
-            "id": model["id"],
-            "object": "model",
-            "owned_by": "flow2api",
-            "description": model["description"],
-        }
-        for model in _get_internal_openai_model_catalog()
-    ]
-
-    return {"object": "list", "data": models}
-
-
-@router.get("/v1/models/aliases")
-async def list_model_aliases(api_key: str = Depends(verify_api_key_flexible)):
-    """List simplified model aliases for generationConfig-based resolution."""
-    aliases = get_base_model_aliases()
-    alias_models = []
-    for alias_id, description in aliases.items():
-        alias_models.append(
-            {
-                "id": alias_id,
-                "object": "model",
-                "owned_by": "flow2api",
-                "description": description,
-                "is_alias": True,
-            }
-        )
-    return {"object": "list", "data": alias_models}
+@router.get("/v1/models")
+async def list_models(api_key: str = Depends(verify_api_key_flexible)):
+    """Keep agent model discovery independent of the generation protocol."""
+    return {
+        "object": "list",
+        "data": [
+            {**model, "object": "model", "owned_by": "flow2api"}
+            for model in _get_openai_model_catalog()
+        ],
+    }
 
 
 @router.get("/v1beta/models")
@@ -1029,46 +1018,138 @@ async def get_gemini_model(model: str, api_key: str = Depends(verify_api_key_fle
     return _build_gemini_model_resource(model, description)
 
 
-@router.post("/v1/chat/completions")
-async def create_chat_completion(
-    request: ChatCompletionRequest,
-    raw_request: Request,
-    api_key: str = Depends(verify_api_key_flexible),
+@router.post("/v1beta/models/{model}:predictLongRunning")
+@router.post("/models/{model}:predictLongRunning")
+async def predict_video_long_running(
+    model: str, payload: Dict[str, Any], api_key: str = Depends(verify_api_key_flexible),
 ):
-    """OpenAI-compatible unified generation endpoint."""
+    model = {
+        "veo-3.1-generate-preview": "Veo 3.1 - Quality",
+        "veo-3.1-fast-generate-preview": "Veo 3.1 - Fast",
+        "veo-3.1-lite-generate-preview": "Veo 3.1 - Lite",
+    }.get(model, model)
+    instances = payload.get("instances")
+    if not isinstance(instances, list) or len(instances) != 1 or not isinstance(instances[0], dict):
+        return JSONResponse(status_code=400, content=_build_gemini_error_payload(400, "Exactly one video instance is required"))
+    instance = instances[0]
+    prompt = str(instance.get("prompt") or "").strip()
+    if not prompt:
+        return JSONResponse(status_code=400, content=_build_gemini_error_payload(400, "Prompt cannot be empty"))
+    parameters = payload.get("parameters") or {}
+    if not isinstance(parameters, dict):
+        return JSONResponse(status_code=400, content=_build_gemini_error_payload(400, "parameters must be an object"))
+    if parameters.get("sampleCount", 1) != 1:
+        return JSONResponse(status_code=400, content=_build_gemini_error_payload(400, "Only one generated video is supported"))
+    aspect_ratio = parameters.get("aspectRatio") or "16:9"
+    if aspect_ratio not in {"16:9", "9:16"}:
+        return JSONResponse(status_code=400, content=_build_gemini_error_payload(400, "Unsupported video aspectRatio"))
+    duration = parameters.get("durationSeconds")
+    if duration is not None and (str(duration) not in {"4", "6", "8", "10"} or (str(duration) == "10" and model != "Omni 1.1 Flash")):
+        return JSONResponse(status_code=400, content=_build_gemini_error_payload(400, "Unsupported video duration"))
+    images = []
+    for frame_field in ("image", "lastFrame"):
+        image = instance.get(frame_field)
+        if image is None:
+            continue
+        if not isinstance(image, dict):
+            return JSONResponse(status_code=400, content=_build_gemini_error_payload(400, "Unsupported input image"))
+        try:
+            inline_data = image.get("inlineData")
+            if isinstance(inline_data, dict):
+                mime_type = inline_data.get("mimeType")
+                encoded = inline_data.get("data")
+                if mime_type not in {"image/png", "image/jpeg", "image/webp"} or not isinstance(encoded, str) or not encoded:
+                    raise ValueError
+                images.append(base64.b64decode(encoded, validate=True))
+            elif image.get("fileUri"):
+                if image.get("mimeType") not in {"image/png", "image/jpeg", "image/webp"}:
+                    raise ValueError
+                images.append(await _load_image_bytes_from_uri(str(image["fileUri"])))
+            elif image.get("bytesBase64Encoded"):
+                if image.get("mimeType") not in {"image/png", "image/jpeg", "image/webp"}:
+                    raise ValueError
+                images.append(base64.b64decode(image["bytesBase64Encoded"], validate=True))
+            else:
+                raise ValueError
+        except (ValueError, base64.binascii.Error):
+            return JSONResponse(status_code=400, content=_build_gemini_error_payload(400, "Invalid base64 input image"))
+        except HTTPException as exc:
+            return JSONResponse(status_code=exc.status_code, content=_build_gemini_error_payload(exc.status_code, str(exc.detail)))
+    if instance.get("lastFrame") is not None and instance.get("image") is None:
+        return JSONResponse(status_code=400, content=_build_gemini_error_payload(400, "lastFrame requires a first input image"))
+    public_veo_family = {
+        "Veo 3.1 - Quality": "veo", "Veo 3.1 - Fast": "veo-fast", "Veo 3.1 - Lite": "veo-lite",
+    }.get(model)
+    resolution_model = public_veo_family or model
+    if images and public_veo_family:
+        resolution_model = {
+            "veo": "veo-i2v", "veo-fast": "veo-i2v-fast", "veo-lite": "veo-i2v-lite",
+        }[public_veo_family]
+    params = SimpleNamespace(generationConfig={"aspectRatio": aspect_ratio, "durationSeconds": duration})
+    resolved = _resolve_request_model(resolution_model, params, images=images)
+    model_config = MODEL_CONFIG.get(resolved)
+    if not model_config or model_config.get("type") != "video":
+        return JSONResponse(status_code=400, content=_build_gemini_error_payload(400, f"Model is not a video model: {model}"))
+    requested_aspect = "VIDEO_ASPECT_RATIO_PORTRAIT" if aspect_ratio == "9:16" else "VIDEO_ASPECT_RATIO_LANDSCAPE"
+    if model_config.get("aspect_ratio") != requested_aspect:
+        return JSONResponse(status_code=400, content=_build_gemini_error_payload(400, "Model does not support requested aspectRatio"))
+    if duration is not None:
+        match = re.search(r"(?:^|_)(4|6|8|10)s(?:_|$)", resolved)
+        actual_duration = model_config.get("reference_duration") or (int(match.group(1)) if match else 8)
+        if int(duration) != actual_duration:
+            return JSONResponse(status_code=400, content=_build_gemini_error_payload(400, "Model does not support requested durationSeconds"))
+    if images and model_config.get("video_type") not in {"i2v", "omni"}:
+        return JSONResponse(status_code=400, content=_build_gemini_error_payload(400, "Model does not support input image"))
+    if images and len(images) > model_config.get("max_images", 0):
+        return JSONResponse(status_code=400, content=_build_gemini_error_payload(400, "Model does not support this number of input images"))
+    if not images and model_config.get("video_type") not in {"t2v", "omni"}:
+        return JSONResponse(status_code=400, content=_build_gemini_error_payload(400, "Model requires an input image"))
     try:
-        normalized = await _normalize_openai_request(request)
-        if not normalized.prompt:
-            raise HTTPException(status_code=400, detail="Prompt cannot be empty")
-
-        request_base_url = _get_request_base_url(raw_request)
-
-        if request.stream:
-            return StreamingResponse(
-                _iterate_openai_stream(normalized, request_base_url),
-                media_type="text/event-stream",
-                headers={
-                    "Cache-Control": "no-cache",
-                    "Connection": "keep-alive",
-                    "X-Accel-Buffering": "no",
-                },
-            )
-
-        payload = _parse_handler_result(
-            await _collect_non_stream_result(
-                normalized.model,
-                normalized.prompt,
-                normalized.images,
-                base_url_override=request_base_url,
-                video_media_id=normalized.video_media_id,
-            )
-        )
-        return _build_openai_json_response(payload)
-
-    except HTTPException:
-        raise
+        name = await _ensure_generation_handler().submit_gemini_video(model=resolved, prompt=prompt, images=images)
+        return {"name": name, "done": False}
+    except ValueError as exc:
+        return JSONResponse(status_code=503, content=_build_gemini_error_payload(503, str(exc)))
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=str(exc))
+        logging.getLogger(__name__).exception("[GEMINI VIDEO] Submission failed")
+        reason = " ".join(str(exc).split())[:500] or type(exc).__name__
+        if "MODEL_ACCESS_DENIED" in reason:
+            return JSONResponse(
+                status_code=403,
+                content=_build_gemini_error_payload(
+                    403,
+                    "Selected Flow account cannot access this video model; choose an available model or account",
+                ),
+            )
+        return JSONResponse(
+            status_code=502,
+            content=_build_gemini_error_payload(502, f"Video submission failed: {reason}"),
+        )
+
+
+@router.get("/v1beta/operations/{operation_id}")
+@router.get("/operations/{operation_id}")
+@router.get("/v1beta/models/{model}/operations/{operation_id}")
+@router.get("/models/{model}/operations/{operation_id}")
+async def poll_video_operation(operation_id: str, raw_request: Request, model: Optional[str] = None, api_key: str = Depends(verify_api_key_flexible)):
+    name = f"operations/{operation_id}"
+    try:
+        operation = await _ensure_generation_handler().get_gemini_video_operation(name)
+    except Exception as exc:
+        debug_logger.log_error(f"[GEMINI VIDEO] Poll failed: {exc}")
+        return JSONResponse(status_code=502, content=_build_gemini_error_payload(502, "Video status lookup failed"))
+    if operation is None:
+        return JSONResponse(status_code=404, content=_build_gemini_error_payload(404, "Video operation not found"))
+    if operation.get("done") and "response" in operation:
+        for sample in operation.get("response", {}).get("generateVideoResponse", {}).get("generatedSamples", []):
+            video = sample.get("video", {})
+            uri = sample.get("uri") or video.get("uri") or ""
+            if uri.startswith("/tmp/"):
+                uri = f"{_get_request_base_url(raw_request)}{uri}"
+            if uri:
+                sample["uri"] = uri
+                video["uri"] = uri
+                sample["video"] = video
+    return operation
 
 
 @router.post("/v1beta/models/{model}:generateContent")

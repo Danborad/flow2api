@@ -69,6 +69,4 @@ config/setting_warp_example.toml
 tests/__pycache__/
 *.har
 
-# Local archives
 *.tar.gz
-flow2api-clean-share*

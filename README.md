@@ -1,6 +1,6 @@
 # Flow2API Fork
 
-将 Google Flow 的图片和视频生成能力封装为 OpenAI/Gemini 兼容 API，并通过仓库自带的 Chrome 扩展同步当前浏览器账号、刷新 ST/AT 和处理 reCAPTCHA。
+将 Google Flow 的图片和视频生成能力封装为 Gemini 请求体兼容 API，并通过仓库自带的 Chrome 扩展同步当前浏览器账号、刷新 ST/AT 和处理 reCAPTCHA。
 
 本仓库是 [TheSmallHanCat/flow2api](https://github.com/TheSmallHanCat/flow2api) 的个人维护分支，保留上游核心能力，并针对原生运行、浏览器插件同步、公开模型名和管理后台做了调整。
 
@@ -9,7 +9,7 @@
 - 内置 Chrome 扩展同时负责账号导入、定时同步和 reCAPTCHA，不需要另外安装 Token Updater。
 - 推荐原生 Python 运行，方便直接使用真实 Chrome 登录态。
 - 对外只展示简洁模型名，旧长模型 ID 仍兼容。
-- 支持 OpenAI `/v1/chat/completions` 和 Gemini `generateContent` / `streamGenerateContent`。
+- 支持 Gemini `generateContent` / `streamGenerateContent`。
 - 管理后台显示账号积分；图片不扣点，视频按 Flow 规则统计点数。
 - 图片生成失败可自动切换其他账号重试，默认兜底 1 次，可在后台关闭或调整。
 - 支持企业微信 Webhook 通知：账号失效实时告警、定时每日汇报生成情况（图片/视频成败统计、各账号调用排行与余额）。
@@ -103,34 +103,11 @@ Flow2API API Key: 管理后台中的 API Key
 
 ## API 接入
 
-### OpenAI 兼容
+### 模型发现
 
-```text
-Base URL: http://127.0.0.1:8000/v1
-API Key: 管理后台中的 API Key
-Endpoint: /chat/completions
-```
+保留 `GET /v1/models` 供外部 Agent 拉取模型，返回 `object: "list"` 和 `data[].id`，列出下方 7 个公开短模型名。Gemini 原生列表使用 `GET /models` 或 `GET /v1beta/models`，返回 `models[].name`。这些入口均需 API Key。
 
-Nano Banana 2 方图 2K：
-
-```bash
-curl -X POST "http://127.0.0.1:8000/v1/chat/completions" \
-  -H "Authorization: Bearer $FLOW2API_KEY" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "model": "Nano Banana 2",
-    "messages": [
-      {"role": "user", "content": "一个透明玻璃苹果，白底产品摄影"}
-    ],
-    "generationConfig": {
-      "imageConfig": {
-        "aspectRatio": "1:1",
-        "imageSize": "2k"
-      }
-    },
-    "stream": false
-  }'
-```
+模型发现与生成协议独立：`/v1/models` 可用不代表恢复 OpenAI 生成接口，图片/视频生成仍使用下方 Gemini 接口。
 
 ### Gemini 兼容
 
@@ -152,6 +129,35 @@ curl -X POST "http://127.0.0.1:8000/models/Nano%20Banana%202:generateContent?key
     }
   }'
 ```
+
+视频同样使用 `generateContent`，将模型名换为 `Veo 3.1 - Fast`、`Veo 3.1 - Lite`、`Veo 3.1 - Quality` 或 `Omni 1.1 Flash`；提示词仍放在 `contents[].parts[].text` 中。视频生成会等待上游完成，响应的 `candidates[].content.parts[].fileData.fileUri` 为视频链接：
+
+```bash
+curl -X POST "http://127.0.0.1:8000/models/Veo%203.1%20-%20Fast:generateContent" \
+  -H "x-goog-api-key: $FLOW2API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"contents":[{"role":"user","parts":[{"text":"一只橘猫在窗边看雨"}]}],"generationConfig":{"aspectRatio":"16:9"}}'
+```
+
+`Veo 3.1 - Fast`、`Lite` 的公开短名称使用默认时长；若需精确指定 4/6/8 秒，可直接使用内部时长模型名，例如 `veo_3_1_t2v_fast_4s`。`/models` 仅列出 7 个公开短名称，完整模型键需要查阅[模型路由规则](docs/model-aliases.md)。
+
+视频续写使用 `veo-extend` 模型，并在 `contents[].parts[]` 中传入 `{ "fileData": { "mimeType": "video/mp4", "fileUri": "extend://原视频mediaGenerationId" } }`。
+
+### Gemini Veo 异步轮询
+
+外部客户端如使用 Gemini Veo 的 `predictLongRunning`，以 JSON 提交并根据返回的 operation name 轮询：
+
+```bash
+curl -X POST "http://127.0.0.1:8000/v1beta/models/Veo%203.1%20-%20Lite:predictLongRunning" \
+  -H "x-goog-api-key: $FLOW2API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"instances":[{"prompt":"一只橘猫在窗边看雨"}],"parameters":{"aspectRatio":"16:9"}}'
+
+curl "http://127.0.0.1:8000/v1beta/operations/OPERATION_ID" \
+  -H "x-goog-api-key: $FLOW2API_KEY"
+```
+
+提交响应包含 `name: "operations/OPERATION_ID"` 和 `done: false`。完成时轮询响应的 `done` 为 `true`，视频链接位于 `response.generateVideoResponse.generatedSamples[0].video.uri`。支持一个 `instances`；单张首帧可放在 `instances[0].image.bytesBase64Encoded` 并设置 `mimeType`。Veo 公开短名使用默认时长，需精确时长请使用对应内部模型名。
 
 支持的认证方式：
 
@@ -175,7 +181,7 @@ x-goog-api-key: <api_key>
 
 旧名称 `Nano Banana2` 和内部长模型 ID 仍可调用，但不会出现在默认模型列表。
 
-完整参数、路由结果和 OpenAI/Gemini 示例见 [模型路由规则](docs/model-aliases.md)。
+完整参数和路由结果见 [模型路由规则](docs/model-aliases.md)。
 
 ## 视频积分
 
@@ -225,7 +231,7 @@ Token 列表里的余额来自上游账号 Credits；“今日视频点数/账�
 管理后台: http://127.0.0.1:8000/manage
 模型测试: http://127.0.0.1:8000/test
 健康检查: http://127.0.0.1:8000/health
-模型列表: http://127.0.0.1:8000/v1/models
+模型列表: http://127.0.0.1:8000/models
 Prometheus: http://127.0.0.1:8000/metrics
 ```
 

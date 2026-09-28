@@ -104,6 +104,8 @@ class Task(BaseModel):
     result_urls: Optional[List[str]] = None
     error_message: Optional[str] = None
     scene_id: Optional[str] = None  # Flow API的sceneId
+    project_id: Optional[str] = None
+    media_name: Optional[str] = None
     created_at: Optional[datetime] = None
     completed_at: Optional[datetime] = None
 

@@ -1,49 +1,40 @@
 # Flow2API Captcha Worker 更新记录
 
-## 1.1.49
+## 1.1.35
 
-- 关键修复：账号导入时补充采集 flow.google.com 域名 Cookie（OSID / __Secure-OSID 等），此前遗漏导致后台无法以登录态访问 Flow，所有生成因 Cookie 缺失被判定未登录而失败。
+- 验证码响应携带真实浏览器 `User-Agent`、`Accept-Language` 和 UA Client Hints。
+- Flow2API 将扩展浏览器指纹绑定到对应 Google API 请求，修复 Linux Chrome 150 mint token 却用 Windows Chrome 149 提交导致的 `reCAPTCHA evaluation failed`。
 
-## 1.1.48
+## 1.1.34
 
-- 导入时自动捕获当前浏览器已打开的真实 Flow 项目 ID，确保数据库内项目 ID 真实有效。
-- 打码标签页避开 404 错误页，自动切回正常项目页或 Flow 首页。
+- 修复 MV3 唤醒时多个 `connectWS()` 并发创建重复 WebSocket 的竞态。
+- 验证码响应固定通过接收该请求的原始 WebSocket 返回，避免服务端忽略非请求所属连接的回包并等待 75 秒超时。
+- 旧连接的 close/error 事件不再覆盖当前连接状态或触发重复重连。
 
-## 1.1.47
+## 1.1.33
 
-- 恢复在 Google Labs 域（labs.google/fx/tools/flow）执行打码，使签发的 reCAPTCHA Token 与后台 REST 请求头（Origin: https://labs.google）100% 保持同源，杜绝跨站风控拦截。
+- 适配 Google 2026-09-23 的 reCAPTCHA 更新：验证码改在 `flow.google.com/about` 专用页面生成，不再调用项目页被包装的公开 `execute`。
+- 使用 Trusted Types 和页面 nonce 加载 Enterprise reCAPTCHA，并在 MAIN world `document_start` 捕获真实执行函数，修复 `reCAPTCHA evaluation failed`。
 
-## 1.1.46
+## 1.1.32
 
-- 彻底移除任何自动 reload 重启代码，坚决杜绝扩展不断自我重启的死循环。
+- 增加 MV3 Service Worker 保活 Alarm，每 30 秒检查 WebSocket；后台休眠后被唤醒会自动重连，避免账号因扩展路由离线而被负载均衡排除。
+- 浏览器启动和扩展重新加载时会自动恢复保活任务与连接。
 
-## 1.1.45
+## 1.1.31
 
-- 对齐 Google 官方出图请求规范：请求头采用 text/plain 避免 CORS 预检，sessionId 采用分号毫秒时间戳规范。
-- 增加打码前 4 秒的环境遥测充分收集，确保 Google reCAPTCHA Enterprise 评分达到高信誉区间。
+- 首次导入未发现 Flow 项目时，自动打开 `flow.google.com` 并通过当前前端 RPC 创建一个项目，再用返回的项目 ID 完成账号导入。
+- 明确区分 Flow 与 Project Genie，避免把 `labs.google/fx/projectgenie` 错当作 Flow 项目页。
 
-## 1.1.44
+## 1.1.30
 
-- 优先通过 content_scripts 原生消息通道在网页主环境安全生成 reCAPTCHA，彻底规避 executeScript 跨域与标签页权限拦截。
-- 回传打码页面关联的真实 Google Flow 项目 ID，解决项目 ID 错配导致的 403 权限拒绝。
+- 扩展项目识别支持 `/project/`、`/projects/`、查询参数、页面跳转中的 `pendingUrl`，并可从 Flow 页面已有项目链接中提取项目 ID。
+- 未识别到项目时，在错误信息中显示扩展实际看到的 Flow 页面地址，便于排查标签页与 Profile 问题。
 
-## 1.1.43
+## 1.1.29
 
-- 过滤 Chrome 自动休眠（discarded）的标签页，杜绝向休眠标签页注入脚本导致的 Chrome 底层权限报错。
-- 增加 content_scripts 原生消息降级取码通道，当动态 executeScript 受阻时无缝完成验证码获取。
-
-## 1.1.42
-
-- 提取并回传打码标签页所属的真实 Google Flow 项目 ID，服务端请求路径精准对齐，解决假项目 ID 引起的 403 权限拒绝。
-
-## 1.1.41
-
-- 将打码页面真实 Origin（如 flow.google.com）与 Referer 连同 User-Agent 完整回传并强覆盖服务端请求头，保证 Google 验证码校验 100% 同源同环境通过。
-
-## 1.1.40
-
-- 打码脚本执行完毕后将浏览器真实 User-Agent 回传至服务端，使 Google 官方 REST 请求头与打码客户端 100% 对齐，彻底解决 `reCAPTCHA evaluation failed`。
-- 打码标签页泛匹配优先复用当前打开的任意 Flow 或 Labs 页面，并在遭遇登录重定向时提前报错，杜绝 `Cannot access contents of the page` 权限拦截。
+- 兼容 Google Flow 新域名迁移：导入账号时读取当前已打开的 `flow.google.com/project/...` 项目 ID，绕过已下线的 Labs 自动创建项目接口。
+- 首次导入前需要先在同一 Chrome Profile 中打开一个 Flow 项目页。
 
 ## 1.1.28
 

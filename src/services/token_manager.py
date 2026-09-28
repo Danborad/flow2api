@@ -174,37 +174,18 @@ class TokenManager:
         return warmup_ids
 
     async def _create_project_for_token(self, token: Token, pool_index: int, base_name: Optional[str] = None) -> Project:
-        """Create (or reuse) a pooled project for a token and persist it.
-
-        Google 已停用旧版 project.createProject 接口，自动建项目不再可行。
-        因此这里优先复用从浏览器导入的真实项目 ID，避免生成不存在的假项目。
-        """
+        """Create a new pooled project for a token and persist it."""
         project_name = self._build_project_name(pool_index, base_name)
-        reusable_project_id = str(getattr(token, "current_project_id", "") or "").strip()
-        if not reusable_project_id:
-            reusable_project_id = await self.flow_client.create_project(token.st, project_name)
-            debug_logger.log_info(
-                f"[PROJECT] Created pooled project for token {token.id}: {project_name} ({reusable_project_id})"
-            )
-
-        # 真实项目 ID 只能对应一条记录（projects.project_id 有唯一约束），已存在则直接复用
-        existing_projects = await self.db.get_projects_by_token(token.id)
-        for item in existing_projects:
-            if str(item.project_id or "").strip() == reusable_project_id:
-                debug_logger.log_info(
-                    f"[PROJECT] 复用已有池项目 {reusable_project_id}（跳过重复插入）"
-                )
-                return item
-
+        project_id = await self.flow_client.create_project(token.st, project_name)
+        debug_logger.log_info(
+            f"[PROJECT] Created pooled project for token {token.id}: {project_name} ({project_id})"
+        )
         project = Project(
-            project_id=reusable_project_id,
+            project_id=project_id,
             token_id=token.id,
             project_name=project_name,
         )
         project.id = await self.db.add_project(project)
-        debug_logger.log_info(
-            f"[PROJECT] 池项目已写入: {reusable_project_id} ({project_name})"
-        )
         return project
 
     def _select_next_project(self, token: Token, projects: List[Project]) -> Project:
@@ -332,7 +313,7 @@ class TokenManager:
                 except Exception:
                     pass
         except Exception as e:
-            raise ValueError(f"ST换取AT失败: {str(e)}")
+            raise ValueError(f"ST?AT??: {str(e)}")
 
         try:
             credits_result = await self.flow_client.get_credits(at)
@@ -356,20 +337,18 @@ class TokenManager:
                 tool_name="PINHOLE"
             ))
         else:
-            first_project_name = self._build_project_name(1, base_project_name)
             try:
+                first_project_name = self._build_project_name(1, base_project_name)
                 first_project_id = await self.flow_client.create_project(st, first_project_name)
                 debug_logger.log_info(f"[ADD_TOKEN] Created pooled project #1: {first_project_name} (ID: {first_project_id})")
+                pooled_projects.append(Project(
+                    project_id=first_project_id,
+                    token_id=0,
+                    project_name=first_project_name,
+                    tool_name="PINHOLE"
+                ))
             except Exception as e:
-                import uuid
-                first_project_id = str(uuid.uuid4())
-                debug_logger.log_warning(f"[ADD_TOKEN] 创建项目异常，自动降级使用独立项目ID: {first_project_id} (错误: {e})")
-            pooled_projects.append(Project(
-                project_id=first_project_id,
-                token_id=0,
-                project_name=first_project_name,
-                tool_name="PINHOLE"
-            ))
+                raise ValueError(f"??????: {str(e)}")
 
         token = Token(
             st=st,
@@ -434,14 +413,13 @@ class TokenManager:
         proxy_url: Optional[str] = None,
         auto_refresh_enabled: Optional[bool] = None,
         refresh_interval_minutes: Optional[int] = None,
-        current_project_id: Optional[str] = None,
-        **kwargs,
+        last_st_refresh_at: Optional[datetime] = None,
+        last_st_refresh_result: Optional[str] = None,
     ):
         """Update token (支持修改project_id和project_name)
 
         当用户编辑保存token时，如果token未过期，自动清空429禁用状态
         """
-        project_id = project_id or current_project_id
         update_fields = {}
         credential_updated = any(value is not None for value in (st, at, at_expires))
 
@@ -453,12 +431,6 @@ class TokenManager:
             update_fields["at_expires"] = at_expires
         if project_id is not None:
             update_fields["current_project_id"] = project_id
-            # Google 已停用旧版建项目接口，导入真实项目ID后，重置该项目池，
-            # 避免继续使用此前本地伪造的假项目ID导致出图 403。
-            try:
-                await self.db.replace_projects_for_token(token_id, project_id)
-            except Exception as exc:
-                debug_logger.log_warning(f"[UPDATE_TOKEN] 重置项目池失败: {exc}")
         if project_name is not None:
             update_fields["current_project_name"] = project_name
         if remark is not None:
@@ -489,6 +461,10 @@ class TokenManager:
             update_fields["auto_refresh_enabled"] = bool(auto_refresh_enabled)
         if refresh_interval_minutes is not None:
             update_fields["refresh_interval_minutes"] = self._normalize_refresh_interval(refresh_interval_minutes)
+        if last_st_refresh_at is not None:
+            update_fields["last_st_refresh_at"] = last_st_refresh_at
+        if last_st_refresh_result is not None:
+            update_fields["last_st_refresh_result"] = last_st_refresh_result
 
         # 检查token是否因429被禁用，如果是且未过期，则清空429状态
         token = await self.db.get_token(token_id)
@@ -1004,6 +980,11 @@ class TokenManager:
             await self.db.increment_token_stats(token_id, "image")
 
     async def _request_extension_account_sync(self, token_id: int, reason: str) -> None:
+        if not config.extension_account_sync_enabled:
+            debug_logger.log_info(
+                f"[TOKEN_SYNC] Extension account sync disabled for token {token_id}; reason={reason}"
+            )
+            return
         try:
             from .browser_captcha_extension import ExtensionCaptchaService
 

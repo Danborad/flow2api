@@ -48,6 +48,31 @@ class ExtensionCaptchaService:
             client_label=(websocket.query_params.get("client_label") or "").strip(),
             extension_version=(websocket.query_params.get("extension_version") or "").strip(),
         )
+
+        duplicate_connections = [
+            existing
+            for existing in list(self.active_connections)
+            if existing.websocket is not websocket
+            and existing.route_key == conn.route_key
+        ]
+        for existing in duplicate_connections:
+            self.active_connections.remove(existing)
+            for req_id, (future, owner_websocket) in list(self.pending_requests.items()):
+                if owner_websocket is not existing.websocket:
+                    continue
+                self.pending_requests.pop(req_id, None)
+                if not future.done():
+                    future.set_exception(RuntimeError("Extension route reconnected before captcha response"))
+            try:
+                await existing.websocket.close(code=1000)
+            except Exception:
+                pass
+            debug_logger.log_warning(
+                f"[Extension Captcha] Replaced duplicate route connection: "
+                f"route_key={conn.route_key or '-'}, old_label={existing.client_label or '-'}, "
+                f"new_label={conn.client_label or '-'}"
+            )
+
         self.active_connections.append(conn)
         debug_logger.log_info(
             f"[Extension Captcha] Client connected. Total: {len(self.active_connections)}, "
@@ -236,10 +261,6 @@ class ExtensionCaptchaService:
 
             if result.get("status") == "success":
                 self.last_error = None
-                self.last_user_agent = result.get("user_agent")
-                self.last_origin = result.get("origin")
-                self.last_referer = result.get("referer")
-                self.last_project_id = result.get("project_id")
                 return result.get("token")
 
             error_msg = result.get("error") or "Unknown error from extension"
@@ -254,6 +275,58 @@ class ExtensionCaptchaService:
         except Exception as e:
             self.last_error = str(e)
             debug_logger.log_error(f"[Extension Captcha] Communication error: {e}")
+            return None
+        finally:
+            self.pending_requests.pop(req_id, None)
+
+    async def get_token_bundle(
+        self,
+        project_id: str,
+        action: str = "IMAGE_GENERATION",
+        timeout: int = 20,
+        token_id: Optional[int] = None,
+    ) -> Optional[Dict[str, Any]]:
+        if not self.active_connections:
+            raise RuntimeError("Chrome Extension not connected or Google Labs tab not open.")
+
+        route_key = await self._resolve_route_key(token_id)
+        conn = self._select_connection(route_key)
+        if conn is None:
+            available = self._describe_routes() or "none"
+            raise RuntimeError(
+                f"No Chrome Extension connection matches token_id={token_id} route_key='{route_key}'. "
+                f"Available route keys: {available}"
+            )
+
+        req_id = f"req_{uuid.uuid4().hex}"
+        future = asyncio.get_running_loop().create_future()
+        self.pending_requests[req_id] = (future, conn.websocket)
+        request_data = {
+            "type": "get_token",
+            "req_id": req_id,
+            "action": action,
+            "project_id": project_id,
+            "route_key": route_key,
+        }
+        try:
+            await conn.websocket.send_text(json.dumps(request_data))
+            result = await asyncio.wait_for(future, timeout=timeout)
+            if result.get("status") != "success":
+                self.last_error = result.get("error") or "Unknown error from extension"
+                return None
+
+            token = str(result.get("token") or "").strip()
+            if not token:
+                self.last_error = "Extension returned an empty captcha token"
+                return None
+            fingerprint = result.get("fingerprint") if isinstance(result.get("fingerprint"), dict) else {}
+            self.last_error = None
+            return {"token": token, "fingerprint": fingerprint}
+        except asyncio.TimeoutError:
+            self.last_error = f"等待插件打码超时 ({timeout}秒)"
+            return None
+        except Exception as e:
+            self.last_error = str(e)
             return None
         finally:
             self.pending_requests.pop(req_id, None)

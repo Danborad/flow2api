@@ -173,13 +173,8 @@ const STATE = { selectedModel: null, modelConfig: null, images: [], generating: 
 <script>
 // Model categories for sidebar
 const MODEL_CATEGORIES = {
-  "Gemini 3.1 Flash 图片": { filter: m => m.startsWith("gemini-3.1-flash-image") },
-  "Gemini 3.0 Pro 图片": { filter: m => m.startsWith("gemini-3.0-pro-image") },
-  "Imagen 4.0 图片": { filter: m => m.startsWith("imagen-4.0") },
-  "Veo 3.1 文生视频 (T2V)": { filter: m => m.startsWith("veo_3_1_t2v") && !m.includes("4k") && !m.includes("1080p") },
-  "Veo 3.1 图生视频 (I2V)": { filter: m => m.startsWith("veo_3_1_i2v") && !m.includes("4k") && !m.includes("1080p") },
-  "Veo 3.1 多图视频 (R2V)": { filter: m => m.startsWith("veo_3_1_r2v") && !m.includes("4k") && !m.includes("1080p") },
-  "视频放大 (Upsample)": { filter: m => m.includes("4k") || m.includes("1080p") },
+  "图片生成": { filter: m => getModelType(m) === "image" },
+  "视频生成": { filter: m => getModelType(m) === "video" },
 };
 
 const FALLBACK_MODELS = {
@@ -285,20 +280,20 @@ async function loadModels() {
     return;
   }
   try {
-    const resp = await fetch(`${baseUrl}/v1/models`, {
+    const resp = await fetch(`${baseUrl}/models`, {
       headers: { "Authorization": `Bearer ${apiKey}` }
     });
     if (!resp.ok) {
       throw new Error(`HTTP ${resp.status}`);
     }
     const data = await resp.json();
-    const items = Array.isArray(data.data) ? data.data : [];
+    const items = Array.isArray(data.models) ? data.models : [];
     if (!items.length) {
       applyFallbackModels("empty_model_catalog");
       return;
     }
     ALL_MODELS = {};
-    items.forEach(m => { ALL_MODELS[m.id] = m.description; });
+    items.forEach(m => { ALL_MODELS[m.name.replace(/^models\//, "")] = m.description; });
     renderSidebar();
   } catch (e) {
     console.error("加载模型失败:", e);
@@ -311,7 +306,7 @@ function renderSidebarFallback() {
 }
 
 function getModelType(modelId) {
-  if (modelId.includes("image") || modelId.startsWith("imagen")) return "image";
+  if (/image|imagen|banana/i.test(modelId)) return "image";
   return "video";
 }
 
@@ -319,10 +314,13 @@ function getModelMeta(modelId) {
   // Determine supports_images, min/max from model name patterns
   const isI2V = modelId.includes("i2v");
   const isR2V = modelId.includes("r2v");
-  const isT2V = modelId.includes("t2v");
+  const isOmni = /omni/i.test(modelId);
+  const isPublicVeo = /^Veo 3\.1 - (Lite|Fast|Quality)$/.test(modelId);
   const isImage = getModelType(modelId) === "image";
 
   if (isImage) return { type: "image", supportsImages: true, minImages: 0, maxImages: 5 };
+  if (isOmni) return { type: "video", supportsImages: true, minImages: 0, maxImages: 3 };
+  if (isPublicVeo) return { type: "video", supportsImages: true, minImages: 0, maxImages: modelId.endsWith("Fast") ? 3 : 2 };
   if (isI2V) return { type: "video", supportsImages: true, minImages: 1, maxImages: 2 };
   if (isR2V) return { type: "video", supportsImages: true, minImages: 0, maxImages: 3 };
   return { type: "video", supportsImages: false, minImages: 0, maxImages: 0 };
@@ -490,16 +488,12 @@ async function generate() {
   const log = document.getElementById("outputLog");
   const appendLog = (text) => { log.textContent += text; log.scrollTop = log.scrollHeight; };
 
-  // Build messages
-  const content = [];
-  content.push({ type: "text", text: prompt });
+  const parts = [{ text: prompt }];
   STATE.images.forEach(dataUrl => {
-    content.push({ type: "image_url", image_url: { url: dataUrl } });
+    const match = /^data:([^;]+);base64,(.+)$/.exec(dataUrl);
+    if (match) parts.push({ inlineData: { mimeType: match[1], data: match[2] } });
   });
-
-  const messages = [{ role: "user", content: content.length === 1 ? prompt : content }];
-
-  const body = { model: STATE.selectedModel, messages, stream: true };
+  const body = { contents: [{ role: "user", parts }] };
 
   const startTime = Date.now();
   appendLog(`[${new Date().toLocaleTimeString()}] 模型: ${STATE.selectedModel}\n`);
@@ -507,9 +501,9 @@ async function generate() {
   appendLog(`[${new Date().toLocaleTimeString()}] 开始请求...\n`);
 
   try {
-    const resp = await fetch(`${baseUrl}/v1/chat/completions`, {
+    const resp = await fetch(`${baseUrl}/models/${encodeURIComponent(STATE.selectedModel)}:generateContent`, {
       method: "POST",
-      headers: { "Authorization": `Bearer ${apiKey}`, "Content-Type": "application/json" },
+      headers: { "x-goog-api-key": apiKey, "Content-Type": "application/json" },
       body: JSON.stringify(body),
     });
 
@@ -518,50 +512,15 @@ async function generate() {
       throw new Error(`HTTP ${resp.status}: ${errText}`);
     }
 
-    const reader = resp.body.getReader();
-    const decoder = new TextDecoder();
-    let fullContent = "";
-    let buffer = "";
-
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-
-      buffer += decoder.decode(value, { stream: true });
-      const lines = buffer.split("\n");
-      buffer = lines.pop() || "";
-
-      for (const line of lines) {
-        if (!line.startsWith("data: ")) continue;
-        const data = line.slice(6).trim();
-        if (data === "[DONE]") continue;
-
-        try {
-          const parsed = JSON.parse(data);
-          if (parsed.error) {
-            appendLog(`\n❌ 错误: ${JSON.stringify(parsed.error)}\n`);
-            continue;
-          }
-          const choices = parsed.choices || [];
-          if (choices.length > 0) {
-            const delta = choices[0].delta || {};
-            const content = delta.reasoning_content || delta.content || "";
-            if (content) {
-              fullContent += content;
-              appendLog(content);
-            }
-          }
-        } catch (e) {
-          // skip unparseable chunks
-        }
-      }
-    }
+    const payload = await resp.json();
+    if (payload.error) throw new Error(payload.error.message || JSON.stringify(payload.error));
+    const outputParts = payload.candidates?.[0]?.content?.parts || [];
 
     const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
     appendLog(`\n\n[${new Date().toLocaleTimeString()}] 完成，耗时 ${elapsed}s\n`);
 
     // Render result
-    renderResult(fullContent);
+    renderResult(outputParts);
     dot.className = "status-dot status-done";
     document.getElementById("statusText").textContent = `完成 (${elapsed}s)`;
 
@@ -577,38 +536,31 @@ async function generate() {
   }
 }
 
-function renderResult(content) {
+function renderResult(parts) {
   const resultDiv = document.getElementById("outputResult");
   resultDiv.innerHTML = "";
-
-  // Extract markdown images
-  const imgRegex = /!\[.*?\]\((.*?)\)/g;
-  let match;
-  while ((match = imgRegex.exec(content)) !== null) {
-    const img = document.createElement("img");
-    img.src = match[1];
-    img.alt = "生成结果";
-    img.loading = "lazy";
-    resultDiv.appendChild(img);
-  }
-
-  // Extract video tags
-  const videoRegex = /<video[^>]+src=['"]([^'"]+)['"]/gi;
-  while ((match = videoRegex.exec(content)) !== null) {
-    const video = document.createElement("video");
-    video.src = match[1];
-    video.controls = true;
-    video.autoplay = true;
-    video.loop = true;
-    resultDiv.appendChild(video);
-  }
-
-  // If no media found, show raw text
-  if (resultDiv.children.length === 0 && content.trim()) {
-    const pre = document.createElement("pre");
-    pre.style.cssText = "color:#aaa;font-size:13px;white-space:pre-wrap;word-break:break-all;";
-    pre.textContent = content;
-    resultDiv.appendChild(pre);
+  for (const part of parts) {
+    const uri = part.inlineData
+      ? `data:${part.inlineData.mimeType};base64,${part.inlineData.data}`
+      : part.fileData?.fileUri;
+    const mime = part.inlineData?.mimeType || part.fileData?.mimeType || "";
+    if (uri && mime.startsWith("image/")) {
+      const img = document.createElement("img");
+      img.src = uri;
+      img.alt = "生成结果";
+      img.loading = "lazy";
+      resultDiv.appendChild(img);
+    } else if (uri && mime.startsWith("video/")) {
+      const video = document.createElement("video");
+      video.src = uri;
+      video.controls = true;
+      resultDiv.appendChild(video);
+    } else if (part.text) {
+      const pre = document.createElement("pre");
+      pre.style.cssText = "color:#aaa;font-size:13px;white-space:pre-wrap;word-break:break-all;";
+      pre.textContent = part.text;
+      resultDiv.appendChild(pre);
+    }
   }
 }
 

@@ -8,6 +8,7 @@ import random
 import base64
 import gzip
 import ssl
+import os
 import re
 from typing import Dict, Any, Optional, List, Union, Callable, Awaitable
 from urllib.parse import quote, urljoin, urlparse
@@ -26,7 +27,7 @@ except ImportError:
 class FlowClient:
     """VideoFX API客户端"""
 
-    FLOW_PUBLIC_API_KEY = "AIzaSyBtrm0o5ab1c-Ec8ZuLcGt3oJAA5VWt3pY"
+    FLOW_PUBLIC_API_KEY = os.getenv("FLOW_PUBLIC_API_KEY", "")
     FLOW_BROWSER_CHANNEL_HEADER = "stable"
     FLOW_BROWSER_COPYRIGHT_HEADER = "Copyright 2026 Google LLC. All Rights Reserved."
     FLOW_BROWSER_VALIDATION_HEADER = "MRCPrt/rS3JY47x2Yiz9h3ag4U8="
@@ -280,13 +281,60 @@ class FlowClient:
             return raw_existing or None
         return "; ".join(f"{key}={value}" for key, value in cookie_items.items())
 
+    def _apply_runtime_browser_context_headers(
+        self,
+        headers: Optional[Dict[str, Any]],
+        url: str,
+        json_data: Optional[Dict[str, Any]],
+    ) -> Dict[str, Any]:
+        merged_headers = dict(headers or {})
+        fingerprint = self.get_request_fingerprint()
+        if isinstance(fingerprint, dict):
+            explicit_headers = {
+                "User-Agent": fingerprint.get("user_agent"),
+                "Accept-Language": fingerprint.get("accept_language"),
+                "sec-ch-ua": fingerprint.get("sec_ch_ua"),
+                "sec-ch-ua-mobile": fingerprint.get("sec_ch_ua_mobile"),
+                "sec-ch-ua-platform": fingerprint.get("sec_ch_ua_platform"),
+            }
+            for header_name, value in explicit_headers.items():
+                normalized = str(value or "").strip()
+                if normalized:
+                    merged_headers[header_name] = normalized
+
+        if self._should_attach_runtime_session_cookies(url):
+            derived_project_id = self._extract_project_id_from_request_payload(json_data)
+            if isinstance(fingerprint, dict):
+                origin = str(fingerprint.get("origin") or "").strip()
+                referer = str(fingerprint.get("referer") or "").strip()
+                if not referer:
+                    fingerprint_project_id = str(fingerprint.get("project_id") or "").strip()
+                    if fingerprint_project_id:
+                        referer = self._build_flow_project_page_url(fingerprint_project_id)
+                if origin:
+                    merged_headers["Origin"] = origin
+                if referer:
+                    merged_headers["Referer"] = referer
+                merged_cookie_header = self._merge_cookie_header(
+                    merged_headers.get("Cookie"),
+                    fingerprint.get("session_cookies"),
+                )
+                if merged_cookie_header:
+                    merged_headers["Cookie"] = merged_cookie_header
+
+            merged_headers.setdefault("Origin", "https://labs.google")
+            if derived_project_id:
+                merged_headers.setdefault("Referer", self._build_flow_project_page_url(derived_project_id))
+
+        return merged_headers
+
     def _build_flow_project_page_url(self, project_id: str) -> str:
         return f"https://labs.google/fx/tools/flow/project/{project_id}"
 
     def _build_current_flow_media_headers(
         self,
         *,
-        content_type: str = "text/plain;charset=UTF-8",
+        content_type: str = "application/json",
     ) -> Dict[str, str]:
         headers = {
             "Accept": "*/*",
@@ -442,35 +490,9 @@ class FlowClient:
         if not headers.get("sec-ch-ua-mobile") and inferred_fingerprint.get("sec_ch_ua_mobile"):
             headers["sec-ch-ua-mobile"] = inferred_fingerprint["sec_ch_ua_mobile"]
 
-        if isinstance(fingerprint, dict) and self._should_attach_runtime_session_cookies(url):
-            origin = str(fingerprint.get("origin") or "").strip() or "https://flow.google.com"
-            referer = str(fingerprint.get("referer") or "").strip()
-            if not referer:
-                fingerprint_project_id = str(fingerprint.get("project_id") or "").strip()
-                if fingerprint_project_id:
-                    referer = f"https://flow.google.com/project/{fingerprint_project_id}"
-            if origin:
-                headers["Origin"] = origin
-            if referer:
-                headers["Referer"] = referer
-            merged_cookie_header = self._merge_cookie_header(
-                headers.get("Cookie"),
-                fingerprint.get("session_cookies"),
-            )
-            if merged_cookie_header:
-                headers["Cookie"] = merged_cookie_header
-
-        if self._should_attach_runtime_session_cookies(url):
-            derived_project_id = self._extract_project_id_from_request_payload(json_data)
-            headers.setdefault("Origin", "https://flow.google.com")
-            if derived_project_id:
-                headers.setdefault("Referer", f"https://flow.google.com/project/{derived_project_id}")
-
-        # 针对图片/媒体生成强校验接口，与 Labs 官方前端保持 100% 同源对齐
-        if "/projects/" in url and "/flowMedia:" in url:
-            headers["Origin"] = "https://labs.google"
-            headers["Referer"] = "https://labs.google/"
-            headers["Content-Type"] = "text/plain;charset=UTF-8"
+        headers = self._apply_runtime_browser_context_headers(headers, url, json_data)
+        if isinstance(fingerprint, dict) and fingerprint.get("user_agent"):
+            impersonate = self._resolve_runtime_impersonate(fallback=impersonate)
 
         request_body_for_log = raw_body if raw_body is not None else json_data
         if config.debug_enabled:
@@ -539,8 +561,6 @@ class FlowClient:
                     except Exception:
                         error_reason = f"HTTP Error {response.status_code}: {response.text[:200]}"
 
-                    import logging
-                    logging.getLogger("uvicorn.error").error(f"[API FAILED HTTP {response.status_code}] URL: {url} | Response: {response.text[:200]}")
                     debug_logger.log_error(f"[API FAILED] URL: {url}")
                     debug_logger.log_error(f"[API FAILED] Request Body: {request_body_for_log}")
                     debug_logger.log_error(f"[API FAILED] Response: {response.text}")
@@ -652,34 +672,13 @@ class FlowClient:
                 headers["sec-ch-ua-mobile"] = fingerprint["sec_ch_ua_mobile"]
             if fingerprint.get("sec_ch_ua_platform"):
                 headers["sec-ch-ua-platform"] = fingerprint["sec_ch_ua_platform"]
-            if self._should_attach_runtime_session_cookies(url):
-                origin = str(fingerprint.get("origin") or "").strip() or "https://labs.google"
-                referer = str(fingerprint.get("referer") or "").strip()
-                if not referer:
-                    fingerprint_project_id = str(fingerprint.get("project_id") or "").strip()
-                    if fingerprint_project_id:
-                        referer = self._build_flow_project_page_url(fingerprint_project_id)
-                if origin:
-                    headers.setdefault("Origin", origin)
-                if referer:
-                    headers.setdefault("Referer", referer)
-            if self._should_attach_runtime_session_cookies(url):
-                merged_cookie_header = self._merge_cookie_header(
-                    headers.get("Cookie"),
-                    fingerprint.get("session_cookies"),
-                )
-                if merged_cookie_header:
-                    headers["Cookie"] = merged_cookie_header
-
         if apply_default_client_headers:
             for key, value in self._default_client_headers.items():
                 headers.setdefault(key, value)
 
-        if self._should_attach_runtime_session_cookies(url):
-            derived_project_id = self._extract_project_id_from_request_payload(json_data)
-            headers.setdefault("Origin", "https://labs.google")
-            if derived_project_id:
-                headers.setdefault("Referer", self._build_flow_project_page_url(derived_project_id))
+        headers = self._apply_runtime_browser_context_headers(headers, url, json_data)
+        if isinstance(fingerprint, dict) and fingerprint.get("user_agent"):
+            impersonate = self._resolve_runtime_impersonate(fallback=impersonate)
 
         inferred_fingerprint = self._build_fingerprint_from_user_agent(
             headers.get("User-Agent"),
@@ -1277,14 +1276,6 @@ class FlowClient:
                 return project_id
             except Exception as e:
                 last_error = e
-                error_str = str(e).lower()
-                if "deprecated" in error_str or "404" in error_str:
-                    import uuid
-                    gen_id = str(uuid.uuid4())
-                    debug_logger.log_warning(
-                        f"[PROJECT] Google已正式停用旧版创建项目接口，已自动生成独立项目ID: {gen_id}"
-                    )
-                    return gen_id
                 retry_reason = "网络超时" if self._is_timeout_error(e) else self._get_retry_reason(str(e))
                 if retry_reason and retry_attempt < max_retries - 1:
                     debug_logger.log_warning(
@@ -1689,28 +1680,6 @@ class FlowClient:
                 raise last_error
             if progress_callback is not None:
                 await progress_callback("submitting_image", 48)
-
-            if config.captcha_method == "extension":
-                try:
-                    from .browser_captcha_extension import ExtensionCaptchaService
-                    ext_svc = await ExtensionCaptchaService.get_instance(self.db)
-                    real_pid = getattr(ext_svc, "last_project_id", None)
-                    if not real_pid:
-                        fp_ref = (self._request_fingerprint_ctx.get() or {}).get("referer", "")
-                        ref = getattr(ext_svc, "last_referer", "") or fp_ref
-                        ref_match = re.search(r"/project/([0-9a-fA-F-]+)", str(ref or ""))
-                        if ref_match:
-                            real_pid = ref_match.group(1)
-                    if real_pid and self._is_uuid(real_pid):
-                        if real_pid != project_id:
-                            debug_logger.log_info(f"[IMAGE] 对齐插件页面真实项目ID: {real_pid} (原: {project_id})")
-                            project_id = real_pid
-                            url = f"{self.api_base_url}/projects/{project_id}/flowMedia:batchGenerateImages"
-                            if token_id and self.db:
-                                await self.db.update_token(token_id, current_project_id=project_id)
-                except Exception as ex:
-                    debug_logger.log_warning(f"[IMAGE] 对齐真实项目ID异常: {ex}")
-
             session_id = self._generate_session_id()
 
             # 构建请求 - 新版接口在外层和 requests 内都带 clientContext
@@ -3264,7 +3233,7 @@ class FlowClient:
             request_data = {
                 "aspectRatio": aspect_ratio,
                 "seed": request_seed,
-                "textInput": self._build_video_text_input(prompt, use_v2_model_config=True),
+                "textInput": self._build_video_text_input(prompt, use_v2_model_config=use_v2_model_config),
                 "videoModelKey": model_key,
                 "startImage": {
                     "mediaId": start_media_id
@@ -3278,7 +3247,7 @@ class FlowClient:
                 "mediaGenerationContext": self._build_video_media_generation_context(batch_id),
                 "clientContext": client_context,
                 "requests": [request_data],
-                "useV2ModelConfig": True,
+                "useV2ModelConfig": use_v2_model_config,
             }
 
             try:
@@ -4585,29 +4554,28 @@ class FlowClient:
                 from .browser_captcha_extension import ExtensionCaptchaService
                 service = await ExtensionCaptchaService.get_instance(self.db)
                 extension_timeout = 135 if action == "VIDEO_GENERATION" else 75
-                token = await service.get_token(
+                solve_bundle = await service.get_token_bundle(
                     project_id,
                     action,
                     timeout=extension_timeout,
                     token_id=token_id
                 )
+                token = str((solve_bundle or {}).get("token") or "").strip() or None
+                fingerprint = (
+                    solve_bundle.get("fingerprint")
+                    if isinstance(solve_bundle, dict) and isinstance(solve_bundle.get("fingerprint"), dict)
+                    else None
+                )
+                if token and fingerprint:
+                    next_fingerprint = dict(fingerprint)
+                    next_fingerprint["project_id"] = project_id
+                    self._set_request_fingerprint(next_fingerprint)
+                else:
+                    self._set_request_fingerprint(None)
                 if token:
                     self._last_recaptcha_error = None
-                    captcha_ua = getattr(service, "last_user_agent", None)
-                    captcha_origin = getattr(service, "last_origin", None) or "https://flow.google.com"
-                    captcha_referer = getattr(service, "last_referer", None) or f"{captcha_origin}/"
-                    merged_fp = {
-                        "user_agent": captcha_ua,
-                        "origin": captcha_origin,
-                        "referer": captcha_referer,
-                    }
-                    self._set_request_fingerprint(merged_fp)
-                    debug_logger.log_info(
-                        f"[reCAPTCHA extension] 已将插件打码真实环境注入请求指纹: UA={captcha_ua[:50] if captcha_ua else 'None'}, Origin={captcha_origin}"
-                    )
                     return token, None
                 self._last_recaptcha_error = service.last_error or "插件未返回有效验证码"
-                self._set_request_fingerprint(None)
                 return None, None
             except Exception as e:
                 debug_logger.log_error(f"[reCAPTCHA Extension] 错误: {str(e)}")

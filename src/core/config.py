@@ -411,6 +411,11 @@ class Config:
         self._config["captcha"]["captcha_method"] = method
 
     @property
+    def extension_account_sync_enabled(self) -> bool:
+        """Allow Flow2API to ask the extension to re-import browser credentials."""
+        return bool(self._config.get("captcha", {}).get("extension_account_sync_enabled", True))
+
+    @property
     def browser_launch_background(self) -> bool:
         """有头浏览器打码是否默认后台启动，避免抢占前台窗口。"""
         return self._config.get("captcha", {}).get("browser_launch_background", True)

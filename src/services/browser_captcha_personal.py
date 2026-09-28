@@ -56,7 +56,7 @@ def resolve_effective_personal_max_resident_tabs(value) -> int:
     return current
 
 PERSONAL_COOKIE_PREBIND_URL = "about:blank"
-PERSONAL_LABS_BOOTSTRAP_URL = "https://labs.google/fx/tools/flow"
+PERSONAL_LABS_BOOTSTRAP_URL = "https://labs.google/fx/api/auth/providers"
 PERSONAL_COOKIE_TARGET_URLS = (
     "https://labs.google/",
     "https://www.google.com/",
@@ -7158,7 +7158,8 @@ class BrowserCaptchaService:
             return False
 
         host = str(parsed.netloc or "").strip().lower()
-        return host in {"labs.google", "flow.google.com"}
+        path = str(parsed.path or "").strip()
+        return host == "labs.google" and path.rstrip("/") == "/fx/api/auth/providers"
 
     async def _open_labs_bootstrap_page(self, tab, *, label: str) -> bool:
         """在 cookie 绑定之后再首跳 labs.google，避免首轮 anchor/reload 丢 cookie。"""

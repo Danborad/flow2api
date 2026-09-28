@@ -1109,6 +1109,156 @@ class GenerationHandler:
             flow_client=flow_client,
         )
 
+    async def submit_gemini_video(self, model: str, prompt: str, images: List[bytes]) -> str:
+        model_config = MODEL_CONFIG[model]
+        token = await self.load_balancer.select_token(
+            for_video_generation=True, model=model, reserve=False,
+            enforce_concurrency_filter=False, track_pending=True,
+        )
+        if not token:
+            raise ValueError("No available video token")
+        token_id = token.id
+        try:
+            token = await self.token_manager.ensure_valid_token(token)
+            if not token:
+                raise ValueError("Video access token is invalid")
+            if not supports_model_for_tier(model, token.user_paygate_tier):
+                raise ValueError("Account tier does not support this video model")
+            project_id = await self.token_manager.ensure_project_exists(token.id)
+            await self.flow_client.prefill_remote_browser_pool(
+                project_id=project_id, action="VIDEO_GENERATION", token_id=token.id,
+            )
+            model_key, _ = self._resolve_video_model_key_for_tier(
+                model_config, normalize_user_paygate_tier(token.user_paygate_tier),
+            )
+            kwargs = dict(
+                at=token.at, project_id=project_id, prompt=prompt,
+                aspect_ratio=model_config["aspect_ratio"],
+                user_paygate_tier=normalize_user_paygate_tier(token.user_paygate_tier),
+                token_id=token.id, token_video_concurrency=token.video_concurrency,
+            )
+            if images:
+                image_count = len(images)
+                if model_config.get("video_type") not in {"i2v", "omni"} or not 1 <= image_count <= model_config.get("max_images", 0):
+                    raise ValueError("Model does not support this number of input images")
+                media_ids = [
+                    await self.flow_client.upload_image(
+                        token.at, image, model_config["aspect_ratio"], project_id=project_id,
+                    )
+                    for image in images
+                ]
+                if image_count == 2:
+                    if model_config["video_type"] == "omni":
+                        model_key = model_config.get("start_end_model_key", "abra_i2v_8s")
+                    result = await self.flow_client.generate_video_start_end(
+                        **kwargs, model_key=model_key, start_media_id=media_ids[0], end_media_id=media_ids[1],
+                        use_v2_model_config=bool(model_config.get("use_v2_model_config", False)),
+                    )
+                else:
+                    if model_config["video_type"] == "omni":
+                        model_key = model_config.get("first_frame_model_key", "abra_i2v_8s")
+                    else:
+                        model_key = model_key.replace("_fl_", "_")
+                        if model_key.endswith("_fl"):
+                            model_key = model_key[:-3]
+                    result = await self.flow_client.generate_video_start_image(
+                        **kwargs, model_key=model_key, start_media_id=media_ids[0], use_v2_model_config=True,
+                    )
+            else:
+                if model_config.get("video_type") not in {"t2v", "omni"}:
+                    raise ValueError("Model requires an input image")
+                result = await self.flow_client.generate_video_text(
+                    **kwargs, model_key=model_key,
+                    use_v2_model_config=bool(model_config.get("use_v2_model_config", False)),
+                )
+            operations = result.get("operations") or []
+            if not operations:
+                raise RuntimeError("Video submission returned no operation")
+            operation = operations[0]
+            operation_id = (operation.get("operation") or {}).get("name")
+            if not operation_id:
+                raise RuntimeError("Video submission returned no operation ID")
+            await self.db.create_task(Task(
+                task_id=operation_id, token_id=token.id, model=model_key, prompt=prompt,
+                status="processing", scene_id=operation.get("sceneId"), project_id=project_id,
+                media_name=operation.get("mediaName") or operation_id,
+            ))
+            return f"operations/{operation_id}"
+        finally:
+            await self.load_balancer.release_pending(token_id, for_video_generation=True)
+
+    async def get_gemini_video_operation(self, name: str) -> Optional[Dict[str, Any]]:
+        operation_id = name.removeprefix("operations/")
+        task = await self.db.get_task(operation_id)
+        if not task or not task.project_id:
+            return None
+        if task.status == "processing":
+            token = await self.db.get_token(task.token_id)
+            if not token:
+                raise ValueError("Video account is no longer available")
+            token = await self.token_manager.ensure_valid_token(token)
+            if not token:
+                raise ValueError("Video access token is invalid")
+            operation = {
+                "operation": {"name": task.task_id},
+                "mediaName": task.media_name or task.task_id,
+                "projectId": task.project_id,
+            }
+            result = await self.flow_client.check_video_status(token.at, [operation])
+            checked = result.get("operations") or []
+            if checked:
+                checked_operation = checked[0]
+                status = checked_operation.get("status") or ""
+                if status == "MEDIA_GENERATION_STATUS_SUCCESSFUL":
+                    media_name = checked_operation.get("mediaName") or task.media_name or operation_id
+                    try:
+                        video = await self._resolve_video_asset(token, checked_operation)
+                        video_url = video["video_url"]
+                    except Exception as exc:
+                        debug_logger.log_warning(f"[GEMINI VIDEO] Media redirect pending: {exc}")
+                        video_url = ""
+                    if not video_url:
+                        media = await self.flow_client.get_media(token.at, media_name)
+                        encoded = (media.get("video") or {}).get("encodedVideo") or ""
+                        if encoded:
+                            filename = await self.file_cache.cache_base64_video(encoded)
+                            video_url = f"/tmp/{filename}"
+                    if video_url:
+                        await self.db.update_task(
+                            operation_id, status="completed", progress=100,
+                            media_name=media_name, result_urls=[video_url], completed_at=time.time(),
+                        )
+                        await self.token_manager.record_usage(token.id, is_video=True)
+                        await self.token_manager.record_success(token.id)
+                elif status == "MEDIA_GENERATION_STATUS_FAILED" or status.startswith("MEDIA_GENERATION_STATUS_ERROR"):
+                    error = (checked_operation.get("operation") or {}).get("error") or {}
+                    await self.db.update_task(
+                        operation_id, status="failed", completed_at=time.time(),
+                        error_message=error.get("message") or status,
+                    )
+            task = await self.db.get_task(operation_id)
+        if task.status == "completed" and task.result_urls:
+            video_url = task.result_urls[0]
+            if video_url.startswith("/tmp/") and not (self.file_cache.cache_dir / Path(video_url).name).is_file():
+                token = await self.db.get_token(task.token_id)
+                token = await self.token_manager.ensure_valid_token(token) if token else None
+                if not token or not task.media_name:
+                    raise ValueError("Video cache expired and account is unavailable")
+                media = await self.flow_client.get_media(token.at, task.media_name)
+                encoded = (media.get("video") or {}).get("encodedVideo") or ""
+                if not encoded:
+                    raise RuntimeError("Video cache expired and upstream media is unavailable")
+                filename = await self.file_cache.cache_base64_video(encoded)
+                await self.db.update_task(operation_id, result_urls=[f"/tmp/{filename}"])
+                task = await self.db.get_task(operation_id)
+        if task.status == "failed":
+            return {"name": name, "done": True, "error": {"code": 500, "message": task.error_message or "Video generation failed"}}
+        if task.status == "completed" and task.result_urls:
+            return {"name": name, "done": True, "response": {"generateVideoResponse": {
+                "generatedSamples": [{"video": {"uri": task.result_urls[0]}}],
+            }}}
+        return {"name": name, "done": False}
+
     def _create_generation_result(self) -> Dict[str, Any]:
         """????????????????"""
         return dict(success=False, error_message=None, error_emitted=False)

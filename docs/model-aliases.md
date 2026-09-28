@@ -90,159 +90,9 @@
 - **【素材】模式（视频参考/素材输入）**：支持传入一段 10 秒以内的视频作为素材，生成视频的时长将**随素材而定（最高 10 秒）**，固定消耗 **20 点数**。
 - 视频输出分辨率当前使用 Flow 默认档；`360p/720p` 选择不改变公开 API 的模型路由。
 
-这意味着画布/工作流应用不需要显式切换到 `veo-i2v-*` 或 `veo-r2v-*` 这类内部模型，只要把图片按 OpenAI/Gemini 标准方式传给上述公开模型名即可。
+这意味着画布/工作流应用不需要显式切换到 `veo-i2v-*` 或 `veo-r2v-*` 这类内部模型，只要把图片放入 Gemini `contents[].parts[].inlineData` 并使用上述公开模型名即可。
 
 兼容别名：`veo`、`veo-fast`、`veo-lite`、`veo-i2v`、`veo-i2v-fast`、`veo-r2v` 等上一版短名仍然可调用，但默认模型列表不展示。
-
-## OpenAI 兼容接口示例
-
-### Nano Banana Pro 竖屏 4K 图
-
-```bash
-curl -X POST "http://localhost:8000/v1/chat/completions" \
-  -H "Authorization: Bearer $FLOW2API_KEY" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "model": "Nano Banana Pro",
-    "messages": [
-      {"role": "user", "content": "一只白猫坐在雨后的霓虹街头，电影感"}
-    ],
-    "generationConfig": {
-      "imageConfig": {
-        "aspectRatio": "9:16",
-        "imageSize": "4k"
-      }
-    },
-    "stream": true
-  }'
-```
-
-### Nano Banana 2 方图 2K
-
-```bash
-curl -X POST "http://localhost:8000/v1/chat/completions" \
-  -H "Authorization: Bearer $FLOW2API_KEY" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "model": "Nano Banana 2",
-    "messages": [
-      {"role": "user", "content": "一个透明玻璃苹果，白底产品摄影"}
-    ],
-    "generationConfig": {
-      "imageConfig": {
-        "aspectRatio": "1:1",
-        "imageSize": "2k"
-      }
-    },
-    "stream": true
-  }'
-```
-
-### Veo 竖屏 1080P 文生视频
-
-```bash
-curl -X POST "http://localhost:8000/v1/chat/completions" \
-  -H "Authorization: Bearer $FLOW2API_KEY" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "model": "Veo 3.1 - Quality",
-    "messages": [
-      {"role": "user", "content": "一只小猫穿过晨雾中的花园，镜头缓慢推进"}
-    ],
-    "generationConfig": {
-      "aspectRatio": "9:16",
-      "imageSize": "1080p"
-    },
-    "stream": true
-  }'
-```
-
-### Omni 1.1 Flash 横屏 6 秒文生视频
-
-```bash
-curl -X POST "http://localhost:8000/v1/chat/completions" \
-  -H "Authorization: Bearer $FLOW2API_KEY" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "model": "Omni 1.1 Flash",
-    "messages": [
-      {"role": "user", "content": "一辆未来感跑车穿过夜晚城市，速度感强"}
-    ],
-    "generationConfig": {
-      "aspectRatio": "16:9",
-      "durationSeconds": 6
-    },
-    "stream": true
-  }'
-```
-
-### Veo Fast 竖屏文生视频
-
-```bash
-curl -X POST "http://localhost:8000/v1/chat/completions" \
-  -H "Authorization: Bearer $FLOW2API_KEY" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "model": "Veo 3.1 - Fast",
-    "messages": [
-      {"role": "user", "content": "雨夜赛博朋克城市街道，镜头向前推进"}
-    ],
-    "generationConfig": {
-      "aspectRatio": "9:16"
-    },
-    "stream": true
-  }'
-```
-
-### Veo Fast 单图生成视频
-
-```bash
-curl -X POST "http://localhost:8000/v1/chat/completions" \
-  -H "Authorization: Bearer $FLOW2API_KEY" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "model": "Veo 3.1 - Fast",
-    "messages": [
-      {
-        "role": "user",
-        "content": [
-          {"type": "text", "text": "让画面中的人物自然转身并向镜头走来"},
-          {"type": "image_url", "image_url": {"url": "data:image/jpeg;base64,<首帧base64>"}}
-        ]
-      }
-    ],
-    "generationConfig": {
-      "aspectRatio": "9:16"
-    },
-    "stream": true
-  }'
-```
-
-### Veo Fast 多图生成视频
-
-```bash
-curl -X POST "http://localhost:8000/v1/chat/completions" \
-  -H "Authorization: Bearer $FLOW2API_KEY" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "model": "Veo 3.1 - Fast",
-    "messages": [
-      {
-        "role": "user",
-        "content": [
-          {"type": "text", "text": "参考三张图的人物和场景，生成一段镜头平滑推进的视频"},
-          {"type": "image_url", "image_url": {"url": "data:image/jpeg;base64,<参考图1>"}},
-          {"type": "image_url", "image_url": {"url": "data:image/jpeg;base64,<参考图2>"}},
-          {"type": "image_url", "image_url": {"url": "data:image/jpeg;base64,<参考图3>"}}
-        ]
-      }
-    ],
-    "generationConfig": {
-      "aspectRatio": "16:9"
-    },
-    "stream": true
-  }'
-```
 
 ## Gemini 官方格式示例
 
@@ -268,6 +118,25 @@ curl -X POST "http://localhost:8000/models/Nano%20Banana2:generateContent" \
     }
   }'
 ```
+
+### Veo 文生视频
+
+```bash
+curl -X POST "http://localhost:8000/models/Veo%203.1%20-%20Lite:generateContent" \
+  -H "x-goog-api-key: $FLOW2API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"contents":[{"role":"user","parts":[{"text":"一只猫穿过晨雾中的花园"}]}],"generationConfig":{"aspectRatio":"16:9"}}'
+```
+
+### 首帧或多参考图视频
+
+将参考图放入 `contents[].parts[]`，例如首帧使用：
+
+```json
+{"contents":[{"role":"user","parts":[{"text":"让画面中的人物自然转身"},{"inlineData":{"mimeType":"image/jpeg","data":"<首帧base64>"}}]}],"generationConfig":{"aspectRatio":"9:16"}}
+```
+
+模型使用 `Veo 3.1 - Fast`；如需多参考图，添加最多 3 个 `inlineData` 图片部分。视频响应位于 `candidates[].content.parts[].fileData.fileUri`。
 
 ## 解析示例
 
@@ -297,23 +166,16 @@ labs.google/fx/api/trpc/media.getMediaUrlRedirect?name=<media_id>
 
 ## 模型列表接口
 
-默认模型列表现在只返回短模型名，适合外部应用直接展示：
-
-```bash
-curl "http://localhost:8000/v1/models" \
-  -H "Authorization: Bearer $FLOW2API_KEY"
-```
-
-Gemini 格式模型列表同样只返回短模型名：
+Gemini 模型列表只返回公开短模型名：
 
 ```bash
 curl "http://localhost:8000/models" \
   -H "x-goog-api-key: $FLOW2API_KEY"
 ```
 
-如果需要排查内部长模型 ID，可以用调试接口：
+如果需要排查内部长模型 ID，可以用 Gemini 格式调试接口：
 
 ```bash
-curl "http://localhost:8000/v1/models/internal" \
-  -H "Authorization: Bearer $FLOW2API_KEY"
+curl "http://localhost:8000/models/internal" \
+  -H "x-goog-api-key: $FLOW2API_KEY"
 ```
