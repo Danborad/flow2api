@@ -415,11 +415,14 @@ class TokenManager:
         proxy_url: Optional[str] = None,
         auto_refresh_enabled: Optional[bool] = None,
         refresh_interval_minutes: Optional[int] = None,
+        current_project_id: Optional[str] = None,
+        **kwargs,
     ):
         """Update token (支持修改project_id和project_name)
 
         当用户编辑保存token时，如果token未过期，自动清空429禁用状态
         """
+        project_id = project_id or current_project_id
         update_fields = {}
         credential_updated = any(value is not None for value in (st, at, at_expires))
 

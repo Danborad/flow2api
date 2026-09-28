@@ -897,7 +897,7 @@ async def import_current_browser_account(
         if existing:
             update_data = dict(**common_kwargs)
             if imported_project_id:
-                update_data["current_project_id"] = imported_project_id
+                update_data["project_id"] = imported_project_id
             await handler.token_manager.update_token(
                 token_id=existing.id,
                 st=session_token,
