@@ -1,5 +1,14 @@
 # Flow2API Captcha Worker 更新记录
 
+## 1.1.43
+
+- 过滤 Chrome 自动休眠（discarded）的标签页，杜绝向休眠标签页注入脚本导致的 Chrome 底层权限报错。
+- 增加 content_scripts 原生消息降级取码通道，当动态 executeScript 受阻时无缝完成验证码获取。
+
+## 1.1.42
+
+- 提取并回传打码标签页所属的真实 Google Flow 项目 ID，服务端请求路径精准对齐，解决假项目 ID 引起的 403 权限拒绝。
+
 ## 1.1.41
 
 - 将打码页面真实 Origin（如 flow.google.com）与 Referer 连同 User-Agent 完整回传并强覆盖服务端请求头，保证 Google 验证码校验 100% 同源同环境通过。

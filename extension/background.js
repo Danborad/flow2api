@@ -622,12 +622,13 @@ async function handleGetToken(data) {
         const projectUrl = projectId
             ? `https://flow.google.com/project/${encodeURIComponent(projectId)}`
             : "https://flow.google.com/";
-        const existingTabs = await chrome.tabs.query({
+        const rawTabs = await chrome.tabs.query({
             url: [
                 "https://flow.google.com/*",
                 "https://labs.google/fx/*"
             ]
         });
+        const existingTabs = rawTabs.filter(t => !t.discarded);
         const projectTab = projectId
             ? existingTabs.find(tab => tab.url && tab.url.includes(`/project/${projectId}`))
             : null;
@@ -648,7 +649,8 @@ async function handleGetToken(data) {
 
         // 获取标签页跳转后的最新 URL，若已被跳去登录页则优雅报错，避免向登录页注入触发 Chrome 权限异常
         const currentTab = await new Promise(r => chrome.tabs.get(targetTab.id, t => r(t || null)));
-        if (currentTab && currentTab.url && currentTab.url.includes("accounts.google.com")) {
+        if (currentTab && currentTab.url) targetTab = currentTab;
+        if (targetTab.url && targetTab.url.includes("accounts.google.com")) {
             throw new Error("打码标签页被 Google 重定向至登录页，请在 Chrome 中登录对应 Google 账号并保持 Flow 页面打开");
         }
 
@@ -710,7 +712,10 @@ async function handleGetToken(data) {
                             new Promise((_, reject) => setTimeout(() => reject(new Error("enterprise.execute timeout")), timeoutMs)),
                         ]);
                         if (!token) return fail("captcha_execute", "empty reCAPTCHA token");
-                        return { ok: true, token, href: location.href, origin: location.origin, userAgent: navigator.userAgent };
+                        let realProjectId = "";
+                        const m = location.pathname.match(/\/project\/([0-9a-fA-F-]+)/);
+                        if (m) realProjectId = m[1];
+                        return { ok: true, token, href: location.href, origin: location.origin, userAgent: navigator.userAgent, projectId: realProjectId };
                     } catch (error) {
                         return fail("captcha_execute", error && error.message ? error.message : error);
                     }
@@ -733,6 +738,7 @@ async function handleGetToken(data) {
                     user_agent: scriptResult.userAgent || navigator.userAgent,
                     origin: scriptResult.origin || "https://flow.google.com",
                     referer: scriptResult.href || "https://flow.google.com/",
+                    project_id: scriptResult.projectId || "",
                 };
             } else if (scriptResult) {
                 lastErrorMsg = `${scriptResult.stage || "script"}: ${scriptResult.error || "empty result"}`;
@@ -753,12 +759,36 @@ async function handleGetToken(data) {
                 });
             }
         } catch (e) {
-            lastErrorMsg = e.message || "Script execution failed";
+            lastErrorMsg = `${e.message || "Script execution failed"} [target: ${targetTab ? targetTab.url : "null"}]`;
             logExtensionEvent("captcha_script_exception", {
                 action: data.action || "IMAGE_GENERATION",
                 request_id: data.req_id ? String(data.req_id).slice(-12) : "",
                 error: lastErrorMsg,
             });
+            // executeScript 若被 Chrome 安全拦截，尝试通过原生已加载的 content.js 再次通信
+            try {
+                const msgRes = await new Promise((resolve, reject) => {
+                    chrome.tabs.sendMessage(targetTab.id, { type: "get_token", action: data.action || "IMAGE_GENERATION" }, (resp) => {
+                        if (chrome.runtime.lastError) {
+                            reject(new Error(chrome.runtime.lastError.message));
+                            return;
+                        }
+                        resolve(resp);
+                    });
+                });
+                if (msgRes && msgRes.status === "success" && msgRes.token) {
+                    successResponse = {
+                        status: "success",
+                        token: msgRes.token,
+                        user_agent: navigator.userAgent,
+                        origin: "https://flow.google.com",
+                        referer: targetTab ? targetTab.url : "https://flow.google.com/",
+                        project_id: projectId,
+                    };
+                }
+            } catch (msgErr) {
+                console.warn("[Flow2API] Fallback sendMessage failed:", msgErr);
+            }
         }
 
         if (successResponse) {
@@ -771,7 +801,8 @@ async function handleGetToken(data) {
                 token: successResponse.token,
                 user_agent: successResponse.user_agent || "",
                 origin: successResponse.origin || "https://flow.google.com",
-                referer: successResponse.referer || "https://flow.google.com/"
+                referer: successResponse.referer || "https://flow.google.com/",
+                project_id: successResponse.project_id || "",
             }));
             logExtensionEvent("captcha_success", {
                 action: data.action || "IMAGE_GENERATION",
