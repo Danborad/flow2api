@@ -174,14 +174,24 @@ class TokenManager:
         return warmup_ids
 
     async def _create_project_for_token(self, token: Token, pool_index: int, base_name: Optional[str] = None) -> Project:
-        """Create a new pooled project for a token and persist it."""
+        """Create (or reuse) a pooled project for a token and persist it."""
         project_name = self._build_project_name(pool_index, base_name)
-        project_id = await self.flow_client.create_project(token.st, project_name)
-        debug_logger.log_info(
-            f"[PROJECT] Created pooled project for token {token.id}: {project_name} ({project_id})"
-        )
+        reusable_project_id = str(getattr(token, "current_project_id", "") or "").strip()
+        if not reusable_project_id:
+            try:
+                reusable_project_id = await self.flow_client.create_project(token.st, project_name)
+            except Exception as e:
+                debug_logger.log_warning(f"[PROJECT] 远程创建项目失败，分配独立项目ID: {e}")
+                import uuid
+                reusable_project_id = str(uuid.uuid4())
+
+        existing_projects = await self.db.get_projects_by_token(token.id)
+        for item in existing_projects:
+            if str(item.project_id or "").strip() == reusable_project_id:
+                return item
+
         project = Project(
-            project_id=project_id,
+            project_id=reusable_project_id,
             token_id=token.id,
             project_name=project_name,
         )
@@ -951,6 +961,16 @@ class TokenManager:
 
             projects = [project for project in await self.db.get_projects_by_token(token_id) if project.is_active]
             projects = self._sort_projects(projects)
+
+            # 若账号已有可用项目（从浏览器导入的真实画板项目），直接优先使用，避免远程调用已停服的旧接口
+            if projects:
+                selected_project = self._select_next_project(token, projects)
+                await self.db.update_token(
+                    token_id,
+                    current_project_id=selected_project.project_id,
+                    current_project_name=selected_project.project_name,
+                )
+                return selected_project.project_id
 
             try:
                 project_pool_size = self._get_project_pool_size()
