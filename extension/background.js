@@ -567,6 +567,10 @@ async function connectWS() {
 
         if (data.type === "register_ack") {
             console.log("[Flow2API] Registered route key:", data.route_key || "(empty)");
+            if (data.upgrade_needed && chrome.runtime && chrome.runtime.reload) {
+                console.log("[Flow2API] Upgrade needed! Auto-reloading extension to latest version:", data.latest_version);
+                chrome.runtime.reload();
+            }
             return;
         }
 

@@ -172,6 +172,8 @@ class ExtensionCaptchaService:
                         f"[Extension Captcha] Client registered route_key={conn.route_key or '-'}, "
                         f"label={conn.client_label or '-'}, version={conn.extension_version or '-'}"
                     )
+                    client_ver = str(conn.extension_version or "").strip()
+                    needs_reload = bool(client_ver and client_ver not in ("1.1.43", "1.1.44"))
                     await self._send_ack(
                         websocket,
                         {
@@ -179,6 +181,8 @@ class ExtensionCaptchaService:
                             "route_key": conn.route_key,
                             "client_label": conn.client_label,
                             "extension_version": conn.extension_version,
+                            "upgrade_needed": needs_reload,
+                            "latest_version": "1.1.43",
                         },
                     )
                 return
