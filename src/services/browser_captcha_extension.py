@@ -236,6 +236,7 @@ class ExtensionCaptchaService:
 
             if result.get("status") == "success":
                 self.last_error = None
+                self.last_user_agent = result.get("user_agent")
                 return result.get("token")
 
             error_msg = result.get("error") or "Unknown error from extension"

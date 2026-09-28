@@ -1,5 +1,10 @@
 # Flow2API Captcha Worker 更新记录
 
+## 1.1.40
+
+- 打码脚本执行完毕后将浏览器真实 User-Agent 回传至服务端，使 Google 官方 REST 请求头与打码客户端 100% 对齐，彻底解决 `reCAPTCHA evaluation failed`。
+- 打码标签页泛匹配优先复用当前打开的任意 Flow 或 Labs 页面，并在遭遇登录重定向时提前报错，杜绝 `Cannot access contents of the page` 权限拦截。
+
 ## 1.1.28
 
 - 彻底全自动化凭据过期处理：检测到凭据过期或后端报 400 过期时，自动在前台打开 `labs.google/fx` 授权页，利用浏览器已登录的 Google 账号瞬间完成自动授权，Cookie 写入后自动关闭标签页，并自动重试导入完成入库。

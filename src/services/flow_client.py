@@ -4553,11 +4553,20 @@ class FlowClient:
                     timeout=extension_timeout,
                     token_id=token_id
                 )
-                self._set_request_fingerprint(None)
                 if token:
                     self._last_recaptcha_error = None
+                    captcha_ua = getattr(service, "last_user_agent", None)
+                    if captcha_ua:
+                        merged_fp = {"user_agent": captcha_ua}
+                        self._set_request_fingerprint(merged_fp)
+                        debug_logger.log_info(
+                            f"[reCAPTCHA extension] 已将插件打码真实 UA 注入请求指纹: {captcha_ua[:80]}"
+                        )
+                    else:
+                        self._set_request_fingerprint(None)
                     return token, None
                 self._last_recaptcha_error = service.last_error or "插件未返回有效验证码"
+                self._set_request_fingerprint(None)
                 return None, None
             except Exception as e:
                 debug_logger.log_error(f"[reCAPTCHA Extension] 错误: {str(e)}")

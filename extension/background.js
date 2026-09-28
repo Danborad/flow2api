@@ -632,8 +632,9 @@ async function handleGetToken(data) {
             ? existingTabs.find(tab => tab.url && tab.url.includes(`/project/${projectId}`))
             : null;
         const anyProjectTab = existingTabs.find(tab => tab.url && (tab.url.includes("/project/") || tab.url.includes("/projects/")));
+        const anyFlowTab = existingTabs.find(tab => tab.url && (tab.url.includes("flow.google.com") || tab.url.includes("labs.google")));
 
-        let targetTab = projectTab || anyProjectTab;
+        let targetTab = projectTab || anyProjectTab || anyFlowTab;
         if (!targetTab) {
             targetTab = await chrome.tabs.create({
                 url: projectUrl || FLOW_HOME_URL,
@@ -643,7 +644,13 @@ async function handleGetToken(data) {
         }
 
         await waitForTabReady(targetTab.id);
-        await sleep(newTabId ? 2500 : 300);
+        await sleep(newTabId ? 2500 : 800);
+
+        // 获取标签页跳转后的最新 URL，若已被跳去登录页则优雅报错，避免向登录页注入触发 Chrome 权限异常
+        const currentTab = await new Promise(r => chrome.tabs.get(targetTab.id, t => r(t || null)));
+        if (currentTab && currentTab.url && currentTab.url.includes("accounts.google.com")) {
+            throw new Error("打码标签页被 Google 重定向至登录页，请在 Chrome 中登录对应 Google 账号并保持 Flow 页面打开");
+        }
 
         logExtensionEvent("captcha_tab_selected", {
             action: data.action || "IMAGE_GENERATION",
@@ -703,7 +710,7 @@ async function handleGetToken(data) {
                             new Promise((_, reject) => setTimeout(() => reject(new Error("enterprise.execute timeout")), timeoutMs)),
                         ]);
                         if (!token) return fail("captcha_execute", "empty reCAPTCHA token");
-                        return { ok: true, token, href: location.href };
+                        return { ok: true, token, href: location.href, userAgent: navigator.userAgent };
                     } catch (error) {
                         return fail("captcha_execute", error && error.message ? error.message : error);
                     }
@@ -720,7 +727,11 @@ async function handleGetToken(data) {
 
             const scriptResult = results && results[0] ? results[0].result : null;
             if (scriptResult && scriptResult.ok && scriptResult.token) {
-                successResponse = { status: "success", token: scriptResult.token };
+                successResponse = {
+                    status: "success",
+                    token: scriptResult.token,
+                    user_agent: scriptResult.userAgent || navigator.userAgent,
+                };
             } else if (scriptResult) {
                 lastErrorMsg = `${scriptResult.stage || "script"}: ${scriptResult.error || "empty result"}`;
                 logExtensionEvent("captcha_page_failed", {
@@ -755,7 +766,8 @@ async function handleGetToken(data) {
             ws.send(JSON.stringify({
                 req_id: data.req_id,
                 status: successResponse.status,
-                token: successResponse.token
+                token: successResponse.token,
+                user_agent: successResponse.user_agent || ""
             }));
             logExtensionEvent("captcha_success", {
                 action: data.action || "IMAGE_GENERATION",
