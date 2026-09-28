@@ -174,18 +174,37 @@ class TokenManager:
         return warmup_ids
 
     async def _create_project_for_token(self, token: Token, pool_index: int, base_name: Optional[str] = None) -> Project:
-        """Create a new pooled project for a token and persist it."""
+        """Create (or reuse) a pooled project for a token and persist it.
+
+        Google 已停用旧版 project.createProject 接口，自动建项目不再可行。
+        因此这里优先复用从浏览器导入的真实项目 ID，避免生成不存在的假项目。
+        """
         project_name = self._build_project_name(pool_index, base_name)
-        project_id = await self.flow_client.create_project(token.st, project_name)
-        debug_logger.log_info(
-            f"[PROJECT] Created pooled project for token {token.id}: {project_name} ({project_id})"
-        )
+        reusable_project_id = str(getattr(token, "current_project_id", "") or "").strip()
+        if not reusable_project_id:
+            reusable_project_id = await self.flow_client.create_project(token.st, project_name)
+            debug_logger.log_info(
+                f"[PROJECT] Created pooled project for token {token.id}: {project_name} ({reusable_project_id})"
+            )
+
+        # 真实项目 ID 只能对应一条记录（projects.project_id 有唯一约束），已存在则直接复用
+        existing_projects = await self.db.get_projects_by_token(token.id)
+        for item in existing_projects:
+            if str(item.project_id or "").strip() == reusable_project_id:
+                debug_logger.log_info(
+                    f"[PROJECT] 复用已有池项目 {reusable_project_id}（跳过重复插入）"
+                )
+                return item
+
         project = Project(
-            project_id=project_id,
+            project_id=reusable_project_id,
             token_id=token.id,
             project_name=project_name,
         )
         project.id = await self.db.add_project(project)
+        debug_logger.log_info(
+            f"[PROJECT] 池项目已写入: {reusable_project_id} ({project_name})"
+        )
         return project
 
     def _select_next_project(self, token: Token, projects: List[Project]) -> Project:
@@ -434,6 +453,12 @@ class TokenManager:
             update_fields["at_expires"] = at_expires
         if project_id is not None:
             update_fields["current_project_id"] = project_id
+            # Google 已停用旧版建项目接口，导入真实项目ID后，重置该项目池，
+            # 避免继续使用此前本地伪造的假项目ID导致出图 403。
+            try:
+                await self.db.replace_projects_for_token(token_id, project_id)
+            except Exception as exc:
+                debug_logger.log_warning(f"[UPDATE_TOKEN] 重置项目池失败: {exc}")
         if project_name is not None:
             update_fields["current_project_name"] = project_name
         if remark is not None:

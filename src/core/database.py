@@ -1290,6 +1290,23 @@ class Database:
             await db.execute("DELETE FROM projects WHERE project_id = ?", (project_id,))
             await db.commit()
 
+    async def replace_projects_for_token(self, token_id: int, project_id: str, project_name: str = "") -> None:
+        """Replace a token's project pool with a single verified project id.
+
+        Used after importing the real Flow project id from the browser, since the
+        legacy project.createProject RPC has been disabled by Google.
+        """
+        async with self._connect(write=True) as db:
+            await db.execute("DELETE FROM projects WHERE token_id = ?", (token_id,))
+            await db.execute(
+                """
+                INSERT INTO projects (project_id, token_id, project_name)
+                VALUES (?, ?, ?)
+                """,
+                (project_id, token_id, project_name or ""),
+            )
+            await db.commit()
+
     # Task operations
     async def create_task(self, task: Task) -> int:
         """Create a new task"""
