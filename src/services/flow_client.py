@@ -466,6 +466,14 @@ class FlowClient:
             if derived_project_id:
                 headers.setdefault("Referer", f"https://flow.google.com/project/{derived_project_id}")
 
+        # 针对图片/媒体生成强校验接口，确保 Origin 与 Referer 中的项目ID 100% 绝对一致
+        if "/projects/" in url and "/flowMedia:" in url:
+            m = re.search(r"/projects/([^/]+)/", url)
+            if m:
+                exact_pid = m.group(1)
+                headers["Origin"] = "https://flow.google.com"
+                headers["Referer"] = f"https://flow.google.com/project/{exact_pid}"
+
         request_body_for_log = raw_body if raw_body is not None else json_data
         if config.debug_enabled:
             if isinstance(fingerprint, dict):
@@ -1693,6 +1701,12 @@ class FlowClient:
                     from .browser_captcha_extension import ExtensionCaptchaService
                     ext_svc = await ExtensionCaptchaService.get_instance(self.db)
                     real_pid = getattr(ext_svc, "last_project_id", None)
+                    if not real_pid:
+                        fp_ref = (self._request_fingerprint_ctx.get() or {}).get("referer", "")
+                        ref = getattr(ext_svc, "last_referer", "") or fp_ref
+                        ref_match = re.search(r"/project/([0-9a-fA-F-]+)", str(ref or ""))
+                        if ref_match:
+                            real_pid = ref_match.group(1)
                     if real_pid and self._is_uuid(real_pid):
                         if real_pid != project_id:
                             debug_logger.log_info(f"[IMAGE] 对齐插件页面真实项目ID: {real_pid} (原: {project_id})")
@@ -1700,8 +1714,8 @@ class FlowClient:
                             url = f"{self.api_base_url}/projects/{project_id}/flowMedia:batchGenerateImages"
                             if token_id and self.db:
                                 await self.db.update_token(token_id, current_project_id=project_id)
-                except Exception:
-                    pass
+                except Exception as ex:
+                    debug_logger.log_warning(f"[IMAGE] 对齐真实项目ID异常: {ex}")
 
             session_id = self._generate_session_id()
 
