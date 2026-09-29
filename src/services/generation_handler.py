@@ -1,6 +1,7 @@
 """Generation handler for Flow2API"""
 import asyncio
 import base64
+from datetime import datetime
 import json
 import time
 from pathlib import Path
@@ -1222,9 +1223,10 @@ class GenerationHandler:
             token = await self.db.get_token(task.token_id)
             if not token:
                 raise ValueError("Video account is no longer available")
-            token = await self.token_manager.ensure_valid_token(token)
-            if not token:
-                raise ValueError("Video access token is invalid")
+            if not token.at or self.token_manager._should_refresh_at(token):
+                token = await self.token_manager.ensure_valid_token(token)
+                if not token:
+                    raise ValueError("Video access token is invalid")
             operation = {
                 "operation": {"name": task.task_id},
                 "mediaName": task.media_name or task.task_id,
@@ -1251,11 +1253,14 @@ class GenerationHandler:
                         debug_logger.log_warning(f"[GEMINI VIDEO] Media redirect pending: {exc}")
                         video_url = ""
                     if not video_url:
-                        media = await self.flow_client.get_media(token.at, media_name)
-                        encoded = (media.get("video") or {}).get("encodedVideo") or ""
-                        if encoded:
-                            filename = await self.file_cache.cache_base64_video(encoded)
-                            video_url = f"/tmp/{filename}"
+                        try:
+                            media = await self.flow_client.get_media(token.at, media_name)
+                            encoded = (media.get("video") or {}).get("encodedVideo") or ""
+                            if encoded:
+                                filename = await self.file_cache.cache_base64_video(encoded)
+                                video_url = f"/tmp/{filename}"
+                        except Exception as exc:
+                            debug_logger.log_warning(f"[GEMINI VIDEO] Fallback get_media failed: {exc}")
                     if video_url:
                         await self.db.update_task(
                             operation_id, status="completed", progress=100,
@@ -1348,6 +1353,44 @@ class GenerationHandler:
         if task.status == "failed":
             return {"name": name, "done": True, "error": {"code": 500, "message": task.error_message or "Video generation failed"}}
         if task.status == "completed" and task.result_urls:
+            if task.request_log_id:
+                try:
+                    duration = 0.0
+                    if task.created_at:
+                        if isinstance(task.created_at, datetime):
+                            duration = max(0.0, time.time() - task.created_at.timestamp())
+                        elif isinstance(task.created_at, (int, float)):
+                            duration = max(0.0, time.time() - float(task.created_at))
+                    await self._log_request(
+                        token_id=task.token_id,
+                        operation="generate_video",
+                        request_data={
+                            "model": task.model,
+                            "prompt": task.prompt,
+                            "protocol": "gemini_predictLongRunning",
+                            "operation_name": name,
+                        },
+                        response_data={
+                            "status": "success",
+                            "model": task.model,
+                            "prompt": task.prompt,
+                            "url": task.result_urls[0],
+                            "generated_assets": {
+                                "type": "video",
+                                "final_video_url": task.result_urls[0],
+                                "mediaGenerationId": task.media_name,
+                                "mediaName": task.media_name,
+                                "model": task.model,
+                            },
+                        },
+                        status_code=200,
+                        duration=duration,
+                        status_text="completed",
+                        progress=100,
+                        log_id=task.request_log_id,
+                    )
+                except Exception as exc:
+                    debug_logger.log_warning(f"[GEMINI VIDEO] Sync request_log failed: {exc}")
             return {"name": name, "done": True, "response": {"generateVideoResponse": {
                 "generatedSamples": [{"video": {"uri": task.result_urls[0]}}],
             }}}

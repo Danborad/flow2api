@@ -918,8 +918,8 @@ class FlowClient:
         ])
 
     def _get_control_plane_timeout(self) -> int:
-        """控制轻量控制面请求的超时，避免认证/项目接口长时间挂起。"""
-        return max(5, min(int(self.timeout or 0) or 120, 10))
+        """控制轻量控制面请求的超时，避免认证/项目接口长时间挂起，同时适应代理网络波动。"""
+        return max(15, min(int(self.timeout or 0) or 120, 35))
 
     def _get_video_submit_timeout(self) -> int:
         """视频提交接口应快速返回 operation，避免单次网络挂死拖满整条链路。"""
@@ -4003,7 +4003,7 @@ class FlowClient:
         for key, value in self._default_client_headers.items():
             headers.setdefault(key, value)
 
-        request_timeout = self._get_control_plane_timeout()
+        request_timeout = max(30, int(self.timeout or 45))
         start_time = time.time()
         try:
             async with AsyncSession(trust_env=False) as session:
