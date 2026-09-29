@@ -65,6 +65,18 @@ def _truncate_text(text: Any, limit: int = 240) -> str:
     return f"{value[:limit - 3]}..."
 
 
+def _format_iso_datetime(val: Any) -> Optional[str]:
+    """格式化数据库时间字符串为标准带时区(Z)的 ISO-8601 格式，确保客户端精准识别 UTC 并转为本地时间。"""
+    if val is None:
+        return None
+    s = str(val).strip()
+    if not s:
+        return None
+    if " " in s and not s.endswith("Z") and not ("+" in s or "-" in s[10:]):
+        return s.replace(" ", "T") + "Z"
+    return s
+
+
 def _extract_error_summary(payload: Any) -> str:
     """从响应体里提取用户可读的错误摘要。"""
     if payload is None:
@@ -1512,8 +1524,8 @@ async def get_logs(
             "duration": log.get("duration"),
             "status_text": log.get("status_text") or "",
             "progress": log.get("progress") or 0,
-            "created_at": log.get("created_at"),
-            "updated_at": log.get("updated_at"),
+            "created_at": _format_iso_datetime(log.get("created_at")),
+            "updated_at": _format_iso_datetime(log.get("updated_at")),
             "error_summary": _extract_error_summary(log.get("response_body_excerpt")) if status_code is not None and status_code >= 400 else "",
         })
     return result
@@ -1541,8 +1553,8 @@ async def get_log_detail(
         "duration": log.get("duration"),
         "status_text": log.get("status_text") or "",
         "progress": log.get("progress") or 0,
-        "created_at": log.get("created_at"),
-        "updated_at": log.get("updated_at"),
+        "created_at": _format_iso_datetime(log.get("created_at")),
+        "updated_at": _format_iso_datetime(log.get("updated_at")),
         "error_summary": error_summary,
         "request_body": log.get("request_body"),
         "response_body": log.get("response_body")
