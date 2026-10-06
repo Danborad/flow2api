@@ -120,14 +120,12 @@ IMAGE_SIZE_MAP = {
 # 默认 aspectRatio
 DEFAULT_ASPECT = "landscape"
 
-OPENAI_IMAGE_SIZE_RE = re.compile(r"^(?P<w>\d{2,5})\s*[xX]\s*(?P<h>\d{2,5})$")
+OPENAI_IMAGE_SIZE_RE = re.compile(r"^(?P<w>\d{2,5})\s*[xX*]\s*(?P<h>\d{2,5})$")
 
 # OpenAI 常见 quality → imageSize 映射
-# - 这里的 imageSize 是 flow2api 的“放大档位”，并不等价于 OpenAI 的像素尺寸；
-#   但可用作“画质/清晰度”的近似映射。
 OPENAI_QUALITY_MAP = {
-    "low": None,
-    "standard": None,
+    "low": "1k",
+    "standard": "1k",
     "medium": "2k",
     "high": "4k",
     "hd": "4k",
@@ -142,6 +140,79 @@ ASPECT_RATIO_FLOAT_MAP = {
     "four-three": 4 / 3,
     "three-four": 3 / 4,
 }
+
+
+def _decompose_image_model(model: str) -> Optional[Tuple[str, Optional[str], Optional[str]]]:
+    """分解图片模型名，提取其 (base_model, aspect_ratio, image_size)。
+
+    支持格式示例：
+    - "gemini-3.0-pro-image" -> ("gemini-3.0-pro-image", None, None)
+    - "gemini-3.0-pro-image-portrait" -> ("gemini-3.0-pro-image", "portrait", None)
+    - "gemini-3.0-pro-image-portrait-2k" -> ("gemini-3.0-pro-image", "portrait", "2k")
+    - "gemini-3.0-pro-image-2k" -> ("gemini-3.0-pro-image", None, "2k")
+    - "Nano Banana Pro" -> ("gemini-3.0-pro-image", None, None)
+    - "Nano Banana Pro 2K" -> ("gemini-3.0-pro-image", None, "2k")
+    - "Nano Banana 2 2K" -> ("gemini-3.1-flash-image", None, "2k")
+    - 其它非图片模型返回 None
+    """
+    raw = str(model or "").strip()
+    if not raw:
+        return None
+
+    if raw in IMAGE_BASE_MODELS:
+        return IMAGE_BASE_MODELS[raw], None, None
+
+    lower = raw.lower()
+
+    # 1. 检查末尾的分辨率后缀，例如 "-2k", "_2k", " 2k", " 2K", "-4k"
+    detected_size = None
+    for s in ("2k", "4k"):
+        for sep in ("-", "_", " "):
+            pattern = f"{sep}{s}"
+            if lower.endswith(pattern):
+                detected_size = s
+                raw = raw[:-len(pattern)].strip()
+                lower = raw.lower()
+                break
+        if detected_size:
+            break
+
+    if raw in IMAGE_BASE_MODELS:
+        return IMAGE_BASE_MODELS[raw], None, detected_size
+
+    for k, v in IMAGE_BASE_MODELS.items():
+        if k.lower() == lower:
+            return v, None, detected_size
+
+    # 2. 检查方向后缀，例如 "-portrait", "-landscape", "-square", "-four-three", "-three-four"
+    detected_aspect = None
+    for a in ("landscape", "portrait", "square", "four-three", "three-four", "four_three", "three_four"):
+        for sep in ("-", "_", " "):
+            pattern = f"{sep}{a}"
+            if lower.endswith(pattern):
+                detected_aspect = (
+                    "four-three"
+                    if "four" in a and "three" in a and a.startswith("four")
+                    else (
+                        "three-four"
+                        if "three" in a and "four" in a and a.startswith("three")
+                        else a
+                    )
+                )
+                raw = raw[:-len(pattern)].strip()
+                lower = raw.lower()
+                break
+        if detected_aspect:
+            break
+
+    if raw in IMAGE_BASE_MODELS:
+        return IMAGE_BASE_MODELS[raw], detected_aspect, detected_size
+
+    for k, v in IMAGE_BASE_MODELS.items():
+        if k.lower() == lower:
+            return v, detected_aspect, detected_size
+
+    return None
 
 
 def _aspect_from_dimensions(width: int, height: int, *, video_mode: bool = False) -> Optional[str]:
@@ -509,18 +580,24 @@ VIDEO_ALIASES_ALLOW_DURATION = {
 }
 
 
-def _extract_generation_params(request) -> Tuple[Optional[str], Optional[str], Optional[int]]:
-    """从请求中提取 aspectRatio 和 imageSize 参数。
+def _extract_generation_params(request, raw_request=None) -> Tuple[Optional[str], Optional[str], Optional[int]]:
+    """从请求中提取 aspectRatio、imageSize 和 durationSeconds 参数。
 
     优先级：
-    1. request.generationConfig.imageConfig (顶层 Gemini 参数)
-    2. extra fields 中的 generationConfig (extra_body 透传)
-    3. OpenAI 风格字段（size/quality）兼容：可在 generationConfig/imageConfig 或顶层 extra 中出现
+    1. request.generationConfig / generation_config 下的 imageConfig / image_config (Gemini 官方标准)
+    2. request 顶层 imageConfig / image_config
+    3. extra fields 中的 generationConfig / generation_config (extra_body 透传)
+    4. OpenAI 风格字段（size / quality）兼容：可在 generationConfig/imageConfig 或顶层 extra 中出现
+    5. raw_request 中的 query_params 兼容
 
     Returns:
         (aspect_ratio, image_size, duration_seconds) 归一化后的值
     """
     def _normalize_str(value: Any) -> Optional[str]:
+        if value is None:
+            return None
+        if isinstance(value, (int, float)):
+            return str(value)
         if not isinstance(value, str):
             return None
         text = value.strip()
@@ -531,7 +608,7 @@ def _extract_generation_params(request) -> Tuple[Optional[str], Optional[str], O
             return None
         if isinstance(obj, dict):
             for key in keys:
-                if key in obj:
+                if key in obj and obj.get(key) is not None:
                     return obj.get(key)
             return None
 
@@ -543,7 +620,7 @@ def _extract_generation_params(request) -> Tuple[Optional[str], Optional[str], O
 
         extra = getattr(obj, "__pydantic_extra__", None) or {}
         for key in keys:
-            if key in extra:
+            if key in extra and extra.get(key) is not None:
                 return extra.get(key)
         return None
 
@@ -573,6 +650,18 @@ def _extract_generation_params(request) -> Tuple[Optional[str], Optional[str], O
         return token
 
     def _normalize_image_size(value: Any) -> Optional[str]:
+        if value is None:
+            return None
+        if isinstance(value, (int, float)):
+            val = int(value)
+            if val >= 3000:
+                return "4k"
+            elif val >= 1500:
+                return "2k"
+            elif val >= 500:
+                return "1k"
+            return None
+
         raw = _normalize_str(value)
         if not raw:
             return None
@@ -587,7 +676,28 @@ def _extract_generation_params(request) -> Tuple[Optional[str], Optional[str], O
         mapped = IMAGE_SIZE_MAP.get(token.upper())
         if mapped is not None:
             return mapped or None
-        return token.lower()
+
+        lower = token.lower()
+        if "4k" in lower or "4096" in lower or "ultra" in lower or "high" in lower or "hd" in lower:
+            return "4k"
+        if "2k" in lower or "2048" in lower or "1440p" in lower or "medium" in lower:
+            return "2k"
+        if "1080p" in lower:
+            return "1080p"
+        if "1k" in lower or "1024" in lower or "standard" in lower or "low" in lower:
+            return "1k"
+
+        nums = re.findall(r"\d+", lower)
+        if nums:
+            max_num = max(int(n) for n in nums)
+            if max_num >= 3000:
+                return "4k"
+            elif max_num >= 1500:
+                return "2k"
+            elif max_num >= 500:
+                return "1k"
+
+        return lower
 
     def _normalize_duration(value: Any) -> Optional[int]:
         if value is None:
@@ -635,10 +745,9 @@ def _extract_generation_params(request) -> Tuple[Optional[str], Optional[str], O
         mapped = OPENAI_QUALITY_MAP.get(token)
         if mapped:
             return mapped
-        return None
+        return _normalize_image_size(token)
 
     def _apply_image_config(image_config: Any, aspect_ratio: Optional[str], image_size: Optional[str]) -> Tuple[Optional[str], Optional[str]]:
-        # 显式 aspectRatio/imageSize
         if not aspect_ratio:
             aspect_ratio = _normalize_aspect_ratio(
                 _read_value(image_config, "aspectRatio", "aspect_ratio", "aspect")
@@ -648,9 +757,13 @@ def _extract_generation_params(request) -> Tuple[Optional[str], Optional[str], O
                 _read_value(image_config, "imageSize", "image_size", "resolution")
             )
 
-        # OpenAI size/quality
-        if not aspect_ratio:
-            aspect_ratio = _aspect_from_openai_size(_read_value(image_config, "size"))
+        # 检查 size 字段（可能包含 2k/4k，或 1024x1792）
+        size_val = _read_value(image_config, "size")
+        if not aspect_ratio and size_val:
+            aspect_ratio = _aspect_from_openai_size(size_val)
+        if not image_size and size_val:
+            image_size = _normalize_image_size(size_val)
+
         if not image_size:
             image_size = _image_size_from_openai_quality(
                 _read_value(image_config, "quality", "imageQuality", "image_quality")
@@ -662,8 +775,12 @@ def _extract_generation_params(request) -> Tuple[Optional[str], Optional[str], O
     image_size: Optional[str] = None
     duration_seconds: Optional[int] = None
 
-    # 1) 优先从 request.generationConfig 解析
-    gen_config = getattr(request, "generationConfig", None)
+    # 1) 从 request.generationConfig 或 generation_config 解析
+    gen_config = getattr(request, "generationConfig", None) or getattr(request, "generation_config", None)
+    if gen_config is None and hasattr(request, "__pydantic_extra__"):
+        extra = request.__pydantic_extra__ or {}
+        gen_config = extra.get("generationConfig") or extra.get("generation_config")
+
     if gen_config is not None:
         image_config = _read_value(gen_config, "imageConfig", "image_config")
         if image_config is not None:
@@ -671,82 +788,114 @@ def _extract_generation_params(request) -> Tuple[Optional[str], Optional[str], O
                 image_config, aspect_ratio, image_size
             )
 
-        # 有些上游会把字段放在 generationConfig 顶层
+        # 字段直接在 generationConfig 顶层
         if not aspect_ratio:
             aspect_ratio = _normalize_aspect_ratio(
                 _read_value(gen_config, "aspectRatio", "aspect_ratio")
             )
         if not image_size:
             image_size = _normalize_image_size(
-                _read_value(gen_config, "imageSize", "image_size")
+                _read_value(gen_config, "imageSize", "image_size", "resolution")
             )
         if duration_seconds is None:
             duration_seconds = _normalize_duration(
                 _read_value(gen_config, "durationSeconds", "duration_seconds", "duration")
             )
 
-        if not aspect_ratio:
-            aspect_ratio = _aspect_from_openai_size(_read_value(gen_config, "size"))
+        size_val = _read_value(gen_config, "size")
+        if not aspect_ratio and size_val:
+            aspect_ratio = _aspect_from_openai_size(size_val)
+        if not image_size and size_val:
+            image_size = _normalize_image_size(size_val)
+
         if not image_size:
             image_size = _image_size_from_openai_quality(_read_value(gen_config, "quality"))
 
-    # 2) 顶层没有时，再尝试从 extra fields (Pydantic extra="allow") 中透传的 generationConfig
+    # 2) 顶层 imageConfig / image_config 兼容
+    top_image_config = getattr(request, "imageConfig", None) or getattr(request, "image_config", None)
+    if top_image_config is None and hasattr(request, "__pydantic_extra__"):
+        extra = request.__pydantic_extra__ or {}
+        top_image_config = extra.get("imageConfig") or extra.get("image_config")
+    if top_image_config is not None:
+        aspect_ratio, image_size = _apply_image_config(top_image_config, aspect_ratio, image_size)
+
+    # 3) extra fields (extra_body) 中透传的 generationConfig
     if (aspect_ratio is None or image_size is None or duration_seconds is None) and hasattr(request, "__pydantic_extra__"):
         extra = request.__pydantic_extra__ or {}
-        gen_config_raw = extra.get("generationConfig")
-        if not isinstance(gen_config_raw, dict):
-            extra_body = extra.get("extra_body") or extra.get("extraBody")
-            if isinstance(extra_body, dict):
-                gen_config_raw = extra_body.get("generationConfig")
+        extra_body = extra.get("extra_body") or extra.get("extraBody")
+        if isinstance(extra_body, dict):
+            extra_gen_config = extra_body.get("generationConfig") or extra_body.get("generation_config")
+            if isinstance(extra_gen_config, dict):
+                image_config_raw = (
+                    extra_gen_config.get("imageConfig")
+                    or extra_gen_config.get("image_config")
+                    or {}
+                )
+                if image_config_raw:
+                    aspect_ratio, image_size = _apply_image_config(
+                        image_config_raw, aspect_ratio, image_size
+                    )
 
-        if isinstance(gen_config_raw, dict):
-            image_config_raw = (
-                gen_config_raw.get("imageConfig")
-                or gen_config_raw.get("image_config")
-                or {}
+                if aspect_ratio is None:
+                    aspect_ratio = _normalize_aspect_ratio(
+                        extra_gen_config.get("aspectRatio") or extra_gen_config.get("aspect_ratio")
+                    )
+                if image_size is None:
+                    image_size = _normalize_image_size(
+                        extra_gen_config.get("imageSize") or extra_gen_config.get("image_size") or extra_gen_config.get("resolution")
+                    )
+                if duration_seconds is None:
+                    duration_seconds = _normalize_duration(
+                        extra_gen_config.get("durationSeconds")
+                        or extra_gen_config.get("duration_seconds")
+                        or extra_gen_config.get("duration")
+                    )
+                if aspect_ratio is None:
+                    aspect_ratio = _aspect_from_openai_size(extra_gen_config.get("size"))
+                if image_size is None and extra_gen_config.get("size"):
+                    image_size = _normalize_image_size(extra_gen_config.get("size"))
+                if image_size is None:
+                    image_size = _image_size_from_openai_quality(extra_gen_config.get("quality"))
+
+    # 4) 顶层直接字段 (OpenAI 或其它客户端直传)
+    if (aspect_ratio is None or image_size is None or duration_seconds is None):
+        target_dict = request.__pydantic_extra__ if hasattr(request, "__pydantic_extra__") and request.__pydantic_extra__ else {}
+        if aspect_ratio is None:
+            aspect_ratio = _aspect_from_openai_size(target_dict.get("size") or getattr(request, "size", None))
+        if aspect_ratio is None:
+            aspect_ratio = _normalize_aspect_ratio(
+                target_dict.get("aspect_ratio") or target_dict.get("aspectRatio") or getattr(request, "aspectRatio", None) or getattr(request, "aspect_ratio", None)
             )
-            if image_config_raw:
-                aspect_ratio, image_size = _apply_image_config(
-                    image_config_raw, aspect_ratio, image_size
-                )
-
-            if aspect_ratio is None:
-                aspect_ratio = _normalize_aspect_ratio(
-                    gen_config_raw.get("aspectRatio") or gen_config_raw.get("aspect_ratio")
-                )
-            if image_size is None:
-                image_size = _normalize_image_size(
-                    gen_config_raw.get("imageSize") or gen_config_raw.get("image_size")
-                )
-            if duration_seconds is None:
-                duration_seconds = _normalize_duration(
-                    gen_config_raw.get("durationSeconds")
-                    or gen_config_raw.get("duration_seconds")
-                    or gen_config_raw.get("duration")
-                )
-
-            if aspect_ratio is None:
-                aspect_ratio = _aspect_from_openai_size(gen_config_raw.get("size"))
-            if image_size is None:
-                image_size = _image_size_from_openai_quality(gen_config_raw.get("quality"))
-
-    # 3) OpenAI 风格 size/quality（顶层 extra）兼容
-    if (aspect_ratio is None or image_size is None or duration_seconds is None) and hasattr(request, "__pydantic_extra__"):
-        extra = request.__pydantic_extra__ or {}
-        if aspect_ratio is None:
-            aspect_ratio = _aspect_from_openai_size(extra.get("size"))
         if image_size is None:
-            image_size = _image_size_from_openai_quality(extra.get("quality"))
-
-        # 一些上游可能直接传 aspect_ratio/image_size
-        if aspect_ratio is None:
-            aspect_ratio = _normalize_aspect_ratio(extra.get("aspect_ratio") or extra.get("aspectRatio"))
+            image_size = _normalize_image_size(
+                target_dict.get("image_size") or target_dict.get("imageSize") or target_dict.get("resolution") or getattr(request, "imageSize", None) or getattr(request, "image_size", None)
+            )
         if image_size is None:
-            image_size = _normalize_image_size(extra.get("image_size") or extra.get("imageSize"))
+            size_val = target_dict.get("size") or getattr(request, "size", None)
+            if size_val:
+                image_size = _normalize_image_size(size_val)
+        if image_size is None:
+            image_size = _image_size_from_openai_quality(target_dict.get("quality") or getattr(request, "quality", None))
         if duration_seconds is None:
             duration_seconds = _normalize_duration(
-                extra.get("durationSeconds") or extra.get("duration_seconds") or extra.get("duration")
+                target_dict.get("durationSeconds") or target_dict.get("duration_seconds") or target_dict.get("duration") or getattr(request, "durationSeconds", None) or getattr(request, "duration", None)
             )
+
+    # 5) raw_request query params 兼容
+    if raw_request is not None and hasattr(raw_request, "query_params"):
+        qp = raw_request.query_params
+        if aspect_ratio is None:
+            aspect_ratio = _normalize_aspect_ratio(qp.get("aspectRatio") or qp.get("aspect_ratio"))
+        if aspect_ratio is None and qp.get("size"):
+            aspect_ratio = _aspect_from_openai_size(qp.get("size"))
+        if image_size is None:
+            image_size = _normalize_image_size(qp.get("imageSize") or qp.get("image_size") or qp.get("resolution"))
+        if image_size is None and qp.get("size"):
+            image_size = _normalize_image_size(qp.get("size"))
+        if image_size is None and qp.get("quality"):
+            image_size = _image_size_from_openai_quality(qp.get("quality"))
+        if duration_seconds is None:
+            duration_seconds = _normalize_duration(qp.get("durationSeconds") or qp.get("duration_seconds") or qp.get("duration"))
 
     return aspect_ratio, image_size, duration_seconds
 
@@ -843,29 +992,41 @@ def _resolve_friendly_video_alias(model: str, request=None, images: Any = None) 
 
 
 def resolve_model_name(
-    model: str, request=None, model_config: Dict[str, Any] = None, images: Any = None
+    model: str,
+    request=None,
+    model_config: Dict[str, Any] = None,
+    images: Any = None,
+    raw_request: Any = None,
 ) -> str:
     """将简化模型名 + generationConfig 参数解析为内部 MODEL_CONFIG key。
 
-    如果 model 已经是有效的 MODEL_CONFIG key，直接返回。
+    如果 model 已经是有效的 MODEL_CONFIG key，但用户在 generationConfig 中指定了 2K/4K 等更高分辨率，
+    或者改变了比例，会将其动态升级为对应的带分辨率/比例的 key。
+
     如果 model 是简化名（基础模型名），则根据 generationConfig 中的
     aspectRatio / imageSize 拼接出完整的内部模型名。
 
     Args:
         model: 请求中的模型名
-        request: ChatCompletionRequest 实例（用于提取 generationConfig）
+        request: 请求实例（GeminiGenerateContentRequest 或 ChatCompletionRequest）
         model_config: MODEL_CONFIG 字典（用于验证解析后的模型名）
+        images: 伴随的图片列表（用于推断画面宽高比）
+        raw_request: 原始 FastAPI Request 实例（可选，用于读取 query_params）
 
     Returns:
         解析后的内部模型名
     """
     # ────── 图片模型解析 ──────
-    if model in IMAGE_BASE_MODELS:
-        base = IMAGE_BASE_MODELS[model]
+    image_model_info = _decompose_image_model(model)
+    if image_model_info is not None:
+        base, model_aspect, model_size = image_model_info
         aspect_ratio, image_size, _duration_seconds = (
-            _extract_generation_params(request) if request else (None, None, None)
+            _extract_generation_params(request, raw_request=raw_request)
+            if request or raw_request
+            else (None, None, None)
         )
 
+        aspect_ratio = aspect_ratio or model_aspect
         if not aspect_ratio:
             aspect_ratio = _infer_aspect_ratio_from_images(images)
 
@@ -882,32 +1043,36 @@ def resolve_model_name(
             )
             aspect_ratio = DEFAULT_ASPECT
 
-        # 拼接模型名
+        # 拼接基础模型+方向
         resolved = f"{base}-{aspect_ratio}"
 
-        # 检查支持的 imageSize
-        if image_size and image_size != "1k":
+        # 确定最终 imageSize (优先使用请求参数显式指定的，其次是模型自带的)
+        final_size = image_size or model_size
+        if final_size and final_size != "1k":
             supported_sizes = MODEL_SUPPORTED_SIZES.get(base, [])
-            if image_size in supported_sizes:
-                resolved = f"{resolved}-{image_size}"
+            if final_size in supported_sizes:
+                resolved = f"{resolved}-{final_size}"
             else:
                 debug_logger.log_warning(
-                    f"[MODEL_RESOLVER] 模型 {base} 不支持 imageSize={image_size}，忽略"
+                    f"[MODEL_RESOLVER] 模型 {base} 不支持 imageSize={final_size}，忽略"
                 )
 
         # 最终验证
-        if model_config and resolved not in model_config:
-            debug_logger.log_warning(
-                f"[MODEL_RESOLVER] 解析后的模型名 {resolved} 不在 MODEL_CONFIG 中，"
-                f"回退到原始模型名 {model}"
+        if model_config and resolved in model_config:
+            debug_logger.log_info(
+                f"[MODEL_RESOLVER] 模型名转换: {model} → {resolved} "
+                f"(aspectRatio={aspect_ratio}, imageSize={final_size or 'default'})"
             )
+            return resolved
+
+        if model_config and model in model_config:
             return model
 
-        debug_logger.log_info(
-            f"[MODEL_RESOLVER] 模型名转换: {model} → {resolved} "
-            f"(aspectRatio={aspect_ratio}, imageSize={image_size or 'default'})"
+        debug_logger.log_warning(
+            f"[MODEL_RESOLVER] 解析后的模型名 {resolved} 不在 MODEL_CONFIG 中，"
+            f"回退到原始模型名 {model}"
         )
-        return resolved
+        return model
 
     # ────── 视频模型解析 ──────
     friendly_video_alias = _resolve_friendly_video_alias(model, request, images=images)
@@ -919,7 +1084,9 @@ def resolve_model_name(
 
     if model in VIDEO_BASE_MODELS:
         aspect_ratio, image_size, _duration_seconds = (
-            _extract_generation_params(request) if request else (None, None, None)
+            _extract_generation_params(request, raw_request=raw_request)
+            if request or raw_request
+            else (None, None, None)
         )
 
         if not aspect_ratio:

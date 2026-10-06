@@ -437,8 +437,19 @@ async def _extract_prompt_and_images_from_gemini_contents(
     return prompt, images, video_media_id
 
 
-def _resolve_request_model(model: str, request: Any, images: Optional[List[bytes]] = None) -> str:
-    resolved_model = resolve_model_name(model=model, request=request, model_config=MODEL_CONFIG, images=images)
+def _resolve_request_model(
+    model: str,
+    request: Any,
+    images: Optional[List[bytes]] = None,
+    raw_request: Optional[Request] = None,
+) -> str:
+    resolved_model = resolve_model_name(
+        model=model,
+        request=request,
+        model_config=MODEL_CONFIG,
+        images=images,
+        raw_request=raw_request,
+    )
     if resolved_model != model:
         debug_logger.log_info(f"[ROUTE] 模型名已转换: {model} → {resolved_model}")
     return resolved_model
@@ -459,6 +470,7 @@ def _get_request_base_url(request: Request) -> Optional[str]:
 
 async def _normalize_openai_request(
     request: ChatCompletionRequest,
+    raw_request: Optional[Request] = None,
 ) -> NormalizedGenerationRequest:
     if request.messages:
         prompt, images, video_media_id = await _extract_prompt_and_images_from_openai_messages(
@@ -466,11 +478,11 @@ async def _normalize_openai_request(
         )
         if request.image and not images:
             images.append(await _load_image_bytes_from_uri(request.image))
-        model = _resolve_request_model(request.model, request, images=images)
+        model = _resolve_request_model(request.model, request, images=images, raw_request=raw_request)
         initial_image_count = len(images)
         images = await _append_openai_reference_images(model, request.messages, images)
         if len(images) != initial_image_count:
-            model = _resolve_request_model(request.model, request, images=images)
+            model = _resolve_request_model(request.model, request, images=images, raw_request=raw_request)
         return NormalizedGenerationRequest(
             model=model,
             prompt=prompt,
@@ -484,7 +496,7 @@ async def _normalize_openai_request(
             contents=_coerce_gemini_contents(request.contents),
             generationConfig=request.generationConfig,
         )
-        normalized = await _normalize_gemini_request(request.model, gemini_request)
+        normalized = await _normalize_gemini_request(request.model, gemini_request, raw_request=raw_request)
         normalized.messages = request.messages
         return normalized
 
@@ -494,9 +506,10 @@ async def _normalize_openai_request(
 async def _normalize_gemini_request(
     model: str,
     request: GeminiGenerateContentRequest,
+    raw_request: Optional[Request] = None,
 ) -> NormalizedGenerationRequest:
     prompt, images, video_media_id = await _extract_prompt_and_images_from_gemini_contents(request.contents)
-    resolved_model = _resolve_request_model(model, request, images=images)
+    resolved_model = _resolve_request_model(model, request, images=images, raw_request=raw_request)
     system_instruction = _extract_text_from_gemini_content(request.systemInstruction)
     model_config = MODEL_CONFIG.get(resolved_model)
     media_model = bool(model_config and model_config.get("type") in {"image", "video"})
@@ -1160,7 +1173,7 @@ async def create_chat_completion(
 ):
     """OpenAI-compatible unified generation endpoint."""
     try:
-        normalized = await _normalize_openai_request(request)
+        normalized = await _normalize_openai_request(request, raw_request=raw_request)
         if not normalized.prompt:
             raise HTTPException(status_code=400, detail="Prompt cannot be empty")
 
@@ -1206,7 +1219,7 @@ async def generate_content(
 ):
     """Gemini official generateContent endpoint."""
     try:
-        normalized = await _normalize_gemini_request(model, request)
+        normalized = await _normalize_gemini_request(model, request, raw_request=raw_request)
         if not normalized.prompt:
             raise HTTPException(status_code=400, detail="Prompt cannot be empty")
 
@@ -1253,7 +1266,7 @@ async def stream_generate_content(
 ):
     """Gemini official streamGenerateContent endpoint."""
     try:
-        normalized = await _normalize_gemini_request(model, request)
+        normalized = await _normalize_gemini_request(model, request, raw_request=raw_request)
         if not normalized.prompt:
             raise HTTPException(status_code=400, detail="Prompt cannot be empty")
 

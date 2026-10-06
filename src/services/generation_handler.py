@@ -1223,7 +1223,12 @@ class GenerationHandler:
             token = await self.db.get_token(task.token_id)
             if not token:
                 raise ValueError("Video account is no longer available")
-            if not token.at or self.token_manager._should_refresh_at(token):
+            should_refresh = False
+            if hasattr(self.token_manager, "_should_refresh_at"):
+                should_refresh = self.token_manager._should_refresh_at(token)
+            elif hasattr(self.token_manager, "should_refresh_at"):
+                should_refresh = self.token_manager.should_refresh_at(token)
+            if not token.at or should_refresh:
                 token = await self.token_manager.ensure_valid_token(token)
                 if not token:
                     raise ValueError("Video access token is invalid")
