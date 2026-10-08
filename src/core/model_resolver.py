@@ -22,19 +22,33 @@ from ..core.logger import debug_logger
 IMAGE_BASE_MODELS = {
     # Gemini 3.0 Pro (GEM_PIX_2)
     "gemini-3.0-pro-image": "gemini-3.0-pro-image",
-    # Gemini 3.1 Flash (NARWHAL)
-    "gemini-3.1-flash-image": "gemini-3.1-flash-image",
-    # Imagen 4.0 (IMAGEN_3_5)
-    "imagen-4.0-generate-preview": "imagen-4.0-generate-preview",
-    # Friendly public aliases
     "nano-banana-pro": "gemini-3.0-pro-image",
     "nanobanana-pro": "gemini-3.0-pro-image",
     "Nano Banana Pro": "gemini-3.0-pro-image",
+
+    # Gemini 3.1 Flash / Nano Banana 2.1 (BELUGA)
+    "gemini-3.1-flash-image": "gemini-3.1-flash-image",
+    "nano-banana-2.1": "gemini-3.1-flash-image",
+    "nanobanana-2.1": "gemini-3.1-flash-image",
+    "Nano Banana 2.1": "gemini-3.1-flash-image",
     "nano-banana-2": "gemini-3.1-flash-image",
     "nano-banana2": "gemini-3.1-flash-image",
     "nanobanana2": "gemini-3.1-flash-image",
     "Nano Banana 2": "gemini-3.1-flash-image",
     "Nano Banana2": "gemini-3.1-flash-image",
+    "beluga": "gemini-3.1-flash-image",
+
+    # Gemini 3.1 Flash Lite / Nano Banana 2 Lite (HARBOR_SEAL)
+    "gemini-3.1-flash-lite-image": "gemini-3.1-flash-lite-image",
+    "nano-banana-2-lite": "gemini-3.1-flash-lite-image",
+    "nanobanana-2-lite": "gemini-3.1-flash-lite-image",
+    "Nano Banana 2 Lite": "gemini-3.1-flash-lite-image",
+    "nano-banana-lite": "gemini-3.1-flash-lite-image",
+    "Nano Banana Lite": "gemini-3.1-flash-lite-image",
+    "harbor-seal": "gemini-3.1-flash-lite-image",
+
+    # Imagen 4.0 (IMAGEN_3_5)
+    "imagen-4.0-generate-preview": "imagen-4.0-generate-preview",
     "imagen": "imagen-4.0-generate-preview",
     "Imagen 4": "imagen-4.0-generate-preview",
 }
@@ -43,11 +57,19 @@ IMAGE_ALIAS_DISPLAY_NAMES = {
     "nano-banana-pro": "Nano Banana Pro",
     "nanobanana-pro": "Nano Banana Pro",
     "Nano Banana Pro": "Nano Banana Pro",
-    "nano-banana-2": "Nano Banana 2",
-    "nano-banana2": "Nano Banana 2",
-    "nanobanana2": "Nano Banana 2",
-    "Nano Banana 2": "Nano Banana 2",
-    "Nano Banana2": "Nano Banana 2",
+    "nano-banana-2.1": "Nano Banana 2.1",
+    "nanobanana-2.1": "Nano Banana 2.1",
+    "Nano Banana 2.1": "Nano Banana 2.1",
+    "nano-banana-2": "Nano Banana 2.1",
+    "nano-banana2": "Nano Banana 2.1",
+    "nanobanana2": "Nano Banana 2.1",
+    "Nano Banana 2": "Nano Banana 2.1",
+    "Nano Banana2": "Nano Banana 2.1",
+    "nano-banana-2-lite": "Nano Banana 2 Lite",
+    "nanobanana-2-lite": "Nano Banana 2 Lite",
+    "Nano Banana 2 Lite": "Nano Banana 2 Lite",
+    "nano-banana-lite": "Nano Banana 2 Lite",
+    "Nano Banana Lite": "Nano Banana 2 Lite",
     "imagen": "Imagen",
     "Imagen 4": "Imagen 4",
 }
@@ -94,6 +116,13 @@ MODEL_SUPPORTED_ASPECTS = {
         "four-three",
         "three-four",
     ],
+    "gemini-3.1-flash-lite-image": [
+        "landscape",
+        "portrait",
+        "square",
+        "four-three",
+        "three-four",
+    ],
     "imagen-4.0-generate-preview": ["landscape", "portrait"],
 }
 
@@ -101,6 +130,7 @@ MODEL_SUPPORTED_ASPECTS = {
 MODEL_SUPPORTED_SIZES = {
     "gemini-3.0-pro-image": ["2k", "4k"],
     "gemini-3.1-flash-image": ["2k", "4k"],
+    "gemini-3.1-flash-lite-image": ["2k", "4k"],
     "imagen-4.0-generate-preview": [],  # 不支持放大
 }
 
@@ -1156,7 +1186,7 @@ def get_friendly_model_aliases() -> Dict[str, str]:
     """Return the compact public model list that client apps should display."""
     aliases: Dict[str, str] = {}
 
-    for alias in ("Nano Banana Pro", "Nano Banana 2", "Imagen 4"):
+    for alias in ("Nano Banana Pro", "Nano Banana 2.1", "Nano Banana 2 Lite", "Nano Banana 2", "Imagen 4"):
         base = IMAGE_BASE_MODELS[alias]
         aspects = MODEL_SUPPORTED_ASPECTS.get(base, [])
         sizes = MODEL_SUPPORTED_SIZES.get(base, [])

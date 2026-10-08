@@ -125,89 +125,176 @@ MODEL_CONFIG = {
         "aspect_ratio": "IMAGE_ASPECT_RATIO_PORTRAIT"
     },
 
-    # 图片生成 - NARWHAL (新版)
+    # 图片生成 - BELUGA (Nano Banana 2.1)
     "gemini-3.1-flash-image-landscape": {
         "type": "image",
-        "model_name": "NARWHAL",
+        "model_name": "BELUGA",
         "aspect_ratio": "IMAGE_ASPECT_RATIO_LANDSCAPE"
     },
     "gemini-3.1-flash-image-portrait": {
         "type": "image",
-        "model_name": "NARWHAL",
+        "model_name": "BELUGA",
         "aspect_ratio": "IMAGE_ASPECT_RATIO_PORTRAIT"
     },
     "gemini-3.1-flash-image-square": {
         "type": "image",
-        "model_name": "NARWHAL",
+        "model_name": "BELUGA",
         "aspect_ratio": "IMAGE_ASPECT_RATIO_SQUARE"
     },
     "gemini-3.1-flash-image-four-three": {
         "type": "image",
-        "model_name": "NARWHAL",
+        "model_name": "BELUGA",
         "aspect_ratio": "IMAGE_ASPECT_RATIO_LANDSCAPE_FOUR_THREE"
     },
     "gemini-3.1-flash-image-three-four": {
         "type": "image",
-        "model_name": "NARWHAL",
+        "model_name": "BELUGA",
         "aspect_ratio": "IMAGE_ASPECT_RATIO_PORTRAIT_THREE_FOUR"
     },
     "gemini-3.1-flash-image-landscape-2k": {
         "type": "image",
-        "model_name": "NARWHAL",
+        "model_name": "BELUGA",
         "aspect_ratio": "IMAGE_ASPECT_RATIO_LANDSCAPE",
         "upsample": "UPSAMPLE_IMAGE_RESOLUTION_2K"
     },
     "gemini-3.1-flash-image-portrait-2k": {
         "type": "image",
-        "model_name": "NARWHAL",
+        "model_name": "BELUGA",
         "aspect_ratio": "IMAGE_ASPECT_RATIO_PORTRAIT",
         "upsample": "UPSAMPLE_IMAGE_RESOLUTION_2K"
     },
     "gemini-3.1-flash-image-square-2k": {
         "type": "image",
-        "model_name": "NARWHAL",
+        "model_name": "BELUGA",
         "aspect_ratio": "IMAGE_ASPECT_RATIO_SQUARE",
         "upsample": "UPSAMPLE_IMAGE_RESOLUTION_2K"
     },
     "gemini-3.1-flash-image-four-three-2k": {
         "type": "image",
-        "model_name": "NARWHAL",
+        "model_name": "BELUGA",
         "aspect_ratio": "IMAGE_ASPECT_RATIO_LANDSCAPE_FOUR_THREE",
         "upsample": "UPSAMPLE_IMAGE_RESOLUTION_2K"
     },
     "gemini-3.1-flash-image-three-four-2k": {
         "type": "image",
-        "model_name": "NARWHAL",
+        "model_name": "BELUGA",
         "aspect_ratio": "IMAGE_ASPECT_RATIO_PORTRAIT_THREE_FOUR",
         "upsample": "UPSAMPLE_IMAGE_RESOLUTION_2K"
     },
     "gemini-3.1-flash-image-landscape-4k": {
         "type": "image",
-        "model_name": "NARWHAL",
+        "model_name": "BELUGA",
         "aspect_ratio": "IMAGE_ASPECT_RATIO_LANDSCAPE",
         "upsample": "UPSAMPLE_IMAGE_RESOLUTION_4K"
     },
     "gemini-3.1-flash-image-portrait-4k": {
         "type": "image",
-        "model_name": "NARWHAL",
+        "model_name": "BELUGA",
         "aspect_ratio": "IMAGE_ASPECT_RATIO_PORTRAIT",
         "upsample": "UPSAMPLE_IMAGE_RESOLUTION_4K"
     },
     "gemini-3.1-flash-image-square-4k": {
         "type": "image",
-        "model_name": "NARWHAL",
+        "model_name": "BELUGA",
         "aspect_ratio": "IMAGE_ASPECT_RATIO_SQUARE",
         "upsample": "UPSAMPLE_IMAGE_RESOLUTION_4K"
     },
     "gemini-3.1-flash-image-four-three-4k": {
         "type": "image",
-        "model_name": "NARWHAL",
+        "model_name": "BELUGA",
         "aspect_ratio": "IMAGE_ASPECT_RATIO_LANDSCAPE_FOUR_THREE",
         "upsample": "UPSAMPLE_IMAGE_RESOLUTION_4K"
     },
     "gemini-3.1-flash-image-three-four-4k": {
         "type": "image",
-        "model_name": "NARWHAL",
+        "model_name": "BELUGA",
+        "aspect_ratio": "IMAGE_ASPECT_RATIO_PORTRAIT_THREE_FOUR",
+        "upsample": "UPSAMPLE_IMAGE_RESOLUTION_4K"
+    },
+
+    # 图片生成 - HARBOR_SEAL (Nano Banana 2 Lite)
+    "gemini-3.1-flash-lite-image-landscape": {
+        "type": "image",
+        "model_name": "HARBOR_SEAL",
+        "aspect_ratio": "IMAGE_ASPECT_RATIO_LANDSCAPE"
+    },
+    "gemini-3.1-flash-lite-image-portrait": {
+        "type": "image",
+        "model_name": "HARBOR_SEAL",
+        "aspect_ratio": "IMAGE_ASPECT_RATIO_PORTRAIT"
+    },
+    "gemini-3.1-flash-lite-image-square": {
+        "type": "image",
+        "model_name": "HARBOR_SEAL",
+        "aspect_ratio": "IMAGE_ASPECT_RATIO_SQUARE"
+    },
+    "gemini-3.1-flash-lite-image-four-three": {
+        "type": "image",
+        "model_name": "HARBOR_SEAL",
+        "aspect_ratio": "IMAGE_ASPECT_RATIO_LANDSCAPE_FOUR_THREE"
+    },
+    "gemini-3.1-flash-lite-image-three-four": {
+        "type": "image",
+        "model_name": "HARBOR_SEAL",
+        "aspect_ratio": "IMAGE_ASPECT_RATIO_PORTRAIT_THREE_FOUR"
+    },
+    "gemini-3.1-flash-lite-image-landscape-2k": {
+        "type": "image",
+        "model_name": "HARBOR_SEAL",
+        "aspect_ratio": "IMAGE_ASPECT_RATIO_LANDSCAPE",
+        "upsample": "UPSAMPLE_IMAGE_RESOLUTION_2K"
+    },
+    "gemini-3.1-flash-lite-image-portrait-2k": {
+        "type": "image",
+        "model_name": "HARBOR_SEAL",
+        "aspect_ratio": "IMAGE_ASPECT_RATIO_PORTRAIT",
+        "upsample": "UPSAMPLE_IMAGE_RESOLUTION_2K"
+    },
+    "gemini-3.1-flash-lite-image-square-2k": {
+        "type": "image",
+        "model_name": "HARBOR_SEAL",
+        "aspect_ratio": "IMAGE_ASPECT_RATIO_SQUARE",
+        "upsample": "UPSAMPLE_IMAGE_RESOLUTION_2K"
+    },
+    "gemini-3.1-flash-lite-image-four-three-2k": {
+        "type": "image",
+        "model_name": "HARBOR_SEAL",
+        "aspect_ratio": "IMAGE_ASPECT_RATIO_LANDSCAPE_FOUR_THREE",
+        "upsample": "UPSAMPLE_IMAGE_RESOLUTION_2K"
+    },
+    "gemini-3.1-flash-lite-image-three-four-2k": {
+        "type": "image",
+        "model_name": "HARBOR_SEAL",
+        "aspect_ratio": "IMAGE_ASPECT_RATIO_PORTRAIT_THREE_FOUR",
+        "upsample": "UPSAMPLE_IMAGE_RESOLUTION_2K"
+    },
+    "gemini-3.1-flash-lite-image-landscape-4k": {
+        "type": "image",
+        "model_name": "HARBOR_SEAL",
+        "aspect_ratio": "IMAGE_ASPECT_RATIO_LANDSCAPE",
+        "upsample": "UPSAMPLE_IMAGE_RESOLUTION_4K"
+    },
+    "gemini-3.1-flash-lite-image-portrait-4k": {
+        "type": "image",
+        "model_name": "HARBOR_SEAL",
+        "aspect_ratio": "IMAGE_ASPECT_RATIO_PORTRAIT",
+        "upsample": "UPSAMPLE_IMAGE_RESOLUTION_4K"
+    },
+    "gemini-3.1-flash-lite-image-square-4k": {
+        "type": "image",
+        "model_name": "HARBOR_SEAL",
+        "aspect_ratio": "IMAGE_ASPECT_RATIO_SQUARE",
+        "upsample": "UPSAMPLE_IMAGE_RESOLUTION_4K"
+    },
+    "gemini-3.1-flash-lite-image-four-three-4k": {
+        "type": "image",
+        "model_name": "HARBOR_SEAL",
+        "aspect_ratio": "IMAGE_ASPECT_RATIO_LANDSCAPE_FOUR_THREE",
+        "upsample": "UPSAMPLE_IMAGE_RESOLUTION_4K"
+    },
+    "gemini-3.1-flash-lite-image-three-four-4k": {
+        "type": "image",
+        "model_name": "HARBOR_SEAL",
         "aspect_ratio": "IMAGE_ASPECT_RATIO_PORTRAIT_THREE_FOUR",
         "upsample": "UPSAMPLE_IMAGE_RESOLUTION_4K"
     },

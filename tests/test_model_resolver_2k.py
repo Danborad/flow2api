@@ -65,13 +65,19 @@ class ModelResolver2KTests(unittest.TestCase):
             ),
         )
         self.assertEqual(resolve_model_name("Nano Banana Pro", req, MODEL_CONFIG), "gemini-3.0-pro-image-landscape-2k")
+        self.assertEqual(resolve_model_name("Nano Banana 2.1", req, MODEL_CONFIG), "gemini-3.1-flash-image-landscape-2k")
+        self.assertEqual(resolve_model_name("Nano Banana 2 Lite", req, MODEL_CONFIG), "gemini-3.1-flash-lite-image-landscape-2k")
         self.assertEqual(resolve_model_name("Nano Banana 2", req, MODEL_CONFIG), "gemini-3.1-flash-image-landscape-2k")
         self.assertEqual(resolve_model_name("nano-banana-pro", req, MODEL_CONFIG), "gemini-3.0-pro-image-landscape-2k")
+        self.assertEqual(resolve_model_name("nano-banana-2.1", req, MODEL_CONFIG), "gemini-3.1-flash-image-landscape-2k")
+        self.assertEqual(resolve_model_name("nano-banana-2-lite", req, MODEL_CONFIG), "gemini-3.1-flash-lite-image-landscape-2k")
 
     def test_model_name_embedded_2k(self):
         # 客户端在模型名称中直接自带 2k
         self.assertEqual(resolve_model_name("gemini-3.0-pro-image-2k", None, MODEL_CONFIG), "gemini-3.0-pro-image-landscape-2k")
         self.assertEqual(resolve_model_name("Nano Banana Pro 2K", None, MODEL_CONFIG), "gemini-3.0-pro-image-landscape-2k")
+        self.assertEqual(resolve_model_name("Nano Banana 2.1 2K", None, MODEL_CONFIG), "gemini-3.1-flash-image-landscape-2k")
+        self.assertEqual(resolve_model_name("Nano Banana 2 Lite 2K", None, MODEL_CONFIG), "gemini-3.1-flash-lite-image-landscape-2k")
         self.assertEqual(resolve_model_name("Nano Banana 2 2K", None, MODEL_CONFIG), "gemini-3.1-flash-image-landscape-2k")
 
     def test_snake_case_generation_config(self):
