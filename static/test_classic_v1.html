@@ -1,0 +1,578 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Flow2API 模型测试</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #0f1117; color: #e1e1e6; min-height: 100vh; }
+.container { max-width: 1200px; margin: 0 auto; padding: 20px; }
+h1 { text-align: center; margin-bottom: 8px; font-size: 24px; color: #7c8aff; }
+.subtitle { text-align: center; color: #666; margin-bottom: 24px; font-size: 14px; }
+
+.config-bar {
+  display: flex; gap: 12px; margin-bottom: 20px; align-items: center;
+  background: #1a1b26; padding: 12px 16px; border-radius: 10px; border: 1px solid #2a2b3a;
+}
+.config-bar label { font-size: 13px; color: #888; white-space: nowrap; }
+.config-bar input { flex: 1; background: #0f1117; border: 1px solid #2a2b3a; color: #e1e1e6; padding: 8px 12px; border-radius: 6px; font-size: 14px; }
+.config-note { margin-bottom: 20px; font-size: 12px; color: #7f8498; }
+
+.main-layout { display: flex; gap: 20px; }
+.sidebar { width: 280px; flex-shrink: 0; }
+.content { flex: 1; min-width: 0; }
+
+.model-section { margin-bottom: 16px; }
+.section-title {
+  font-size: 13px; font-weight: 600; color: #7c8aff; padding: 8px 12px;
+  background: #1a1b26; border-radius: 8px 8px 0 0; border: 1px solid #2a2b3a; border-bottom: none;
+  cursor: pointer; user-select: none; display: flex; justify-content: space-between; align-items: center;
+}
+.section-title:hover { background: #1e1f2e; }
+.section-title .arrow { transition: transform 0.2s; }
+.section-title.collapsed .arrow { transform: rotate(-90deg); }
+.model-list {
+  background: #1a1b26; border: 1px solid #2a2b3a; border-radius: 0 0 8px 8px;
+  max-height: 300px; overflow-y: auto;
+}
+.model-list.hidden { display: none; }
+.model-item {
+  padding: 8px 12px; font-size: 13px; cursor: pointer; border-bottom: 1px solid #1e1f2e;
+  display: flex; justify-content: space-between; align-items: center;
+}
+.model-item:last-child { border-bottom: none; }
+.model-item:hover { background: #1e1f2e; }
+.model-item.active { background: #2a2b5a; color: #7c8aff; }
+.model-tag {
+  font-size: 10px; padding: 2px 6px; border-radius: 4px; font-weight: 500;
+}
+.tag-image { background: #1a3a2a; color: #4ade80; }
+.tag-video { background: #3a2a1a; color: #fb923c; }
+
+.gen-panel {
+  background: #1a1b26; border: 1px solid #2a2b3a; border-radius: 10px; padding: 20px;
+}
+.gen-panel h3 { font-size: 16px; margin-bottom: 4px; }
+.gen-panel .model-info { font-size: 12px; color: #666; margin-bottom: 16px; }
+
+.form-group { margin-bottom: 14px; }
+.form-group label { display: block; font-size: 13px; color: #888; margin-bottom: 6px; }
+.form-group textarea {
+  width: 100%; background: #0f1117; border: 1px solid #2a2b3a; color: #e1e1e6;
+  padding: 10px 12px; border-radius: 8px; font-size: 14px; resize: vertical; min-height: 80px;
+  font-family: inherit;
+}
+.form-group textarea:focus { outline: none; border-color: #7c8aff; }
+
+.image-upload-area {
+  border: 2px dashed #2a2b3a; border-radius: 8px; padding: 20px; text-align: center;
+  cursor: pointer; transition: border-color 0.2s; position: relative;
+}
+.image-upload-area:hover { border-color: #7c8aff; }
+.image-upload-area.has-images { padding: 10px; }
+.image-upload-hint { color: #555; font-size: 13px; }
+.image-preview-list { display: flex; gap: 8px; flex-wrap: wrap; }
+.image-preview-item {
+  position: relative; width: 80px; height: 80px; border-radius: 6px; overflow: hidden;
+}
+.image-preview-item img { width: 100%; height: 100%; object-fit: cover; }
+.image-preview-item .remove-btn {
+  position: absolute; top: 2px; right: 2px; width: 20px; height: 20px;
+  background: rgba(0,0,0,0.7); color: #fff; border: none; border-radius: 50%;
+  cursor: pointer; font-size: 12px; display: flex; align-items: center; justify-content: center;
+}
+
+.btn-generate {
+  width: 100%; padding: 12px; background: #7c8aff; color: #fff; border: none;
+  border-radius: 8px; font-size: 15px; font-weight: 600; cursor: pointer;
+  transition: background 0.2s;
+}
+.btn-generate:hover { background: #6b79ee; }
+.btn-generate:disabled { background: #3a3b5a; cursor: not-allowed; }
+
+.output-panel {
+  background: #1a1b26; border: 1px solid #2a2b3a; border-radius: 10px; padding: 20px; margin-top: 16px;
+}
+.output-panel h3 { font-size: 15px; margin-bottom: 12px; display: flex; align-items: center; gap: 8px; }
+.status-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+.status-idle { background: #555; }
+.status-running { background: #facc15; animation: pulse 1s infinite; }
+.status-done { background: #4ade80; }
+.status-error { background: #f87171; }
+@keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.4; } }
+
+.output-log {
+  background: #0f1117; border-radius: 8px; padding: 12px; font-size: 13px;
+  line-height: 1.6; max-height: 200px; overflow-y: auto; white-space: pre-wrap;
+  word-break: break-all; color: #aaa;
+}
+.output-result { margin-top: 12px; }
+.output-result img { max-width: 100%; border-radius: 8px; margin-top: 8px; }
+.output-result video { max-width: 100%; border-radius: 8px; margin-top: 8px; }
+
+.model-list::-webkit-scrollbar, .output-log::-webkit-scrollbar { width: 4px; }
+.model-list::-webkit-scrollbar-thumb, .output-log::-webkit-scrollbar-thumb { background: #333; border-radius: 2px; }
+
+@media (max-width: 768px) {
+  .main-layout { flex-direction: column; }
+  .sidebar { width: 100%; }
+  .config-bar { flex-wrap: wrap; }
+}
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>🧪 Flow2API 模型测试</h1>
+  <p class="subtitle">选择模型，输入提示词，测试生成效果</p>
+
+  <div class="config-bar">
+    <label>API Key:</label>
+    <input type="password" id="apiKey" placeholder="输入 API Key">
+    <label>地址:</label>
+    <input type="text" id="baseUrl" placeholder="http://localhost:8000" />
+  </div>
+  <p class="config-note">未填写 API Key 或模型列表加载失败时，会回退到内置候选模型；实际生成前仍需填写有效 API Key。</p>
+
+  <div class="main-layout">
+    <div class="sidebar" id="modelSidebar"></div>
+    <div class="content">
+      <div class="gen-panel">
+        <h3 id="selectedModelName">请选择模型</h3>
+        <div class="model-info" id="selectedModelInfo">从左侧列表选择一个模型开始测试</div>
+
+        <div class="form-group">
+          <label>提示词 (Prompt)</label>
+          <textarea id="promptInput" placeholder="描述你想生成的内容...">一只可爱的橘猫趴在窗台上晒太阳，窗外是樱花盛开的春天</textarea>
+        </div>
+
+        <div class="form-group" id="imageUploadGroup" style="display:none;">
+          <label>上传图片 <span id="imageLimit" style="color:#666;font-size:12px;"></span></label>
+          <div class="image-upload-area" id="imageUploadArea">
+            <div class="image-upload-hint" id="imageHint">点击或拖拽上传图片</div>
+            <div class="image-preview-list" id="imagePreviewList"></div>
+          </div>
+          <input type="file" id="imageFileInput" accept="image/*" multiple style="display:none;">
+        </div>
+
+        <button class="btn-generate" id="btnGenerate" disabled>选择模型后开始生成</button>
+      </div>
+
+      <div class="output-panel">
+        <h3><span class="status-dot status-idle" id="statusDot"></span> <span id="statusText">等待中</span></h3>
+        <div class="output-log" id="outputLog">准备就绪，选择模型并点击生成按钮开始...</div>
+        <div class="output-result" id="outputResult"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const STATE = { selectedModel: null, modelConfig: null, images: [], generating: false };
+</script>
+<script>
+// Model categories for sidebar
+const MODEL_CATEGORIES = {
+  "图片生成": { filter: m => getModelType(m) === "image" },
+  "视频生成": { filter: m => getModelType(m) === "video" },
+};
+
+const FALLBACK_MODELS = {
+  "gemini-3.1-flash-image": "Image generation (alias) - aspects: landscape, portrait, square, four-three, three-four; sizes: 2k, 4k",
+  "gemini-3.0-pro-image": "Image generation (alias) - aspects: landscape, portrait, square, four-three, three-four; sizes: 2k, 4k",
+  "imagen-4.0-generate-preview": "Image generation (alias) - aspects: landscape, portrait",
+  "veo_3_1_t2v_fast": "Video generation (alias) - supports landscape/portrait via generationConfig",
+  "veo_3_1_t2v_fast_4s": "Video generation (alias) - 4s, supports landscape/portrait via generationConfig",
+  "veo_3_1_t2v_fast_landscape_4s": "Video generation - fast 4s landscape",
+  "veo_3_1_t2v_fast_6s": "Video generation (alias) - 6s, supports landscape/portrait via generationConfig",
+  "veo_3_1_t2v_fast_landscape_6s": "Video generation - fast 6s landscape",
+  "veo_3_1_t2v_fast_8s": "Video generation (alias) - 8s, supports landscape/portrait via generationConfig",
+  "veo_3_1_t2v_fast_landscape_8s": "Video generation - fast 8s landscape",
+  "veo_3_1_t2v_fast_ultra": "Video generation (alias) - supports landscape/portrait via generationConfig",
+  "veo_3_1_t2v_fast_ultra_relaxed": "Video generation (alias) - supports landscape/portrait via generationConfig",
+  "veo_3_1_t2v": "Video generation (alias) - supports landscape/portrait via generationConfig",
+  "veo_3_1_t2v_4s": "Video generation (alias) - 4s, supports landscape/portrait via generationConfig",
+  "veo_3_1_t2v_landscape_4s": "Video generation - quality 4s landscape",
+  "veo_3_1_t2v_6s": "Video generation (alias) - 6s, supports landscape/portrait via generationConfig",
+  "veo_3_1_t2v_landscape_6s": "Video generation - quality 6s landscape",
+  "veo_3_1_t2v_8s": "Video generation (alias) - 8s, supports landscape/portrait via generationConfig",
+  "veo_3_1_t2v_landscape_8s": "Video generation - quality 8s landscape",
+  "veo_3_1_t2v_4k": "Video upsample alias - generate then upscale to 4K",
+  "veo_3_1_t2v_landscape_4k": "Video upsample alias - generate landscape then upscale to 4K",
+  "veo_3_1_t2v_1080p": "Video upsample alias - generate then upscale to 1080P",
+  "veo_3_1_t2v_landscape_1080p": "Video upsample alias - generate landscape then upscale to 1080P",
+  "veo_3_1_t2v_4s_4k": "Video upsample alias - generate 4s then upscale to 4K",
+  "veo_3_1_t2v_landscape_4s_4k": "Video upsample alias - generate 4s landscape then upscale to 4K",
+  "veo_3_1_t2v_4s_1080p": "Video upsample alias - generate 4s then upscale to 1080P",
+  "veo_3_1_t2v_landscape_4s_1080p": "Video upsample alias - generate 4s landscape then upscale to 1080P",
+  "veo_3_1_t2v_6s_4k": "Video upsample alias - generate 6s then upscale to 4K",
+  "veo_3_1_t2v_landscape_6s_4k": "Video upsample alias - generate 6s landscape then upscale to 4K",
+  "veo_3_1_t2v_6s_1080p": "Video upsample alias - generate 6s then upscale to 1080P",
+  "veo_3_1_t2v_landscape_6s_1080p": "Video upsample alias - generate 6s landscape then upscale to 1080P",
+  "veo_3_1_t2v_8s_4k": "Video upsample alias - generate 8s then upscale to 4K",
+  "veo_3_1_t2v_landscape_8s_4k": "Video upsample alias - generate 8s landscape then upscale to 4K",
+  "veo_3_1_t2v_8s_1080p": "Video upsample alias - generate 8s then upscale to 1080P",
+  "veo_3_1_t2v_landscape_8s_1080p": "Video upsample alias - generate 8s landscape then upscale to 1080P",
+  "veo_3_1_t2v_lite_8s": "Video generation (alias) - lite 8s, supports landscape/portrait via generationConfig",
+  "veo_3_1_i2v_s_fast_fl": "Video generation (alias) - supports landscape/portrait via generationConfig",
+  "veo_3_1_i2v_s_fast_4s_fl": "Video generation (alias) - 4s, supports landscape/portrait via generationConfig",
+  "veo_3_1_i2v_s_fast_landscape_4s_fl": "Video generation - fast 4s landscape",
+  "veo_3_1_i2v_s_fast_6s_fl": "Video generation (alias) - 6s, supports landscape/portrait via generationConfig",
+  "veo_3_1_i2v_s_fast_landscape_6s_fl": "Video generation - fast 6s landscape",
+  "veo_3_1_i2v_s_fast_8s_fl": "Video generation (alias) - 8s, supports landscape/portrait via generationConfig",
+  "veo_3_1_i2v_s_fast_landscape_8s_fl": "Video generation - fast 8s landscape",
+  "veo_3_1_i2v_s_fast_ultra_fl": "Video generation (alias) - supports landscape/portrait via generationConfig",
+  "veo_3_1_i2v_s_fast_ultra_relaxed": "Video generation (alias) - supports landscape/portrait via generationConfig",
+  "veo_3_1_i2v_s": "Video generation (alias) - supports landscape/portrait via generationConfig",
+  "veo_3_1_i2v_s_4s": "Video generation (alias) - 4s, supports landscape/portrait via generationConfig",
+  "veo_3_1_i2v_s_landscape_4s": "Video generation - quality 4s landscape",
+  "veo_3_1_i2v_s_6s": "Video generation (alias) - 6s, supports landscape/portrait via generationConfig",
+  "veo_3_1_i2v_s_landscape_6s": "Video generation - quality 6s landscape",
+  "veo_3_1_i2v_s_8s": "Video generation (alias) - 8s, supports landscape/portrait via generationConfig",
+  "veo_3_1_i2v_s_landscape_8s": "Video generation - quality 8s landscape",
+  "veo_3_1_i2v_s_4k": "Video upsample alias - generate then upscale to 4K",
+  "veo_3_1_i2v_s_landscape_4k": "Video upsample alias - generate landscape then upscale to 4K",
+  "veo_3_1_i2v_s_1080p": "Video upsample alias - generate then upscale to 1080P",
+  "veo_3_1_i2v_s_landscape_1080p": "Video upsample alias - generate landscape then upscale to 1080P",
+  "veo_3_1_i2v_s_4s_4k": "Video upsample alias - generate 4s then upscale to 4K",
+  "veo_3_1_i2v_s_landscape_4s_4k": "Video upsample alias - generate 4s landscape then upscale to 4K",
+  "veo_3_1_i2v_s_4s_1080p": "Video upsample alias - generate 4s then upscale to 1080P",
+  "veo_3_1_i2v_s_landscape_4s_1080p": "Video upsample alias - generate 4s landscape then upscale to 1080P",
+  "veo_3_1_i2v_s_6s_4k": "Video upsample alias - generate 6s then upscale to 4K",
+  "veo_3_1_i2v_s_landscape_6s_4k": "Video upsample alias - generate 6s landscape then upscale to 4K",
+  "veo_3_1_i2v_s_6s_1080p": "Video upsample alias - generate 6s then upscale to 1080P",
+  "veo_3_1_i2v_s_landscape_6s_1080p": "Video upsample alias - generate 6s landscape then upscale to 1080P",
+  "veo_3_1_i2v_s_8s_4k": "Video upsample alias - generate 8s then upscale to 4K",
+  "veo_3_1_i2v_s_landscape_8s_4k": "Video upsample alias - generate 8s landscape then upscale to 4K",
+  "veo_3_1_i2v_s_8s_1080p": "Video upsample alias - generate 8s then upscale to 1080P",
+  "veo_3_1_i2v_s_landscape_8s_1080p": "Video upsample alias - generate 8s landscape then upscale to 1080P",
+  "veo_3_1_i2v_lite_8s": "Video generation (alias) - lite 8s, supports landscape/portrait via generationConfig",
+  "veo_3_1_interpolation_lite_8s": "Video generation (alias) - interpolation lite 8s, supports landscape/portrait via generationConfig",
+  "veo_3_1_r2v_fast": "Video generation (alias) - supports landscape/portrait via generationConfig",
+  "veo_3_1_r2v_fast_landscape": "Video generation - R2V fast landscape",
+  "veo_3_1_r2v_fast_8s": "Video generation (alias) - R2V fast 8s, supports landscape/portrait via generationConfig",
+  "veo_3_1_r2v_fast_landscape_8s": "Video generation - R2V fast 8s landscape",
+  "veo_3_1_r2v_fast_ultra": "Video generation (alias) - supports landscape/portrait via generationConfig",
+  "veo_3_1_r2v_fast_landscape_ultra": "Video generation - R2V fast ultra landscape",
+  "veo_3_1_r2v_fast_ultra_8s": "Video generation (alias) - R2V fast ultra 8s, supports landscape/portrait via generationConfig",
+  "veo_3_1_r2v_fast_landscape_ultra_8s": "Video generation - R2V fast ultra 8s landscape",
+  "veo_3_1_r2v_fast_ultra_relaxed": "Video generation (alias) - supports landscape/portrait via generationConfig",
+  "veo_3_1_r2v_fast_landscape_ultra_relaxed": "Video generation - R2V fast ultra relaxed landscape",
+  "veo_3_1_r2v_fast_ultra_relaxed_8s": "Video generation (alias) - R2V fast ultra relaxed 8s, supports landscape/portrait via generationConfig",
+  "veo_3_1_r2v_fast_landscape_ultra_relaxed_8s": "Video generation - R2V fast ultra relaxed 8s landscape",
+  "veo_3_1_r2v_fast_landscape_ultra_4k": "Video upsample alias - generate R2V landscape then upscale to 4K",
+  "veo_3_1_r2v_fast_landscape_ultra_1080p": "Video upsample alias - generate R2V landscape then upscale to 1080P",
+};
+
+let ALL_MODELS = {};
+
+function applyFallbackModels(reason) {
+  console.warn("使用内置候选模型列表:", reason);
+  ALL_MODELS = { ...FALLBACK_MODELS };
+  renderSidebar();
+}
+
+async function loadModels() {
+  const baseUrl = (document.getElementById("baseUrl").value || "").trim();
+  const apiKey = (document.getElementById("apiKey").value || "").trim();
+  if (!baseUrl || !apiKey) {
+    applyFallbackModels("missing_base_url_or_api_key");
+    return;
+  }
+  try {
+    const resp = await fetch(`${baseUrl}/models`, {
+      headers: { "Authorization": `Bearer ${apiKey}` }
+    });
+    if (!resp.ok) {
+      throw new Error(`HTTP ${resp.status}`);
+    }
+    const data = await resp.json();
+    const items = Array.isArray(data.models) ? data.models : [];
+    if (!items.length) {
+      applyFallbackModels("empty_model_catalog");
+      return;
+    }
+    ALL_MODELS = {};
+    items.forEach(m => { ALL_MODELS[m.name.replace(/^models\//, "")] = m.description; });
+    renderSidebar();
+  } catch (e) {
+    console.error("加载模型失败:", e);
+    applyFallbackModels(e.message || "load_failed");
+  }
+}
+
+function renderSidebarFallback() {
+  applyFallbackModels("legacy_fallback");
+}
+
+function getModelType(modelId) {
+  if (/image|imagen|banana/i.test(modelId)) return "image";
+  return "video";
+}
+
+function getModelMeta(modelId) {
+  // Determine supports_images, min/max from model name patterns
+  const isI2V = modelId.includes("i2v");
+  const isR2V = modelId.includes("r2v");
+  const isOmni = /omni/i.test(modelId);
+  const isPublicVeo = /^Veo 3\.1 - (Lite|Fast|Quality)$/.test(modelId);
+  const isImage = getModelType(modelId) === "image";
+
+  if (isImage) return { type: "image", supportsImages: true, minImages: 0, maxImages: 5 };
+  if (isOmni) return { type: "video", supportsImages: true, minImages: 0, maxImages: 3 };
+  if (isPublicVeo) return { type: "video", supportsImages: true, minImages: 0, maxImages: modelId.endsWith("Fast") ? 3 : 2 };
+  if (isI2V) return { type: "video", supportsImages: true, minImages: 1, maxImages: 2 };
+  if (isR2V) return { type: "video", supportsImages: true, minImages: 0, maxImages: 3 };
+  return { type: "video", supportsImages: false, minImages: 0, maxImages: 0 };
+}
+
+function renderSidebar() {
+  const sidebar = document.getElementById("modelSidebar");
+  sidebar.innerHTML = "";
+
+  const modelIds = Object.keys(ALL_MODELS).sort();
+  if (modelIds.length === 0) {
+    sidebar.innerHTML = '<div class="model-section"><div class="model-list" style="border-radius:8px;"><div class="model-item" style="cursor:default;color:#888;">未获取到可用模型，请检查 API Key 或稍后重试</div></div></div>';
+    return;
+  }
+
+  for (const [catName, catDef] of Object.entries(MODEL_CATEGORIES)) {
+    const models = modelIds.filter(catDef.filter);
+    if (models.length === 0) continue;
+
+    const section = document.createElement("div");
+    section.className = "model-section";
+
+    const title = document.createElement("div");
+    title.className = "section-title";
+    title.innerHTML = `<span>${catName} (${models.length})</span><span class="arrow">▼</span>`;
+
+    const list = document.createElement("div");
+    list.className = "model-list";
+
+    models.forEach(modelId => {
+      const item = document.createElement("div");
+      item.className = "model-item";
+      item.dataset.model = modelId;
+
+      const type = getModelType(modelId);
+      const shortName = modelId.replace("gemini-3.1-flash-image-", "").replace("gemini-3.0-pro-image-", "").replace("imagen-4.0-generate-preview-", "");
+      item.innerHTML = `<span>${shortName}</span><span class="model-tag ${type === 'image' ? 'tag-image' : 'tag-video'}">${type === 'image' ? '图片' : '视频'}</span>`;
+      item.onclick = () => selectModel(modelId);
+      list.appendChild(item);
+    });
+
+    title.onclick = () => {
+      title.classList.toggle("collapsed");
+      list.classList.toggle("hidden");
+    };
+
+    section.appendChild(title);
+    section.appendChild(list);
+    sidebar.appendChild(section);
+  }
+}
+
+function selectModel(modelId) {
+  STATE.selectedModel = modelId;
+  STATE.modelConfig = getModelMeta(modelId);
+  STATE.images = [];
+
+  // Update sidebar active state
+  document.querySelectorAll(".model-item").forEach(el => {
+    el.classList.toggle("active", el.dataset.model === modelId);
+  });
+
+  // Update panel
+  document.getElementById("selectedModelName").textContent = modelId;
+  document.getElementById("selectedModelInfo").textContent = ALL_MODELS[modelId] || "";
+
+  // Show/hide image upload
+  const uploadGroup = document.getElementById("imageUploadGroup");
+  const meta = STATE.modelConfig;
+  if (meta.supportsImages) {
+    uploadGroup.style.display = "block";
+    const limitText = meta.type === "image" ? "可选，用于图生图" : `${meta.minImages}-${meta.maxImages}张`;
+    document.getElementById("imageLimit").textContent = `(${limitText})`;
+  } else {
+    uploadGroup.style.display = "none";
+  }
+
+  // Reset image previews
+  document.getElementById("imagePreviewList").innerHTML = "";
+  document.getElementById("imageHint").style.display = "block";
+
+  // Enable button
+  const btn = document.getElementById("btnGenerate");
+  btn.disabled = false;
+  btn.textContent = meta.type === "image" ? "🎨 生成图片" : "🎬 生成视频";
+}
+
+// Image upload handling
+const uploadArea = document.getElementById("imageUploadArea");
+const fileInput = document.getElementById("imageFileInput");
+
+uploadArea.onclick = (e) => {
+  if (e.target.closest(".remove-btn")) return;
+  fileInput.click();
+};
+
+uploadArea.ondragover = (e) => { e.preventDefault(); uploadArea.style.borderColor = "#7c8aff"; };
+uploadArea.ondragleave = () => { uploadArea.style.borderColor = "#2a2b3a"; };
+uploadArea.ondrop = (e) => {
+  e.preventDefault();
+  uploadArea.style.borderColor = "#2a2b3a";
+  handleFiles(e.dataTransfer.files);
+};
+
+fileInput.onchange = () => { handleFiles(fileInput.files); fileInput.value = ""; };
+
+function handleFiles(files) {
+  const maxImages = STATE.modelConfig ? STATE.modelConfig.maxImages : 5;
+  for (const file of files) {
+    if (STATE.images.length >= maxImages) break;
+    if (!file.type.startsWith("image/")) continue;
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      STATE.images.push(e.target.result);
+      renderImagePreviews();
+    };
+    reader.readAsDataURL(file);
+  }
+}
+
+function renderImagePreviews() {
+  const list = document.getElementById("imagePreviewList");
+  const hint = document.getElementById("imageHint");
+  list.innerHTML = "";
+  hint.style.display = STATE.images.length ? "none" : "block";
+
+  STATE.images.forEach((dataUrl, idx) => {
+    const item = document.createElement("div");
+    item.className = "image-preview-item";
+    item.innerHTML = `<img src="${dataUrl}" alt="preview"><button class="remove-btn" onclick="removeImage(${idx})">×</button>`;
+    list.appendChild(item);
+  });
+}
+
+function removeImage(idx) {
+  STATE.images.splice(idx, 1);
+  renderImagePreviews();
+}
+
+// Generation
+document.getElementById("btnGenerate").onclick = generate;
+
+async function generate() {
+  if (!STATE.selectedModel || STATE.generating) return;
+
+  const baseUrl = (document.getElementById("baseUrl").value || "").trim();
+  const apiKey = (document.getElementById("apiKey").value || "").trim();
+  const prompt = document.getElementById("promptInput").value.trim();
+  if (!prompt) { alert("请输入提示词"); return; }
+  if (!apiKey) { alert("请输入 API Key"); return; }
+  if (!baseUrl) { alert("请输入服务地址"); return; }
+
+  STATE.generating = true;
+  const btn = document.getElementById("btnGenerate");
+  btn.disabled = true;
+  btn.textContent = "⏳ 生成中...";
+
+  const dot = document.getElementById("statusDot");
+  dot.className = "status-dot status-running";
+  document.getElementById("statusText").textContent = "生成中...";
+  document.getElementById("outputLog").textContent = "";
+  document.getElementById("outputResult").innerHTML = "";
+
+  const log = document.getElementById("outputLog");
+  const appendLog = (text) => { log.textContent += text; log.scrollTop = log.scrollHeight; };
+
+  const parts = [{ text: prompt }];
+  STATE.images.forEach(dataUrl => {
+    const match = /^data:([^;]+);base64,(.+)$/.exec(dataUrl);
+    if (match) parts.push({ inlineData: { mimeType: match[1], data: match[2] } });
+  });
+  const body = { contents: [{ role: "user", parts }] };
+
+  const startTime = Date.now();
+  appendLog(`[${new Date().toLocaleTimeString()}] 模型: ${STATE.selectedModel}\n`);
+  appendLog(`[${new Date().toLocaleTimeString()}] 提示词: ${prompt.substring(0, 100)}${prompt.length > 100 ? '...' : ''}\n`);
+  appendLog(`[${new Date().toLocaleTimeString()}] 开始请求...\n`);
+
+  try {
+    const resp = await fetch(`${baseUrl}/models/${encodeURIComponent(STATE.selectedModel)}:generateContent`, {
+      method: "POST",
+      headers: { "x-goog-api-key": apiKey, "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+
+    if (!resp.ok) {
+      const errText = await resp.text();
+      throw new Error(`HTTP ${resp.status}: ${errText}`);
+    }
+
+    const payload = await resp.json();
+    if (payload.error) throw new Error(payload.error.message || JSON.stringify(payload.error));
+    const outputParts = payload.candidates?.[0]?.content?.parts || [];
+
+    const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+    appendLog(`\n\n[${new Date().toLocaleTimeString()}] 完成，耗时 ${elapsed}s\n`);
+
+    // Render result
+    renderResult(outputParts);
+    dot.className = "status-dot status-done";
+    document.getElementById("statusText").textContent = `完成 (${elapsed}s)`;
+
+  } catch (e) {
+    appendLog(`\n❌ 请求失败: ${e.message}\n`);
+    dot.className = "status-dot status-error";
+    document.getElementById("statusText").textContent = "失败";
+  } finally {
+    STATE.generating = false;
+    btn.disabled = false;
+    const meta = STATE.modelConfig;
+    btn.textContent = meta && meta.type === "image" ? "🎨 生成图片" : "🎬 生成视频";
+  }
+}
+
+function renderResult(parts) {
+  const resultDiv = document.getElementById("outputResult");
+  resultDiv.innerHTML = "";
+  for (const part of parts) {
+    const uri = part.inlineData
+      ? `data:${part.inlineData.mimeType};base64,${part.inlineData.data}`
+      : part.fileData?.fileUri;
+    const mime = part.inlineData?.mimeType || part.fileData?.mimeType || "";
+    if (uri && mime.startsWith("image/")) {
+      const img = document.createElement("img");
+      img.src = uri;
+      img.alt = "生成结果";
+      img.loading = "lazy";
+      resultDiv.appendChild(img);
+    } else if (uri && mime.startsWith("video/")) {
+      const video = document.createElement("video");
+      video.src = uri;
+      video.controls = true;
+      resultDiv.appendChild(video);
+    } else if (part.text) {
+      const pre = document.createElement("pre");
+      pre.style.cssText = "color:#aaa;font-size:13px;white-space:pre-wrap;word-break:break-all;";
+      pre.textContent = part.text;
+      resultDiv.appendChild(pre);
+    }
+  }
+}
+
+// Auto-detect base URL
+(function() {
+  const baseUrlInput = document.getElementById("baseUrl");
+  const apiKeyInput = document.getElementById("apiKey");
+  baseUrlInput.value = window.location.origin;
+  baseUrlInput.addEventListener("change", loadModels);
+  apiKeyInput.addEventListener("change", loadModels);
+  loadModels();
+})();
+</script>
+</body>
+</html>

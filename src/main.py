@@ -344,6 +344,15 @@ async def test_page(request: Request):
     return HTMLResponse(content="<h1>Test Page Not Found</h1>", status_code=404)
 
 
+@app.get("/preview", response_class=HTMLResponse)
+async def preview_page():
+    """UI Preview page without session guard for instant review"""
+    preview_file = static_path / "preview.html"
+    if preview_file.exists():
+        return _static_page_response(preview_file)
+    return HTMLResponse(content="<h1>Preview Not Found</h1>", status_code=404)
+
+
 @app.get("/metrics")
 async def metrics():
     """Prometheus metrics endpoint for the main Flow2API service."""

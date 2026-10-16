@@ -1,0 +1,1071 @@
+<!DOCTYPE html>
+<html lang="zh-CN" class="h-full">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>管理控制台 - Flow2API</title>
+<!-- 网页 Logo Favicon: 白底黑色 F 字符，极简大气 -->
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%23ffffff' stroke='%23cbd5e1' stroke-width='1.5'/%3E%3Ctext x='16' y='24' font-family='-apple-system, BlinkMacSystemFont, Roboto, sans-serif' font-size='22' font-weight='800' fill='%230f172a' text-anchor='middle'%3EF%3C/text%3E%3C/svg%3E">
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+tailwind.config = {
+  theme: {
+    extend: {
+      colors: {
+        border: "hsl(0 0% 89.8%)",
+        input: "hsl(0 0% 89.8%)",
+        background: "#ffffff",
+        foreground: "hsl(0 0% 3.9%)",
+        muted: { DEFAULT: "hsl(0 0% 96.1%)", foreground: "hsl(0 0% 45.1%)" },
+        card: { DEFAULT: "#ffffff", foreground: "hsl(0 0% 3.9%)" }
+      }
+    }
+  }
+}
+</script>
+<style>
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; -webkit-tap-highlight-color: transparent; }
+  .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
+  .custom-scrollbar::-webkit-scrollbar-thumb { background: #e2e8f0; border-radius: 9999px; }
+  .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+  .chat-bubble-enter { animation: bubbleIn 0.2s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+  @keyframes bubbleIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+</style>
+</head>
+<body class="min-h-screen bg-[#fafafa] text-slate-900 antialiased flex flex-col md:flex-row">
+
+  <!-- 移动端侧边栏遮罩 Backdrop -->
+  <div id="mobile-sidebar-backdrop" onclick="toggleMobileSidebar()" class="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-30 hidden md:hidden transition-opacity"></div>
+
+  <!-- ======================== 左侧侧边栏导航 (支持移动端抽屉折叠) ======================== -->
+  <aside id="main-sidebar" class="fixed inset-y-0 left-0 z-40 w-64 bg-white border-r border-slate-200/80 flex flex-col justify-between shrink-0 select-none shadow-xl md:shadow-[1px_0_2px_rgba(0,0,0,0.02)] -translate-x-full md:translate-x-0 md:static transition-transform duration-200 ease-in-out">
+    <div>
+      <!-- 品牌栏 (白底黑色F字符 + 纯文字Flow2API) -->
+      <div class="h-14 flex items-center justify-between px-5 border-b border-slate-100">
+        <div class="flex items-center gap-2.5">
+          <div class="w-7 h-7 rounded-lg bg-white border border-slate-300 shadow-sm flex items-center justify-center font-extrabold text-sm text-slate-900 font-mono">
+            F
+          </div>
+          <span class="font-bold text-base tracking-tight text-slate-900">Flow2API</span>
+        </div>
+        <!-- 移动端关闭侧栏按钮 -->
+        <button onclick="toggleMobileSidebar()" class="md:hidden p-1.5 text-slate-400 hover:text-slate-600 rounded-lg">
+          <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+        </button>
+      </div>
+
+      <!-- 导航列表 -->
+      <div class="px-3 py-4">
+        <p class="px-3 text-[11px] font-medium text-slate-400 tracking-wider mb-2">控制中心</p>
+        <nav class="space-y-1">
+          <!-- 概览中心 -->
+          <button onclick="switchTab('overview')" id="nav-overview" class="nav-item w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all bg-slate-900 text-white shadow-sm">
+            <svg class="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"/></svg>
+            <span>概览中心</span>
+          </button>
+
+          <!-- 图片生成 -->
+          <button onclick="switchTab('chat-paint')" id="nav-chat-paint" class="nav-item w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all text-slate-600 hover:bg-slate-100 hover:text-slate-900">
+            <svg class="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+            <span class="flex-1 text-left">图片生成</span>
+            <span class="text-[10px] px-1.5 py-0.2 rounded bg-slate-100 text-slate-600 font-medium">快捷</span>
+          </button>
+
+          <!-- 请求日志 -->
+          <button onclick="switchTab('logs')" id="nav-logs" class="nav-item w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all text-slate-600 hover:bg-slate-100 hover:text-slate-900">
+            <svg class="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+            <span>请求日志</span>
+          </button>
+
+          <!-- 媒体管理 -->
+          <button onclick="switchTab('media-mgr')" id="nav-media-mgr" class="nav-item w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all text-slate-600 hover:bg-slate-100 hover:text-slate-900">
+            <svg class="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><rect x="2" y="4" width="20" height="16" rx="2.18"/><path d="M7 2v20M17 2v20M2 12h20M2 7h5M2 17h5M17 17h5M17 7h5"/></svg>
+            <span>媒体管理</span>
+          </button>
+
+          <!-- 系统配置 -->
+          <button onclick="switchTab('settings')" id="nav-settings" class="nav-item w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all text-slate-600 hover:bg-slate-100 hover:text-slate-900">
+            <svg class="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+            <span>系统配置</span>
+          </button>
+        </nav>
+      </div>
+    </div>
+
+    <!-- 底部退出栏 -->
+    <div class="p-3 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
+      <div class="flex items-center gap-2">
+        <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
+        <span>管理员在线</span>
+      </div>
+      <button class="hover:text-slate-900 transition-colors">退出</button>
+    </div>
+  </aside>
+
+  <!-- ======================== 右侧主内容区 ======================== -->
+  <main class="flex-1 flex flex-col min-w-0 min-h-screen md:h-screen md:overflow-y-auto custom-scrollbar">
+
+    <!-- 顶部状态栏 -->
+    <header class="h-14 bg-white border-b border-slate-200/80 px-4 sm:px-6 flex items-center justify-between shrink-0 sticky top-0 z-20 shadow-sm/50">
+      <div class="flex items-center gap-3">
+        <!-- 移动端汉堡按钮 -->
+        <button onclick="toggleMobileSidebar()" class="md:hidden p-1.5 -ml-1 text-slate-700 hover:bg-slate-100 rounded-lg focus:outline-none">
+          <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg>
+        </button>
+        <div class="flex items-center gap-2 text-sm font-semibold text-slate-900" id="page-title">
+          <span>概览中心</span>
+        </div>
+      </div>
+
+      <div class="flex items-center gap-2 sm:gap-3">
+        <a href="https://github.com/TheSmallHanCat/flow2api" target="_blank" class="hidden sm:inline-block text-xs text-slate-500 hover:text-slate-900 transition-colors" title="GitHub 仓库">
+          GitHub
+        </a>
+        <span class="hidden sm:inline-block text-slate-300">|</span>
+        <button class="text-xs font-medium text-slate-600 hover:text-slate-900 transition-colors">
+          刷新
+        </button>
+        <span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-xs bg-emerald-50 text-emerald-700 font-medium border border-emerald-100">
+          <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+          <span>正常运行</span>
+        </span>
+      </div>
+    </header>
+
+    <!-- ==================== TAB 1: 概览中心 ==================== -->
+    <section id="view-overview" class="p-3.5 sm:p-6 space-y-4 sm:space-y-5">
+
+      <!-- 第一排卡片：全局指标与资产状态 (移动端双列，桌面端六列) -->
+      <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5 sm:gap-3.5">
+        <!-- 账号总数 -->
+        <div class="bg-white rounded-xl p-3 sm:p-4 border border-slate-200/80 shadow-sm">
+          <p class="text-xs text-slate-500 mb-0.5 sm:mb-1">账号总数</p>
+          <div class="text-xl sm:text-2xl font-bold text-slate-900">5</div>
+          <p class="text-[10px] sm:text-[11px] text-emerald-600 font-medium mt-0.5 sm:mt-1 truncate">5 正常 · 0 异常</p>
+        </div>
+
+        <!-- 账号总余额 -->
+        <div class="bg-white rounded-xl p-3 sm:p-4 border border-slate-200/80 shadow-sm">
+          <p class="text-xs text-slate-500 mb-0.5 sm:mb-1">账号总点数</p>
+          <div class="text-xl sm:text-2xl font-bold text-slate-900">5,000 <span class="text-xs font-normal text-slate-400">点</span></div>
+          <p class="text-[10px] sm:text-[11px] text-slate-400 mt-0.5 sm:mt-1 truncate">均分 1000 点/号</p>
+        </div>
+
+        <!-- 今日消耗点数 -->
+        <div class="bg-white rounded-xl p-3 sm:p-4 border border-slate-200/80 shadow-sm">
+          <p class="text-xs text-slate-500 mb-0.5 sm:mb-1">今日已用点数</p>
+          <div class="text-xl sm:text-2xl font-bold text-slate-900">42 <span class="text-xs font-normal text-slate-400">点</span></div>
+          <p class="text-[10px] sm:text-[11px] text-slate-400 mt-0.5 sm:mt-1 truncate">视频生成消耗</p>
+        </div>
+
+        <!-- 今日成功率 -->
+        <div class="bg-white rounded-xl p-3 sm:p-4 border border-slate-200/80 shadow-sm">
+          <p class="text-xs text-slate-500 mb-0.5 sm:mb-1">今日成功率</p>
+          <div class="text-xl sm:text-2xl font-bold text-emerald-600">100.0%</div>
+          <p class="text-[10px] sm:text-[11px] text-emerald-600 font-medium mt-0.5 sm:mt-1 truncate">无异常拦截</p>
+        </div>
+
+        <!-- 今日调用量 -->
+        <div class="bg-white rounded-xl p-3 sm:p-4 border border-slate-200/80 shadow-sm">
+          <p class="text-xs text-slate-500 mb-0.5 sm:mb-1">今日总调用</p>
+          <div class="text-xl sm:text-2xl font-bold text-slate-900">70 <span class="text-xs font-normal text-slate-400">次</span></div>
+          <p class="text-[10px] sm:text-[11px] text-slate-400 mt-0.5 sm:mt-1 truncate">累计 1,598 次</p>
+        </div>
+
+        <!-- 平均耗时 -->
+        <div class="bg-white rounded-xl p-3 sm:p-4 border border-slate-200/80 shadow-sm">
+          <p class="text-xs text-slate-500 mb-0.5 sm:mb-1">平均耗时</p>
+          <div class="text-xl sm:text-2xl font-bold text-slate-900">24.2 <span class="text-xs font-normal text-slate-400">秒</span></div>
+          <p class="text-[10px] sm:text-[11px] text-slate-400 mt-0.5 sm:mt-1 truncate">图18s / 视52s</p>
+        </div>
+      </div>
+
+      <!-- 第二排卡片：图片与视频业务拆解 (纯扁平线框 SVG 图标) -->
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+        <!-- 图片卡片 -->
+        <div class="bg-white rounded-xl p-3.5 sm:p-4 border border-slate-200/80 shadow-sm">
+          <div class="flex items-center justify-between border-b border-slate-100 pb-2.5">
+            <span class="font-semibold text-xs sm:text-sm text-slate-800 flex items-center gap-1.5 sm:gap-2">
+              <svg class="w-4 h-4 text-blue-600 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>
+              <span>图片生成</span>
+              <span class="text-[10px] px-1.5 py-0.2 rounded bg-slate-100 text-slate-600 font-normal">不扣点数</span>
+            </span>
+            <span class="text-xs text-slate-400">累计出图：<span class="font-mono font-bold text-slate-700">1,412</span></span>
+          </div>
+          <div class="mt-2.5 flex items-baseline justify-between">
+            <div>
+              <span class="text-2xl sm:text-3xl font-extrabold text-slate-900">24</span>
+              <span class="text-xs text-slate-500 ml-1">今日生成 (张)</span>
+            </div>
+            <div class="flex items-center gap-2 text-xs text-slate-500 font-medium">
+              <span>1K: <strong class="text-slate-800">14</strong></span>
+              <span>2K: <strong class="text-blue-600">8</strong></span>
+              <span>4K: <strong class="text-purple-600">2</strong></span>
+            </div>
+          </div>
+        </div>
+
+        <!-- 视频卡片 -->
+        <div class="bg-white rounded-xl p-3.5 sm:p-4 border border-slate-200/80 shadow-sm">
+          <div class="flex items-center justify-between border-b border-slate-100 pb-2.5">
+            <span class="font-semibold text-xs sm:text-sm text-slate-800 flex items-center gap-1.5 sm:gap-2">
+              <svg class="w-4 h-4 text-purple-600 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><rect x="2" y="4" width="20" height="16" rx="2.18"/><path d="M7 2v20M17 2v20M2 12h20M2 7h5M2 17h5M17 17h5M17 7h5"/></svg>
+              <span>视频生成</span>
+              <span class="text-[10px] px-1.5 py-0.2 rounded bg-purple-50 text-purple-700 font-normal">Omni 1.1 Flash</span>
+            </span>
+            <span class="text-xs text-slate-400">累计产出：<span class="font-mono font-bold text-slate-700">186</span></span>
+          </div>
+          <div class="mt-2.5 flex items-baseline justify-between">
+            <div>
+              <span class="text-2xl sm:text-3xl font-extrabold text-slate-900">5</span>
+              <span class="text-xs text-slate-500 ml-1">今日生成 (支)</span>
+            </div>
+            <div class="flex items-center gap-2 text-xs text-slate-500 font-medium">
+              <span>文生: <strong class="text-slate-800">3</strong></span>
+              <span>图生: <strong class="text-slate-800">2</strong></span>
+              <span>消耗: <strong class="text-amber-600">42点</strong></span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ==================== 账号列表模块 (双模响应式：移动端专属卡片 + 桌面端标准表格) ==================== -->
+      <div class="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+        <!-- 头部操作栏 -->
+        <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2.5 p-3.5 sm:p-4 border-b border-slate-100">
+          <div>
+            <h3 class="text-sm sm:text-base font-bold text-slate-900">账号 Token 列表</h3>
+            <p class="text-xs text-slate-400 mt-0.5">管理 Google Flow 账号会话凭据与画板项目绑定状态</p>
+          </div>
+          <div class="flex items-center gap-2 w-full sm:w-auto justify-between sm:justify-end flex-wrap pt-1 sm:pt-0">
+            <label class="flex items-center gap-1.5 text-xs text-slate-500 cursor-pointer select-none">
+              <input type="checkbox" checked class="w-4 h-4 text-slate-900 rounded border-slate-300 focus:ring-0 cursor-pointer">
+              <span>自动刷新AT</span>
+            </label>
+            <div class="flex items-center gap-1.5">
+              <button class="px-2.5 py-1.5 rounded-lg border border-slate-200 text-xs font-medium text-slate-700 hover:bg-slate-50 transition-colors">
+                刷新余额
+              </button>
+              <button class="px-3 py-1.5 rounded-lg bg-slate-900 text-white text-xs font-medium hover:bg-slate-800 transition-colors shadow-sm">
+                + 添加 Token
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- 1. 移动端专属响应式卡片 (屏幕宽度 < 768px 自动启用，竖向单手刷，无需横滑) -->
+        <div class="block md:hidden divide-y divide-slate-100">
+          <!-- 移动端账号卡片 1 -->
+          <div class="p-3.5 space-y-2.5">
+            <div class="flex items-center justify-between gap-2">
+              <span class="font-bold text-xs text-slate-900 truncate">danborad916@gmail.com</span>
+              <span class="px-2 py-0.5 rounded text-[10px] font-medium bg-emerald-50 text-emerald-700 shrink-0">启用</span>
+            </div>
+            <div class="grid grid-cols-2 gap-2 text-[11px] bg-slate-50 p-2.5 rounded-lg border border-slate-100">
+              <div>
+                <span class="text-slate-400 block text-[10px] mb-0.5">点数余额</span>
+                <button class="inline-flex items-center gap-1 font-bold text-blue-600 font-mono">
+                  <span>1,000 点</span>
+                  <svg class="w-3 h-3 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+                </button>
+              </div>
+              <div>
+                <span class="text-slate-400 block text-[10px] mb-0.5">AT 过期时间</span>
+                <span class="text-slate-700 font-mono">今天 21:16 (12h)</span>
+              </div>
+              <div>
+                <span class="text-slate-400 block text-[10px] mb-0.5">运行模式</span>
+                <span class="text-slate-700 font-medium">协议模式</span>
+              </div>
+              <div>
+                <span class="text-slate-400 block text-[10px] mb-0.5">生成累计</span>
+                <span class="text-slate-700 font-mono">图 418 / 视 62</span>
+              </div>
+            </div>
+            <div class="flex items-center justify-between pt-0.5">
+              <span class="text-[10px] text-slate-400 font-mono truncate max-w-[140px]" title="0ac9aeac-640b-4e05-a279-ac7dea6a7651">项目: 0ac9aeac...</span>
+              <div class="flex items-center gap-1.5">
+                <button class="px-2.5 py-1 text-xs border border-slate-200 rounded-md text-slate-700 hover:bg-slate-50">编辑</button>
+                <button class="px-2.5 py-1 text-xs bg-slate-900 text-white rounded-md hover:bg-slate-800">刷新AT</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- 移动端账号卡片 2 -->
+          <div class="p-3.5 space-y-2.5">
+            <div class="flex items-center justify-between gap-2">
+              <span class="font-bold text-xs text-slate-900 truncate">sebaytinlaho@gmail.com</span>
+              <span class="px-2 py-0.5 rounded text-[10px] font-medium bg-emerald-50 text-emerald-700 shrink-0">启用</span>
+            </div>
+            <div class="grid grid-cols-2 gap-2 text-[11px] bg-slate-50 p-2.5 rounded-lg border border-slate-100">
+              <div>
+                <span class="text-slate-400 block text-[10px] mb-0.5">点数余额</span>
+                <button class="inline-flex items-center gap-1 font-bold text-blue-600 font-mono">
+                  <span>1,000 点</span>
+                  <svg class="w-3 h-3 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+                </button>
+              </div>
+              <div>
+                <span class="text-slate-400 block text-[10px] mb-0.5">AT 过期时间</span>
+                <span class="text-slate-700 font-mono">今天 23:36 (14h)</span>
+              </div>
+              <div>
+                <span class="text-slate-400 block text-[10px] mb-0.5">运行模式</span>
+                <span class="text-slate-700 font-medium">协议模式</span>
+              </div>
+              <div>
+                <span class="text-slate-400 block text-[10px] mb-0.5">生成累计</span>
+                <span class="text-slate-700 font-mono">图 520 / 视 48</span>
+              </div>
+            </div>
+            <div class="flex items-center justify-between pt-0.5">
+              <span class="text-[10px] text-slate-400 font-mono truncate max-w-[140px]">项目: 5fa36fb3...</span>
+              <div class="flex items-center gap-1.5">
+                <button class="px-2.5 py-1 text-xs border border-slate-200 rounded-md text-slate-700 hover:bg-slate-50">编辑</button>
+                <button class="px-2.5 py-1 text-xs bg-slate-900 text-white rounded-md hover:bg-slate-800">刷新AT</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- 移动端账号卡片 3 -->
+          <div class="p-3.5 space-y-2.5">
+            <div class="flex items-center justify-between gap-2">
+              <span class="font-bold text-xs text-slate-900 truncate">capocciadrinkley388@gmail.com</span>
+              <span class="px-2 py-0.5 rounded text-[10px] font-medium bg-emerald-50 text-emerald-700 shrink-0">启用</span>
+            </div>
+            <div class="grid grid-cols-2 gap-2 text-[11px] bg-slate-50 p-2.5 rounded-lg border border-slate-100">
+              <div>
+                <span class="text-slate-400 block text-[10px] mb-0.5">点数余额</span>
+                <button class="inline-flex items-center gap-1 font-bold text-blue-600 font-mono">
+                  <span>1,000 点</span>
+                  <svg class="w-3 h-3 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+                </button>
+              </div>
+              <div>
+                <span class="text-slate-400 block text-[10px] mb-0.5">AT 过期时间</span>
+                <span class="text-slate-700 font-mono">明天 06:21 (22h)</span>
+              </div>
+              <div>
+                <span class="text-slate-400 block text-[10px] mb-0.5">运行模式</span>
+                <span class="text-slate-700 font-medium">协议模式</span>
+              </div>
+              <div>
+                <span class="text-slate-400 block text-[10px] mb-0.5">生成累计</span>
+                <span class="text-slate-700 font-mono">图 360 / 视 42</span>
+              </div>
+            </div>
+            <div class="flex items-center justify-between pt-0.5">
+              <span class="text-[10px] text-slate-400 font-mono truncate max-w-[140px]">项目: 5628552e...</span>
+              <div class="flex items-center gap-1.5">
+                <button class="px-2.5 py-1 text-xs border border-slate-200 rounded-md text-slate-700 hover:bg-slate-50">编辑</button>
+                <button class="px-2.5 py-1 text-xs bg-slate-900 text-white rounded-md hover:bg-slate-800">刷新AT</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- 移动端账号卡片 4 -->
+          <div class="p-3.5 space-y-2.5">
+            <div class="flex items-center justify-between gap-2">
+              <span class="font-bold text-xs text-slate-900 truncate">danborad@gmail.com</span>
+              <span class="px-2 py-0.5 rounded text-[10px] font-medium bg-emerald-50 text-emerald-700 shrink-0">启用</span>
+            </div>
+            <div class="grid grid-cols-2 gap-2 text-[11px] bg-slate-50 p-2.5 rounded-lg border border-slate-100">
+              <div>
+                <span class="text-slate-400 block text-[10px] mb-0.5">点数余额</span>
+                <button class="inline-flex items-center gap-1 font-bold text-blue-600 font-mono">
+                  <span>1,000 点</span>
+                  <svg class="w-3 h-3 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+                </button>
+              </div>
+              <div>
+                <span class="text-slate-400 block text-[10px] mb-0.5">AT 过期时间</span>
+                <span class="text-slate-700 font-mono">明天 00:04 (15h)</span>
+              </div>
+              <div>
+                <span class="text-slate-400 block text-[10px] mb-0.5">运行模式</span>
+                <span class="text-slate-700 font-medium">协议模式</span>
+              </div>
+              <div>
+                <span class="text-slate-400 block text-[10px] mb-0.5">生成累计</span>
+                <span class="text-slate-700 font-mono">图 114 / 视 34</span>
+              </div>
+            </div>
+            <div class="flex items-center justify-between pt-0.5">
+              <span class="text-[10px] text-slate-400 font-mono truncate max-w-[140px]">项目: c397aaa8...</span>
+              <div class="flex items-center gap-1.5">
+                <button class="px-2.5 py-1 text-xs border border-slate-200 rounded-md text-slate-700 hover:bg-slate-50">编辑</button>
+                <button class="px-2.5 py-1 text-xs bg-slate-900 text-white rounded-md hover:bg-slate-800">刷新AT</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- 移动端账号卡片 5 -->
+          <div class="p-3.5 space-y-2.5">
+            <div class="flex items-center justify-between gap-2">
+              <span class="font-bold text-xs text-slate-900 truncate">flow.backup05@gmail.com</span>
+              <span class="px-2 py-0.5 rounded text-[10px] font-medium bg-emerald-50 text-emerald-700 shrink-0">启用</span>
+            </div>
+            <div class="grid grid-cols-2 gap-2 text-[11px] bg-slate-50 p-2.5 rounded-lg border border-slate-100">
+              <div>
+                <span class="text-slate-400 block text-[10px] mb-0.5">点数余额</span>
+                <button class="inline-flex items-center gap-1 font-bold text-blue-600 font-mono">
+                  <span>1,000 点</span>
+                  <svg class="w-3 h-3 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+                </button>
+              </div>
+              <div>
+                <span class="text-slate-400 block text-[10px] mb-0.5">AT 过期时间</span>
+                <span class="text-slate-700 font-mono">明天 14:20 (28h)</span>
+              </div>
+              <div>
+                <span class="text-slate-400 block text-[10px] mb-0.5">运行模式</span>
+                <span class="text-slate-700 font-medium">备用模式</span>
+              </div>
+              <div>
+                <span class="text-slate-400 block text-[10px] mb-0.5">生成累计</span>
+                <span class="text-slate-700 font-mono">图 0 / 视 0</span>
+              </div>
+            </div>
+            <div class="flex items-center justify-between pt-0.5">
+              <span class="text-[10px] text-slate-400 font-mono truncate max-w-[140px]">项目: 8e1f02ac...</span>
+              <div class="flex items-center gap-1.5">
+                <button class="px-2.5 py-1 text-xs border border-slate-200 rounded-md text-slate-700 hover:bg-slate-50">编辑</button>
+                <button class="px-2.5 py-1 text-xs bg-slate-900 text-white rounded-md hover:bg-slate-800">刷新AT</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 2. 桌面端宽屏幕标准表格 (屏幕宽度 >= 768px 显示，布局宽阔自然) -->
+        <div class="hidden md:block overflow-x-auto">
+          <table class="w-full text-xs text-left">
+            <thead class="bg-slate-50/80 text-slate-500 font-medium border-b border-slate-100">
+              <tr>
+                <th class="py-3 px-4">账号邮箱</th>
+                <th class="py-3 px-3 text-center">状态</th>
+                <th class="py-3 px-3 text-center">模式</th>
+                <th class="py-3 px-3 text-center">AT 过期时间</th>
+                <th class="py-3 px-3 text-center">点数余额</th>
+                <th class="py-3 px-4">当前画板项目 ID</th>
+                <th class="py-3 px-3 text-center">生成统计</th>
+                <th class="py-3 px-4 text-right">操作</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-100 text-slate-700">
+              <tr class="hover:bg-slate-50/60 transition-colors">
+                <td class="py-3 px-4 font-medium text-slate-900">danborad916@gmail.com</td>
+                <td class="py-3 px-3 text-center"><span class="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium bg-emerald-50 text-emerald-700">启用</span></td>
+                <td class="py-3 px-3 text-center"><span class="inline-flex items-center px-1.5 py-0.5 rounded text-[11px] bg-slate-100 text-slate-600 font-medium">协议</span></td>
+                <td class="py-3 px-3 text-center font-mono text-slate-500">今天 21:16 (12小时)</td>
+                <td class="py-3 px-3 text-center">
+                  <button class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 hover:bg-blue-100 font-semibold font-mono" title="点击刷新余额">
+                    <span>1,000</span>
+                    <svg class="w-3 h-3 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+                  </button>
+                </td>
+                <td class="py-3 px-4 font-mono text-slate-500 text-[11px]">0ac9aeac-640b-4e05-a279-ac7dea6a7651</td>
+                <td class="py-3 px-3 text-center text-slate-500 font-mono">图 418 / 视 62</td>
+                <td class="py-3 px-4 text-right space-x-1">
+                  <button class="px-2 py-1 text-slate-600 hover:text-slate-900 font-medium">编辑</button>
+                  <button class="px-2 py-1 text-blue-600 hover:underline">刷新AT</button>
+                </td>
+              </tr>
+              <tr class="hover:bg-slate-50/60 transition-colors">
+                <td class="py-3 px-4 font-medium text-slate-900">sebaytinlaho@gmail.com</td>
+                <td class="py-3 px-3 text-center"><span class="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium bg-emerald-50 text-emerald-700">启用</span></td>
+                <td class="py-3 px-3 text-center"><span class="inline-flex items-center px-1.5 py-0.5 rounded text-[11px] bg-slate-100 text-slate-600 font-medium">协议</span></td>
+                <td class="py-3 px-3 text-center font-mono text-slate-500">今天 23:36 (14小时)</td>
+                <td class="py-3 px-3 text-center">
+                  <button class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 hover:bg-blue-100 font-semibold font-mono" title="点击刷新余额">
+                    <span>1,000</span>
+                    <svg class="w-3 h-3 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+                  </button>
+                </td>
+                <td class="py-3 px-4 font-mono text-slate-500 text-[11px]">5fa36fb3-075a-41ef-8bb7-c58cb7634dbd</td>
+                <td class="py-3 px-3 text-center text-slate-500 font-mono">图 520 / 视 48</td>
+                <td class="py-3 px-4 text-right space-x-1">
+                  <button class="px-2 py-1 text-slate-600 hover:text-slate-900 font-medium">编辑</button>
+                  <button class="px-2 py-1 text-blue-600 hover:underline">刷新AT</button>
+                </td>
+              </tr>
+              <tr class="hover:bg-slate-50/60 transition-colors">
+                <td class="py-3 px-4 font-medium text-slate-900">capocciadrinkley388@gmail.com</td>
+                <td class="py-3 px-3 text-center"><span class="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium bg-emerald-50 text-emerald-700">启用</span></td>
+                <td class="py-3 px-3 text-center"><span class="inline-flex items-center px-1.5 py-0.5 rounded text-[11px] bg-slate-100 text-slate-600 font-medium">协议</span></td>
+                <td class="py-3 px-3 text-center font-mono text-slate-500">明天 06:21 (22小时)</td>
+                <td class="py-3 px-3 text-center">
+                  <button class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 hover:bg-blue-100 font-semibold font-mono" title="点击刷新余额">
+                    <span>1,000</span>
+                    <svg class="w-3 h-3 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+                  </button>
+                </td>
+                <td class="py-3 px-4 font-mono text-slate-500 text-[11px]">5628552e-2880-407e-afdc-8d30d2f23e11</td>
+                <td class="py-3 px-3 text-center text-slate-500 font-mono">图 360 / 视 42</td>
+                <td class="py-3 px-4 text-right space-x-1">
+                  <button class="px-2 py-1 text-slate-600 hover:text-slate-900 font-medium">编辑</button>
+                  <button class="px-2 py-1 text-blue-600 hover:underline">刷新AT</button>
+                </td>
+              </tr>
+              <tr class="hover:bg-slate-50/60 transition-colors">
+                <td class="py-3 px-4 font-medium text-slate-900">danborad@gmail.com</td>
+                <td class="py-3 px-3 text-center"><span class="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium bg-emerald-50 text-emerald-700">启用</span></td>
+                <td class="py-3 px-3 text-center"><span class="inline-flex items-center px-1.5 py-0.5 rounded text-[11px] bg-slate-100 text-slate-600 font-medium">协议</span></td>
+                <td class="py-3 px-3 text-center font-mono text-slate-500">明天 00:04 (15小时)</td>
+                <td class="py-3 px-3 text-center">
+                  <button class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 hover:bg-blue-100 font-semibold font-mono" title="点击刷新余额">
+                    <span>1,000</span>
+                    <svg class="w-3 h-3 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+                  </button>
+                </td>
+                <td class="py-3 px-4 font-mono text-slate-500 text-[11px]">c397aaa8-dd71-4444-8b5e-1467f1f04a9f</td>
+                <td class="py-3 px-3 text-center text-slate-500 font-mono">图 114 / 视 34</td>
+                <td class="py-3 px-4 text-right space-x-1">
+                  <button class="px-2 py-1 text-slate-600 hover:text-slate-900 font-medium">编辑</button>
+                  <button class="px-2 py-1 text-blue-600 hover:underline">刷新AT</button>
+                </td>
+              </tr>
+              <tr class="hover:bg-slate-50/60 transition-colors">
+                <td class="py-3 px-4 font-medium text-slate-900">flow.backup05@gmail.com</td>
+                <td class="py-3 px-3 text-center"><span class="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium bg-emerald-50 text-emerald-700">启用</span></td>
+                <td class="py-3 px-3 text-center"><span class="inline-flex items-center px-1.5 py-0.5 rounded text-[11px] bg-slate-100 text-slate-600 font-medium">备用</span></td>
+                <td class="py-3 px-3 text-center font-mono text-slate-500">明天 14:20 (28小时)</td>
+                <td class="py-3 px-3 text-center">
+                  <button class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 hover:bg-blue-100 font-semibold font-mono" title="点击刷新余额">
+                    <span>1,000</span>
+                    <svg class="w-3 h-3 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+                  </button>
+                </td>
+                <td class="py-3 px-4 font-mono text-slate-500 text-[11px]">8e1f02ac-22bb-4122-990a-661da129ef90</td>
+                <td class="py-3 px-3 text-center text-slate-500 font-mono">图 0 / 视 0</td>
+                <td class="py-3 px-4 text-right space-x-1">
+                  <button class="px-2 py-1 text-slate-600 hover:text-slate-900 font-medium">编辑</button>
+                  <button class="px-2 py-1 text-blue-600 hover:underline">刷新AT</button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- ==================== 账号列表下方：生成时间轴 (粗柱体大方块，复刻截图3，支持手机滑动) ==================== -->
+      <div class="rounded-xl border border-slate-200 bg-white shadow-sm p-3.5 sm:p-5 space-y-3.5 sm:space-y-4">
+        <!-- 头部标题、时间切换胶囊、模型图例 -->
+        <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+          <div>
+            <h4 class="text-sm font-bold text-slate-900">生成时间轴 / 模型请求分布</h4>
+            <p class="text-xs text-slate-400 mt-0.5">统计今日 24 小时各时段的真实出图与视频调用柱状分布</p>
+          </div>
+
+          <div class="flex items-center justify-between w-full sm:w-auto gap-3 flex-wrap">
+            <!-- 截图3同款图例：绿色方块 gpt-image / 2.1 样式 -->
+            <div class="flex items-center gap-2 text-xs text-slate-600">
+              <span class="w-3 h-3 rounded-sm bg-[#2e9e6b] shrink-0"></span>
+              <span class="font-mono text-[11px]">Nano Banana 2.1</span>
+            </div>
+
+            <!-- 截图3同款：今日 / 7天 / 30天 切换胶囊 -->
+            <div class="inline-flex rounded-lg border border-slate-200 p-0.5 bg-slate-50 text-xs font-medium text-slate-600 shrink-0">
+              <button onclick="switchChartTimeline('today', this)" class="px-2.5 py-1 rounded-md bg-white text-slate-900 shadow-sm transition-all">今日</button>
+              <button onclick="switchChartTimeline('7d', this)" class="px-2.5 py-1 rounded-md hover:text-slate-900 transition-all">7天</button>
+              <button onclick="switchChartTimeline('30d', this)" class="px-2.5 py-1 rounded-md hover:text-slate-900 transition-all">30天</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- 柱状图主区域 (粗柱体大方块，支持移动端横向滑动) -->
+        <div class="relative pt-6 pb-2 overflow-x-auto custom-scrollbar">
+          <!-- 悬浮 Tooltip 气泡 (复刻截图3风格) -->
+          <div id="chart-tooltip" class="absolute pointer-events-none hidden z-20 bg-white border border-slate-200 rounded-xl px-3.5 py-2 shadow-xl transition-all -top-12">
+            <span class="font-bold text-slate-900 block text-xs" id="tooltip-time">14:00</span>
+            <div class="flex items-center gap-2 mt-1 text-xs text-slate-600">
+              <span class="w-2.5 h-2.5 rounded-full bg-[#2e9e6b]"></span>
+              <span id="tooltip-val" class="font-medium">Nano Banana 2.1: 24 次</span>
+            </div>
+          </div>
+
+          <!-- 图表网格容器 (min-w 保持柱体粗壮饱满，不挤成细线) -->
+          <div class="min-w-[700px]">
+            <!-- 柱体区域 (包含刻度虚线) -->
+            <div class="relative h-44 w-full flex items-end justify-between gap-2 sm:gap-2.5 border-b border-slate-200 px-3">
+              <!-- 纵轴刻度参考虚线 -->
+              <div class="absolute inset-x-0 top-0 border-b border-dashed border-slate-100 flex justify-between text-[10px] text-slate-300 pointer-events-none -translate-y-2.5"><span>25</span></div>
+              <div class="absolute inset-x-0 top-1/4 border-b border-dashed border-slate-100 flex justify-between text-[10px] text-slate-300 pointer-events-none -translate-y-2.5"><span>20</span></div>
+              <div class="absolute inset-x-0 top-2/4 border-b border-dashed border-slate-100 flex justify-between text-[10px] text-slate-300 pointer-events-none -translate-y-2.5"><span>15</span></div>
+              <div class="absolute inset-x-0 top-3/4 border-b border-dashed border-slate-100 flex justify-between text-[10px] text-slate-300 pointer-events-none -translate-y-2.5"><span>10</span></div>
+
+              <!-- 24小时粗壮大柱子 (宽度调宽至 26px~32px，完全对标截图3) -->
+              <div class="bar-group flex-1 h-full flex items-end justify-center group cursor-pointer" onmouseenter="showTooltip(event, '00:00', '0')" onmouseleave="hideTooltip()">
+                <div class="w-full max-w-[28px] bg-[#2e9e6b] rounded-t-sm transition-all group-hover:brightness-110" style="height: 0%"></div>
+              </div>
+              <div class="bar-group flex-1 h-full flex items-end justify-center group cursor-pointer" onmouseenter="showTooltip(event, '01:00', '0')" onmouseleave="hideTooltip()">
+                <div class="w-full max-w-[28px] bg-[#2e9e6b] rounded-t-sm transition-all group-hover:brightness-110" style="height: 0%"></div>
+              </div>
+              <div class="bar-group flex-1 h-full flex items-end justify-center group cursor-pointer" onmouseenter="showTooltip(event, '02:00', '0')" onmouseleave="hideTooltip()">
+                <div class="w-full max-w-[28px] bg-[#2e9e6b] rounded-t-sm transition-all group-hover:brightness-110" style="height: 0%"></div>
+              </div>
+              <div class="bar-group flex-1 h-full flex items-end justify-center group cursor-pointer" onmouseenter="showTooltip(event, '03:00', '0')" onmouseleave="hideTooltip()">
+                <div class="w-full max-w-[28px] bg-[#2e9e6b] rounded-t-sm transition-all group-hover:brightness-110" style="height: 0%"></div>
+              </div>
+              <div class="bar-group flex-1 h-full flex items-end justify-center group cursor-pointer" onmouseenter="showTooltip(event, '04:00', '0')" onmouseleave="hideTooltip()">
+                <div class="w-full max-w-[28px] bg-[#2e9e6b] rounded-t-sm transition-all group-hover:brightness-110" style="height: 0%"></div>
+              </div>
+              <div class="bar-group flex-1 h-full flex items-end justify-center group cursor-pointer" onmouseenter="showTooltip(event, '05:00', '0')" onmouseleave="hideTooltip()">
+                <div class="w-full max-w-[28px] bg-[#2e9e6b] rounded-t-sm transition-all group-hover:brightness-110" style="height: 0%"></div>
+              </div>
+              <div class="bar-group flex-1 h-full flex items-end justify-center group cursor-pointer" onmouseenter="showTooltip(event, '06:00', '0')" onmouseleave="hideTooltip()">
+                <div class="w-full max-w-[28px] bg-[#2e9e6b] rounded-t-sm transition-all group-hover:brightness-110" style="height: 0%"></div>
+              </div>
+              <div class="bar-group flex-1 h-full flex items-end justify-center group cursor-pointer" onmouseenter="showTooltip(event, '07:00', '0')" onmouseleave="hideTooltip()">
+                <div class="w-full max-w-[28px] bg-[#2e9e6b] rounded-t-sm transition-all group-hover:brightness-110" style="height: 0%"></div>
+              </div>
+              <div class="bar-group flex-1 h-full flex items-end justify-center group cursor-pointer" onmouseenter="showTooltip(event, '08:00', '0')" onmouseleave="hideTooltip()">
+                <div class="w-full max-w-[28px] bg-[#2e9e6b] rounded-t-sm transition-all group-hover:brightness-110" style="height: 0%"></div>
+              </div>
+              <div class="bar-group flex-1 h-full flex items-end justify-center group cursor-pointer" onmouseenter="showTooltip(event, '09:00', '1')" onmouseleave="hideTooltip()">
+                <div class="w-full max-w-[28px] bg-[#2e9e6b] rounded-t-sm transition-all group-hover:brightness-110" style="height: 4%"></div>
+              </div>
+              <div class="bar-group flex-1 h-full flex items-end justify-center group cursor-pointer" onmouseenter="showTooltip(event, '10:00', '2')" onmouseleave="hideTooltip()">
+                <div class="w-full max-w-[28px] bg-[#2e9e6b] rounded-t-sm transition-all group-hover:brightness-110" style="height: 8%"></div>
+              </div>
+              <div class="bar-group flex-1 h-full flex items-end justify-center group cursor-pointer" onmouseenter="showTooltip(event, '11:00', '1')" onmouseleave="hideTooltip()">
+                <div class="w-full max-w-[28px] bg-[#2e9e6b] rounded-t-sm transition-all group-hover:brightness-110" style="height: 4%"></div>
+              </div>
+              <div class="bar-group flex-1 h-full flex items-end justify-center group cursor-pointer" onmouseenter="showTooltip(event, '12:00', '2')" onmouseleave="hideTooltip()">
+                <div class="w-full max-w-[28px] bg-[#2e9e6b] rounded-t-sm transition-all group-hover:brightness-110" style="height: 8%"></div>
+              </div>
+              <div class="bar-group flex-1 h-full flex items-end justify-center group cursor-pointer" onmouseenter="showTooltip(event, '13:00', '0')" onmouseleave="hideTooltip()">
+                <div class="w-full max-w-[28px] bg-[#2e9e6b] rounded-t-sm transition-all group-hover:brightness-110" style="height: 0%"></div>
+              </div>
+              <!-- 粗壮柱体 14:00 (24次) -->
+              <div class="bar-group flex-1 h-full flex items-end justify-center group cursor-pointer" onmouseenter="showTooltip(event, '14:00', '24')" onmouseleave="hideTooltip()">
+                <div class="w-full max-w-[28px] bg-[#2e9e6b] rounded-t-sm transition-all group-hover:brightness-110" style="height: 96%"></div>
+              </div>
+              <!-- 粗壮柱体 15:00 (14次) -->
+              <div class="bar-group flex-1 h-full flex items-end justify-center group cursor-pointer" onmouseenter="showTooltip(event, '15:00', '14')" onmouseleave="hideTooltip()">
+                <div class="w-full max-w-[28px] bg-[#2e9e6b] rounded-t-sm transition-all group-hover:brightness-110" style="height: 56%"></div>
+              </div>
+              <!-- 粗壮柱体 16:00 (24次) -->
+              <div class="bar-group flex-1 h-full flex items-end justify-center group cursor-pointer" onmouseenter="showTooltip(event, '16:00', '24')" onmouseleave="hideTooltip()">
+                <div class="w-full max-w-[28px] bg-[#2e9e6b] rounded-t-sm transition-all group-hover:brightness-110" style="height: 96%"></div>
+              </div>
+              <div class="bar-group flex-1 h-full flex items-end justify-center group cursor-pointer" onmouseenter="showTooltip(event, '17:00', '2')" onmouseleave="hideTooltip()">
+                <div class="w-full max-w-[28px] bg-[#2e9e6b] rounded-t-sm transition-all group-hover:brightness-110" style="height: 8%"></div>
+              </div>
+              <div class="bar-group flex-1 h-full flex items-end justify-center group cursor-pointer" onmouseenter="showTooltip(event, '18:00', '0')" onmouseleave="hideTooltip()">
+                <div class="w-full max-w-[28px] bg-[#2e9e6b] rounded-t-sm transition-all group-hover:brightness-110" style="height: 0%"></div>
+              </div>
+              <div class="bar-group flex-1 h-full flex items-end justify-center group cursor-pointer" onmouseenter="showTooltip(event, '19:00', '0')" onmouseleave="hideTooltip()">
+                <div class="w-full max-w-[28px] bg-[#2e9e6b] rounded-t-sm transition-all group-hover:brightness-110" style="height: 0%"></div>
+              </div>
+              <div class="bar-group flex-1 h-full flex items-end justify-center group cursor-pointer" onmouseenter="showTooltip(event, '20:00', '0')" onmouseleave="hideTooltip()">
+                <div class="w-full max-w-[28px] bg-[#2e9e6b] rounded-t-sm transition-all group-hover:brightness-110" style="height: 0%"></div>
+              </div>
+              <div class="bar-group flex-1 h-full flex items-end justify-center group cursor-pointer" onmouseenter="showTooltip(event, '21:00', '0')" onmouseleave="hideTooltip()">
+                <div class="w-full max-w-[28px] bg-[#2e9e6b] rounded-t-sm transition-all group-hover:brightness-110" style="height: 0%"></div>
+              </div>
+              <div class="bar-group flex-1 h-full flex items-end justify-center group cursor-pointer" onmouseenter="showTooltip(event, '22:00', '0')" onmouseleave="hideTooltip()">
+                <div class="w-full max-w-[28px] bg-[#2e9e6b] rounded-t-sm transition-all group-hover:brightness-110" style="height: 0%"></div>
+              </div>
+              <div class="bar-group flex-1 h-full flex items-end justify-center group cursor-pointer" onmouseenter="showTooltip(event, '23:00', '0')" onmouseleave="hideTooltip()">
+                <div class="w-full max-w-[28px] bg-[#2e9e6b] rounded-t-sm transition-all group-hover:brightness-110" style="height: 0%"></div>
+              </div>
+            </div>
+
+            <!-- 横轴刻度 -->
+            <div class="w-full flex justify-between text-[10px] text-slate-400 px-3 pt-2 select-none">
+              <span>00:00</span>
+              <span>01:00</span>
+              <span>02:00</span>
+              <span>03:00</span>
+              <span>04:00</span>
+              <span>05:00</span>
+              <span>06:00</span>
+              <span>07:00</span>
+              <span>08:00</span>
+              <span>09:00</span>
+              <span>10:00</span>
+              <span>11:00</span>
+              <span>12:00</span>
+              <span>13:00</span>
+              <span class="font-bold text-slate-700">14:00</span>
+              <span>15:00</span>
+              <span class="font-bold text-slate-700">16:00</span>
+              <span>17:00</span>
+              <span>18:00</span>
+              <span>19:00</span>
+              <span>20:00</span>
+              <span>21:00</span>
+              <span>22:00</span>
+              <span>23:00</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================== TAB 2: 图片生成 (完美适配移动端) ==================== -->
+    <section id="view-chat-paint" class="flex-1 flex flex-col md:flex-row overflow-hidden hidden" style="height: calc(100vh - 56px);">
+      <!-- 左侧对话历史 (桌面端常驻，移动端折叠) -->
+      <div id="chat-history-sidebar" class="w-full md:w-60 bg-white border-b md:border-b-0 md:border-r border-slate-200/80 flex flex-col shrink-0 max-h-44 md:max-h-full">
+        <div class="p-3 border-b border-slate-100 flex items-center justify-between">
+          <span class="font-semibold text-xs text-slate-700">生图任务历史</span>
+          <button onclick="newChatSession()" class="flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded bg-slate-900 text-white hover:bg-slate-800 transition-colors">
+            <span>+ 新任务</span>
+          </button>
+        </div>
+
+        <div class="flex-1 overflow-y-auto p-2 space-y-1 custom-scrollbar">
+          <div class="p-2.5 rounded-lg bg-slate-100/90 border border-slate-200/80 cursor-pointer">
+            <div class="flex items-center justify-between">
+              <p class="text-xs font-semibold text-slate-900 truncate">洛阳应天门古风少女</p>
+              <span class="text-[10px] px-1 rounded bg-slate-200 text-slate-700">图片</span>
+            </div>
+            <p class="text-[11px] text-slate-400 mt-1 flex justify-between">
+              <span>Nano Banana 2.1</span>
+              <span>10:24</span>
+            </p>
+          </div>
+
+          <div class="p-2.5 rounded-lg hover:bg-slate-50 cursor-pointer text-slate-600">
+            <div class="flex items-center justify-between">
+              <p class="text-xs font-medium truncate">赛博朋克雨夜街道跑车</p>
+              <span class="text-[10px] px-1 rounded bg-slate-100 text-slate-600">视频</span>
+            </div>
+            <p class="text-[11px] text-slate-400 mt-1 flex justify-between">
+              <span>Omni 1.1 6s</span>
+              <span>昨天</span>
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <!-- 右侧生图聊天工作台 -->
+      <div class="flex-1 flex flex-col bg-[#fafafa] overflow-hidden">
+        <div class="h-11 bg-white border-b border-slate-200/80 px-4 sm:px-6 flex items-center justify-between shrink-0">
+          <span class="font-semibold text-xs text-slate-800 truncate" id="current-chat-title">洛阳应天门古风少女</span>
+          <button onclick="clearChatMessages()" class="text-xs text-slate-400 hover:text-slate-600 shrink-0">清空记录</button>
+        </div>
+
+        <!-- 消息气泡区 -->
+        <div class="flex-1 overflow-y-auto p-3.5 sm:p-6 space-y-4 sm:space-y-5 custom-scrollbar" id="chat-messages-container">
+          <!-- 用户气泡 -->
+          <div class="flex items-start gap-2.5 justify-end chat-bubble-enter">
+            <div class="max-w-[85%] sm:max-w-xl bg-slate-900 text-white rounded-xl px-3.5 py-2.5 shadow-sm text-xs leading-relaxed">
+              <p>盛唐夜景，洛阳应天门前，一位身穿绯红襦裙的少女回眸浅笑，手持精美宫灯，电影级光影质感，极具东方美学细节。</p>
+              <div class="mt-1 text-[10px] text-slate-400 text-right">9:16 · 2K · Nano Banana 2.1</div>
+            </div>
+          </div>
+
+          <!-- AI 生成卡片 -->
+          <div class="flex items-start gap-2.5 chat-bubble-enter">
+            <div class="max-w-[92%] sm:max-w-xl bg-white border border-slate-200 rounded-xl p-3 shadow-sm space-y-2.5">
+              <div class="relative rounded-lg overflow-hidden bg-black">
+                <img src="https://images.unsplash.com/photo-1534447677768-be436bb09401?w=800&q=80" alt="Generated" class="w-full max-h-[360px] sm:max-h-[460px] object-cover cursor-pointer hover:opacity-95" onclick="previewImageModal(this.src)">
+                <div class="absolute top-2 right-2 px-2 py-0.5 rounded bg-black/70 text-white text-[10px] font-mono">
+                  1536 × 2752 (2K)
+                </div>
+              </div>
+              <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs pt-1">
+                <span class="text-[11px] text-emerald-600 font-medium">生成成功 · 耗时 22.4s</span>
+                <div class="flex items-center gap-1.5 self-end sm:self-auto">
+                  <button onclick="quotePrompt('盛唐夜景，洛阳应天门前，一位身穿绯红襦裙的少女回眸浅笑...')" class="px-2 py-1 rounded border border-slate-200 hover:bg-slate-50 text-slate-600 text-xs">引用</button>
+                  <button onclick="copyToClipboard('http://192.168.31.63:8000/tmp/sample_2k.jpg')" class="px-2 py-1 rounded border border-slate-200 hover:bg-slate-50 text-slate-600 text-xs">复制</button>
+                  <button class="px-2.5 py-1 rounded bg-slate-900 text-white text-xs font-medium">下载</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 底部输入栏 (移动端自适应弹性换行) -->
+        <div class="p-3 sm:p-4 bg-white border-t border-slate-200">
+          <div class="max-w-4xl mx-auto bg-slate-50 rounded-xl border border-slate-200 p-2.5 sm:p-3 focus-within:bg-white focus-within:border-slate-400 transition-all">
+            <textarea id="prompt-input" rows="2" placeholder="输入生成画面的提示词，支持粘贴或拖入参考图..." class="w-full bg-transparent resize-none focus:outline-none text-xs text-slate-900 placeholder-slate-400 leading-relaxed"></textarea>
+
+            <div class="flex items-center justify-between pt-2 border-t border-slate-200/60 mt-1 select-none flex-wrap gap-2">
+              <div class="flex items-center gap-1.5 sm:gap-2 flex-wrap">
+                <!-- 垫图上传 -->
+                <label class="cursor-pointer px-2 py-1 rounded bg-white border border-slate-200 hover:bg-slate-50 text-xs text-slate-700 transition-colors inline-flex items-center gap-1 shrink-0">
+                  <svg class="w-3.5 h-3.5 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/></svg>
+                  <span>参考图</span>
+                  <input type="file" accept="image/*" class="hidden" onchange="handleFileInput(event)">
+                </label>
+
+                <!-- 模型切换 (纯扁平文字) -->
+                <select id="select-model" onchange="onModelChange()" class="bg-white border border-slate-200 rounded px-2 py-1 text-xs font-semibold text-slate-900 focus:outline-none cursor-pointer">
+                  <option value="Nano Banana 2.1">Nano Banana 2.1 (BELUGA)</option>
+                  <option value="Nano Banana 2 Lite">Nano Banana 2 Lite</option>
+                  <option value="Nano Banana Pro">Nano Banana Pro</option>
+                  <option value="Omni 1.1 Flash">Omni 1.1 Flash (视频)</option>
+                </select>
+
+                <!-- 比例 -->
+                <select id="select-aspect" class="bg-white border border-slate-200 rounded px-2 py-1 text-xs text-slate-700 focus:outline-none cursor-pointer">
+                  <option value="9:16">9:16 竖屏</option>
+                  <option value="16:9">16:9 横屏</option>
+                  <option value="1:1">1:1 正方</option>
+                  <option value="4:3">4:3</option>
+                  <option value="3:4">3:4</option>
+                </select>
+
+                <!-- 画质 -->
+                <div id="box-resolution">
+                  <select id="select-size" class="bg-white border border-slate-200 rounded px-2 py-1 text-xs text-slate-700 focus:outline-none cursor-pointer">
+                    <option value="2k">2K 原生重塑</option>
+                    <option value="4k">4K 超分 (Lanczos3)</option>
+                    <option value="1k">1K 标清</option>
+                  </select>
+                </div>
+
+                <!-- 视频时长 -->
+                <div id="box-duration" class="hidden">
+                  <select id="select-duration" class="bg-purple-50 border border-purple-200 text-purple-700 rounded px-2.5 py-1 text-xs font-semibold focus:outline-none cursor-pointer">
+                    <option value="6">时长: 6 秒</option>
+                    <option value="4">时长: 4 秒</option>
+                    <option value="8">时长: 8 秒</option>
+                    <option value="10">时长: 10 秒</option>
+                  </select>
+                </div>
+              </div>
+
+              <!-- 发送按钮 -->
+              <button onclick="handleSendPrompt()" class="px-3.5 py-1.5 rounded-lg bg-slate-900 text-white text-xs font-medium hover:bg-slate-800 transition-colors shrink-0 ml-auto">
+                生成画面
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================== TAB 3: 本地媒体管理 ==================== -->
+    <section id="view-media-mgr" class="p-3.5 sm:p-6 space-y-4 sm:space-y-5 hidden">
+      <div class="bg-white rounded-xl p-4 border border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div>
+          <h3 class="font-bold text-slate-900 text-sm">本地媒体缓存空间</h3>
+          <p class="text-xs text-slate-400 mt-0.5">保存在服务器 <code class="font-mono bg-slate-100 px-1 py-0.5 rounded">tmp/</code> 目录，共 15 个文件 · 占用 52.8 MB</p>
+        </div>
+        <div class="flex items-center gap-2">
+          <button onclick="alert('已清理 7 天前文件')" class="text-xs px-3 py-1.5 rounded border border-slate-200 hover:bg-slate-50">清理 7 天前</button>
+          <button onclick="alert('已清空全部媒体缓存')" class="text-xs px-3 py-1.5 rounded bg-red-50 text-red-600 border border-red-200 hover:bg-red-100">清空缓存</button>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
+        <div class="bg-white rounded-xl border border-slate-200 overflow-hidden p-2.5 space-y-2">
+          <div class="aspect-[9/16] bg-black rounded-lg overflow-hidden">
+            <img src="https://images.unsplash.com/photo-1534447677768-be436bb09401?w=600&q=80" class="w-full h-full object-cover">
+          </div>
+          <div class="flex items-center justify-between text-xs text-slate-500">
+            <span>2K · 2.8 MB</span>
+            <button class="text-red-500 hover:underline">删除</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================== TAB 4: 系统配置 ==================== -->
+    <section id="view-settings" class="p-3.5 sm:p-6 space-y-4 sm:space-y-5 max-w-3xl hidden">
+      <div class="bg-white rounded-xl p-4 sm:p-6 border border-slate-200 space-y-5">
+        <div>
+          <h3 class="font-bold text-slate-900 text-sm">图片放大</h3>
+          <p class="text-xs text-slate-400 mt-0.5">当请求 4K 或大尺寸而无 Ultra 账号时，自动启动本地插值超分补齐</p>
+        </div>
+
+        <div class="space-y-4 pt-1">
+          <div class="flex items-center gap-3">
+            <input type="checkbox" id="cfgAutoUpscale" checked class="w-4 h-4 text-slate-900 rounded border-slate-300 focus:ring-0 cursor-pointer">
+            <label for="cfgAutoUpscale" class="text-xs font-semibold text-slate-800 cursor-pointer">
+              图片尺寸不足时自动放大
+            </label>
+          </div>
+
+          <div class="space-y-1.5">
+            <label class="block text-xs font-medium text-slate-600">放大引擎</label>
+            <select class="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs text-slate-800 focus:outline-none">
+              <option value="lanczos3">Sharp / Lanczos3 (推荐 · 高清锐化重采样)</option>
+            </select>
+            <p class="text-[11px] text-slate-400">2K 继续走 Google Flow 官方免费接口；4K 自动以 2K 为基准使用 Lanczos3 滤波算法超分输出。</p>
+          </div>
+        </div>
+
+        <div class="pt-4 border-t border-slate-100 flex justify-end">
+          <button onclick="alert('保存成功')" class="px-4 py-2 rounded-lg bg-slate-900 text-white text-xs font-medium hover:bg-slate-800">
+            保存配置
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- 大图灯箱 -->
+    <div id="image-modal" class="fixed inset-0 z-50 bg-black/80 hidden flex items-center justify-center p-4" onclick="closeImageModal()">
+      <img id="modal-img" src="" class="max-w-full max-h-[85vh] rounded-lg shadow-2xl object-contain">
+    </div>
+  </main>
+
+  <script>
+    function toggleMobileSidebar() {
+      const sidebar = document.getElementById('main-sidebar');
+      const backdrop = document.getElementById('mobile-sidebar-backdrop');
+      const isOpen = !sidebar.classList.contains('-translate-x-full');
+      if (isOpen) {
+        sidebar.classList.add('-translate-x-full');
+        backdrop.classList.add('hidden');
+      } else {
+        sidebar.classList.remove('-translate-x-full');
+        backdrop.classList.remove('hidden');
+      }
+    }
+
+    function switchTab(tabId) {
+      if (window.innerWidth < 768) {
+        const sidebar = document.getElementById('main-sidebar');
+        const backdrop = document.getElementById('mobile-sidebar-backdrop');
+        sidebar.classList.add('-translate-x-full');
+        backdrop.classList.add('hidden');
+      }
+
+      ['overview', 'chat-paint', 'logs', 'media-mgr', 'settings'].forEach(v => {
+        const el = document.getElementById('view-' + v);
+        const nav = document.getElementById('nav-' + v);
+        if (el) el.classList.add('hidden');
+        if (nav) {
+          nav.classList.remove('bg-slate-900', 'text-white', 'shadow-sm');
+          nav.classList.add('text-slate-600');
+        }
+      });
+
+      const targetView = document.getElementById('view-' + tabId);
+      const targetNav = document.getElementById('nav-' + tabId);
+      if (targetView) targetView.classList.remove('hidden');
+      if (targetNav) {
+        targetNav.classList.add('bg-slate-900', 'text-white', 'shadow-sm');
+        targetNav.classList.remove('text-slate-600');
+      }
+
+      const titles = {
+        'overview': '概览中心',
+        'chat-paint': '图片生成',
+        'logs': '请求日志',
+        'media-mgr': '媒体管理',
+        'settings': '系统配置'
+      };
+      document.getElementById('page-title').innerHTML = `<span>${titles[tabId] || '控制台'}</span>`;
+    }
+
+    function onModelChange() {
+      const model = document.getElementById('select-model').value;
+      const isVideo = model.includes('Omni');
+      document.getElementById('box-duration').classList.toggle('hidden', !isVideo);
+      document.getElementById('box-resolution').classList.toggle('hidden', isVideo);
+    }
+
+    function handleSendPrompt() {
+      const input = document.getElementById('prompt-input');
+      const text = input.value.trim();
+      if (!text) return;
+
+      const model = document.getElementById('select-model').value;
+      const aspect = document.getElementById('select-aspect').value;
+      const size = document.getElementById('select-size').value.toUpperCase();
+      const container = document.getElementById('chat-messages-container');
+
+      const userBubble = document.createElement('div');
+      userBubble.className = "flex items-start gap-2.5 justify-end chat-bubble-enter";
+      userBubble.innerHTML = `
+        <div class="max-w-[85%] sm:max-w-xl bg-slate-900 text-white rounded-xl px-3.5 py-2.5 shadow-sm text-xs leading-relaxed">
+          <p>${escapeHtml(text)}</p>
+          <div class="mt-1 text-[10px] text-slate-400 text-right">${aspect} · ${size} · ${model}</div>
+        </div>
+      `;
+      container.appendChild(userBubble);
+      input.value = '';
+
+      const loadingBubble = document.createElement('div');
+      loadingBubble.className = "flex items-start gap-2.5 chat-bubble-enter";
+      loadingBubble.innerHTML = `
+        <div class="max-w-md bg-white border border-slate-200 rounded-xl p-3 shadow-sm flex items-center gap-2.5 text-xs text-slate-600">
+          <div class="w-4 h-4 border-2 border-slate-900 border-t-transparent rounded-full animate-spin"></div>
+          <span>正在生成中，请稍候...</span>
+        </div>
+      `;
+      container.appendChild(loadingBubble);
+      container.scrollTop = container.scrollHeight;
+
+      setTimeout(() => {
+        loadingBubble.remove();
+        const resBubble = document.createElement('div');
+        resBubble.className = "flex items-start gap-2.5 chat-bubble-enter";
+        const sampleUrl = "https://images.unsplash.com/photo-1543466835-00a7907e9de1?w=800&q=80";
+
+        resBubble.innerHTML = `
+          <div class="max-w-[92%] sm:max-w-xl bg-white border border-slate-200 rounded-xl p-3 shadow-sm space-y-2.5">
+            <div class="relative rounded-lg overflow-hidden bg-black">
+              <img src="${sampleUrl}" class="w-full max-h-[360px] sm:max-h-[460px] object-cover cursor-pointer hover:opacity-95" onclick="previewImageModal(this.src)">
+              <div class="absolute top-2 right-2 px-2 py-0.5 rounded bg-black/70 text-white text-[10px] font-mono">
+                ${size === '4K' ? '5504×3072 (4K)' : '2752×1536 (2K)'}
+              </div>
+            </div>
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs pt-1">
+              <span class="text-[11px] text-emerald-600 font-medium">生成成功 · 耗时 19.8s</span>
+              <div class="flex items-center gap-1.5 self-end sm:self-auto">
+                <button onclick="quotePrompt('${escapeHtml(text)}')" class="px-2 py-1 rounded border border-slate-200 hover:bg-slate-50 text-slate-600 text-xs">引用</button>
+                <button onclick="copyToClipboard('${sampleUrl}')" class="px-2 py-1 rounded border border-slate-200 hover:bg-slate-50 text-slate-600 text-xs">复制</button>
+                <button class="px-2.5 py-1 rounded bg-slate-900 text-white text-xs font-medium">下载</button>
+              </div>
+            </div>
+          </div>
+        `;
+        container.appendChild(resBubble);
+        container.scrollTop = container.scrollHeight;
+      }, 1500);
+    }
+
+    function switchChartTimeline(range, btn) {
+      const parent = btn.parentElement;
+      Array.from(parent.children).forEach(b => {
+        b.className = "px-2.5 py-1 rounded-md hover:text-slate-900 transition-all";
+      });
+      btn.className = "px-2.5 py-1 rounded-md bg-white text-slate-900 shadow-sm transition-all";
+    }
+
+    function showTooltip(e, time, val) {
+      const tip = document.getElementById('chart-tooltip');
+      document.getElementById('tooltip-time').textContent = time;
+      document.getElementById('tooltip-val').textContent = `Nano Banana 2.1: ${val} 次`;
+      
+      const rect = e.currentTarget.getBoundingClientRect();
+      const parentRect = e.currentTarget.offsetParent.getBoundingClientRect();
+      tip.style.left = `${e.currentTarget.offsetLeft - 30}px`;
+      tip.style.top = `${e.currentTarget.offsetTop - 55}px`;
+      tip.classList.remove('hidden');
+    }
+
+    function hideTooltip() {
+      document.getElementById('chart-tooltip').classList.add('hidden');
+    }
+
+    function quotePrompt(text) {
+      document.getElementById('prompt-input').value = text;
+      document.getElementById('prompt-input').focus();
+    }
+
+    function copyToClipboard(text) {
+      navigator.clipboard.writeText(text).then(() => alert('链接已复制！'));
+    }
+
+    function previewImageModal(url) {
+      document.getElementById('modal-img').src = url;
+      document.getElementById('image-modal').classList.remove('hidden');
+    }
+
+    function closeImageModal() {
+      document.getElementById('image-modal').classList.add('hidden');
+    }
+
+    function escapeHtml(str) {
+      return str.replace(/[&<>"']/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[m]);
+    }
+  </script>
+</body>
+</html>
