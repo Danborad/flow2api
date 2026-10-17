@@ -1,10 +1,12 @@
 """Admin API routes"""
 import asyncio
 import importlib
+import io
 import json
 import shutil
 from pathlib import Path
 from datetime import datetime, timezone
+from PIL import Image, ImageOps
 from fastapi import APIRouter, Depends, HTTPException, Header, Request, Response
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
@@ -2693,12 +2695,33 @@ async def list_media_files(
             if media_type != "all" and file_type != media_type:
                 continue
 
+            dimensions = None
+            resolution_label = "1K"
+            if file_type == "image":
+                try:
+                    with Image.open(item) as img:
+                        w, h = img.size
+                        dimensions = f"{w}×{h}"
+                        if w >= 3800 or h >= 3800:
+                            resolution_label = "4K"
+                        elif w >= 2000 or h >= 2000:
+                            resolution_label = "2K"
+                        else:
+                            resolution_label = "1K"
+                except Exception:
+                    pass
+            elif file_type == "video":
+                resolution_label = "MP4"
+
             st = item.stat()
             files.append({
                 "filename": item.name,
                 "type": file_type,
                 "size_bytes": st.st_size,
                 "mtime": st.st_mtime,
+                "dimensions": dimensions,
+                "resolution_label": resolution_label,
+                "thumbnail_url": f"/api/media/thumbnail/{item.name}",
                 "created_at": datetime.fromtimestamp(st.st_mtime, tz=timezone.utc).isoformat(),
                 "url": f"/tmp/{item.name}",
             })
@@ -2712,6 +2735,43 @@ async def list_media_files(
         "total": total_count,
         "files": paginated
     }
+
+
+@router.get("/api/media/thumbnail/{filename}")
+async def get_media_thumbnail(filename: str, size: int = 160):
+    """Generate or retrieve a square thumbnail for a cached file."""
+    safe_name = Path(filename).name
+    tmp_path = Path(__file__).resolve().parents[2] / "tmp" / safe_name
+    if not tmp_path.is_file():
+        raise HTTPException(status_code=404, detail="文件不存在")
+
+    ext = tmp_path.suffix.lower()
+    if ext in (".jpg", ".jpeg", ".png", ".webp"):
+        try:
+            with Image.open(tmp_path) as img:
+                thumb = ImageOps.fit(img.convert("RGB"), (size, size), Image.Resampling.LANCZOS)
+                buf = io.BytesIO()
+                thumb.save(buf, format="JPEG", quality=82)
+                return Response(
+                    content=buf.getvalue(),
+                    media_type="image/jpeg",
+                    headers={
+                        "Cache-Control": "public, max-age=86400",
+                        "Content-Type": "image/jpeg",
+                    }
+                )
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=str(e))
+    elif ext in (".mp4", ".webm", ".mov"):
+        svg = """<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 160" width="160" height="160">
+            <rect width="160" height="160" rx="12" fill="#0f172a"/>
+            <circle cx="80" cy="80" r="30" fill="#334155"/>
+            <polygon points="73,66 73,94 95,80" fill="#a855f7"/>
+            <text x="80" y="132" font-family="-apple-system, BlinkMacSystemFont, Roboto, sans-serif" font-size="12" font-weight="700" fill="#cbd5e1" text-anchor="middle">VIDEO MP4</text>
+        </svg>"""
+        return Response(content=svg, media_type="image/svg+xml", headers={"Cache-Control": "public, max-age=86400"})
+    else:
+        raise HTTPException(status_code=400, detail="不支持的媒体格式")
 
 
 @router.delete("/api/media/files/{filename}")

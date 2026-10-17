@@ -1,959 +1,2183 @@
 <!DOCTYPE html>
 <html lang="zh-CN" class="h-full">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>管理控制台 - Flow2API</title>
-<!-- 纯净矢量 Favicon: 白底黑色 F 字符，极简大气 -->
-<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%23ffffff' stroke='%23cbd5e1' stroke-width='1.5'/%3E%3Ctext x='16' y='24' font-family='-apple-system, BlinkMacSystemFont, Roboto, sans-serif' font-size='22' font-weight='800' fill='%230f172a' text-anchor='middle'%3EF%3C/text%3E%3C/svg%3E">
-<script src="https://cdn.tailwindcss.com"></script>
-<script>
-tailwind.config = {
-  theme: {
-    extend: {
-      colors: {
-        border: "hsl(0 0% 89.8%)",
-        input: "hsl(0 0% 89.8%)",
-        background: "#ffffff",
-        foreground: "hsl(0 0% 3.9%)",
-        muted: { DEFAULT: "hsl(0 0% 96.1%)", foreground: "hsl(0 0% 45.1%)" },
-        card: { DEFAULT: "#ffffff", foreground: "hsl(0 0% 3.9%)" }
-      }
-    }
-  }
-}
-</script>
-<style>
-  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; }
-  .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
-  .custom-scrollbar::-webkit-scrollbar-thumb { background: #e2e8f0; border-radius: 9999px; }
-  .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
-  .tab-btn { transition: all 0.15s ease; }
-  .chat-bubble-enter { animation: bubbleIn 0.2s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
-  @keyframes bubbleIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
-</style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>管理控制台 - Flow2API</title>
+    <!-- 纯净矢量 Favicon: 白底黑色 F 字符，极简大气 -->
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%23ffffff' stroke='%23cbd5e1' stroke-width='1.5'/%3E%3Ctext x='16' y='24' font-family='-apple-system, BlinkMacSystemFont, Roboto, sans-serif' font-size='22' font-weight='800' fill='%230f172a' text-anchor='middle'%3EF%3C/text%3E%3C/svg%3E">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        border: "hsl(0 0% 89.8%)",
+                        input: "hsl(0 0% 89.8%)",
+                        background: "#ffffff",
+                        foreground: "hsl(0 0% 3.9%)",
+                        muted: { DEFAULT: "hsl(0 0% 96.1%)", foreground: "hsl(0 0% 45.1%)" },
+                        card: { DEFAULT: "#ffffff", foreground: "hsl(0 0% 3.9%)" }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; -webkit-tap-highlight-color: transparent; }
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #e2e8f0; border-radius: 9999px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+        .tab-btn { transition: all 0.15s ease; }
+        .chat-bubble-enter { animation: bubbleIn 0.2s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+        @keyframes bubbleIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes slide-up { from { transform: translateY(100%); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+        .animate-slide-up { animation: slide-up .25s ease-out; }
+    </style>
 </head>
 <body class="min-h-screen bg-[#fafafa] text-slate-900 antialiased flex flex-col">
 
-  <!-- ======================== 经典原版顶部导航栏 (彻底移除侧栏，统一在 max-w-7xl 内严格对齐) ======================== -->
-  <header class="sticky top-0 z-50 w-full border-b border-slate-200/80 bg-white/95 backdrop-blur shadow-sm/30">
-    <div class="mx-auto flex h-14 max-w-7xl items-center justify-between px-4 sm:px-6">
-      
-      <!-- 左侧：白底黑字 F 徽标 + 原版 Flow2API 文字标题 -->
-      <div class="flex items-center gap-3">
-        <div class="w-7 h-7 rounded-lg bg-white border border-slate-300 shadow-sm flex items-center justify-center font-extrabold text-sm text-slate-900 font-mono shrink-0">
-          F
-        </div>
-        <span class="font-bold text-lg tracking-tight text-slate-900">Flow2API</span>
-      </div>
+    <!-- ======================== 经典原版顶部导航栏 ======================== -->
+    <header class="sticky top-0 z-40 w-full border-b border-slate-200/80 bg-white/95 backdrop-blur shadow-sm/30">
+        <div class="mx-auto flex h-14 max-w-7xl items-center justify-between px-4 sm:px-6">
+            <!-- 左侧：白底黑字 F 徽标 + 原版 Flow2API 文字标题 -->
+            <div class="flex items-center gap-3">
+                <div class="w-7 h-7 rounded-lg bg-white border border-slate-300 shadow-sm flex items-center justify-center font-extrabold text-sm text-slate-900 font-mono shrink-0">
+                    F
+                </div>
+                <span class="font-bold text-lg tracking-tight text-slate-900">Flow2API</span>
+            </div>
 
-      <!-- 右侧操作与状态 (与下方内容右边缘垂直严格对齐，再也不会被甩到屏幕最外端) -->
-      <div class="flex items-center gap-3">
-        <a href="https://github.com/TheSmallHanCat/flow2api" target="_blank" class="hidden sm:inline-flex items-center gap-1 text-xs text-slate-500 hover:text-slate-900 transition-colors" title="GitHub 仓库">
-          <svg class="h-4 w-4" fill="currentColor" viewBox="0 0 24 24"><path fill-rule="evenodd" clip-rule="evenodd" d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.53 1.032 1.53 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z"/></svg>
-          <span>GitHub</span>
-        </a>
-        <span class="hidden sm:inline text-slate-200">|</span>
-        <button class="text-xs font-medium text-slate-600 hover:text-slate-900 transition-colors">
-          刷新
-        </button>
-        <span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-xs bg-emerald-50 text-emerald-700 font-medium border border-emerald-100">
-          <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-          <span>正常运行</span>
-        </span>
-        <button class="text-xs text-slate-500 hover:text-slate-900 transition-colors ml-1">
-          退出
-        </button>
-      </div>
-    </div>
-  </header>
-
-  <!-- ======================== 主视口：统一定格在 max-w-7xl 黄金居中 ======================== -->
-  <main class="mx-auto w-full max-w-7xl px-4 sm:px-6 py-5 sm:py-6 flex-1 flex flex-col">
-
-    <!-- 顶部极简扁平导航 Tab (继承原版，加宽更清晰，支持横滑) -->
-    <div class="border-b border-slate-200 mb-6 overflow-x-auto custom-scrollbar shrink-0 select-none">
-      <nav class="flex space-x-8 min-w-max">
-        <button onclick="switchTab('overview')" id="tab-overview" class="tab-btn border-b-2 border-slate-900 text-slate-900 text-sm font-bold py-2.5 px-1 flex items-center gap-2">
-          <span>概览与账号</span>
-        </button>
-
-        <button onclick="switchTab('chat-paint')" id="tab-chat-paint" class="tab-btn border-b-2 border-transparent text-slate-500 hover:text-slate-800 text-sm font-medium py-2.5 px-1 flex items-center gap-1.5">
-          <span>图片生成</span>
-          <span class="text-[10px] px-1.5 py-0.2 rounded bg-blue-50 text-blue-600 font-semibold border border-blue-100">对话式</span>
-        </button>
-
-        <button onclick="switchTab('media-mgr')" id="tab-media-mgr" class="tab-btn border-b-2 border-transparent text-slate-500 hover:text-slate-800 text-sm font-medium py-2.5 px-1 flex items-center gap-1.5">
-          <span>媒体管理</span>
-          <span class="text-[10px] px-1.5 py-0.2 rounded bg-slate-100 text-slate-500">空间防爆</span>
-        </button>
-
-        <button onclick="switchTab('settings')" id="tab-settings" class="tab-btn border-b-2 border-transparent text-slate-500 hover:text-slate-800 text-sm font-medium py-2.5 px-1 flex items-center gap-1.5">
-          <span>系统配置</span>
-        </button>
-
-        <button onclick="switchTab('logs')" id="tab-logs" class="tab-btn border-b-2 border-transparent text-slate-500 hover:text-slate-800 text-sm font-medium py-2.5 px-1 flex items-center gap-1.5">
-          <span>请求日志</span>
-        </button>
-      </nav>
-    </div>
-
-    <!-- ==================== TAB 1: 概览与账号 (上方指标卡片 + 红框当前任务 + 5个账号列表 + 粗柱状时间轴) ==================== -->
-    <div id="panel-overview" class="space-y-5">
-
-      <!-- 第一排卡片：全局指标与资产状态 -->
-      <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-        <!-- 账号总数 -->
-        <div class="bg-white rounded-xl p-3.5 border border-slate-200/80 shadow-sm">
-          <p class="text-xs text-slate-500 mb-0.5">账号总数</p>
-          <div class="text-2xl font-bold text-slate-900">5</div>
-          <p class="text-[11px] text-emerald-600 font-medium mt-1 truncate">5 正常 · 0 异常</p>
-        </div>
-
-        <!-- 账号总余额 -->
-        <div class="bg-white rounded-xl p-3.5 border border-slate-200/80 shadow-sm">
-          <p class="text-xs text-slate-500 mb-0.5">账号总点数</p>
-          <div class="text-2xl font-bold text-slate-900">5,000 <span class="text-xs font-normal text-slate-400">点</span></div>
-          <p class="text-[11px] text-slate-400 mt-1 truncate">均分 1000 点/号</p>
-        </div>
-
-        <!-- 今日消耗点数 -->
-        <div class="bg-white rounded-xl p-3.5 border border-slate-200/80 shadow-sm">
-          <p class="text-xs text-slate-500 mb-0.5">今日已用点数</p>
-          <div class="text-2xl font-bold text-slate-900">42 <span class="text-xs font-normal text-slate-400">点</span></div>
-          <p class="text-[11px] text-slate-400 mt-1 truncate">视频生成消耗</p>
-        </div>
-
-        <!-- 今日成功率 -->
-        <div class="bg-white rounded-xl p-3.5 border border-slate-200/80 shadow-sm">
-          <p class="text-xs text-slate-500 mb-0.5">今日成功率</p>
-          <div class="text-2xl font-bold text-emerald-600">100.0%</div>
-          <p class="text-[11px] text-emerald-600 font-medium mt-1 truncate">无异常拦截</p>
-        </div>
-
-        <!-- 今日调用量 -->
-        <div class="bg-white rounded-xl p-3.5 border border-slate-200/80 shadow-sm">
-          <p class="text-xs text-slate-500 mb-0.5">今日总调用</p>
-          <div class="text-2xl font-bold text-slate-900">70 <span class="text-xs font-normal text-slate-400">次</span></div>
-          <p class="text-[11px] text-slate-400 mt-1 truncate">累计 1,598 次</p>
-        </div>
-
-        <!-- 平均耗时 -->
-        <div class="bg-white rounded-xl p-3.5 border border-slate-200/80 shadow-sm">
-          <p class="text-xs text-slate-500 mb-0.5">平均耗时</p>
-          <div class="text-2xl font-bold text-slate-900">24.2 <span class="text-xs font-normal text-slate-400">秒</span></div>
-          <p class="text-[11px] text-slate-400 mt-1 truncate">图18s / 视52s</p>
-        </div>
-      </div>
-
-      <!-- 第二排卡片：图片与视频业务拆解 (当前运行任务直接内嵌在红框位置，移除冗余大卡片和进度条) -->
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-3.5">
-        <!-- 图片卡片 -->
-        <div class="bg-white rounded-xl p-4 border border-slate-200/80 shadow-sm">
-          <div class="flex items-center justify-between border-b border-slate-100 pb-2.5">
-            <span class="font-semibold text-xs sm:text-sm text-slate-800 flex items-center gap-1.5 sm:gap-2">
-              <svg class="w-4 h-4 text-blue-600 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>
-              <span>图片生成</span>
-              <span class="text-[10px] px-1.5 py-0.2 rounded bg-slate-100 text-slate-600 font-normal">不扣点数</span>
-            </span>
-            <span class="text-xs text-slate-400">累计出图：<span class="font-mono font-bold text-slate-700">1,412</span></span>
-          </div>
-          <div class="mt-2.5 flex flex-wrap items-center justify-between gap-2">
-            <div class="flex items-center gap-2.5 flex-wrap">
-              <div>
-                <span class="text-2xl sm:text-3xl font-extrabold text-slate-900">24</span>
-                <span class="text-xs text-slate-500 ml-1">今日生成 (张)</span>
-              </div>
-              <!-- 截图红框位置：直接显示当前运行任务 -->
-              <div id="live-img-task" onclick="toggleTaskTag('img')" class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-blue-50 text-blue-700 border border-blue-100 text-[11px] font-medium cursor-pointer shadow-sm hover:bg-blue-100 transition-colors" title="点击切换状态演示">
-                <span class="relative flex h-2 w-2 shrink-0">
-                  <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
-                  <span class="relative inline-flex rounded-full h-2 w-2 bg-blue-600"></span>
+            <!-- 右侧操作与状态 (垂直严格对齐于 max-w-7xl) -->
+            <div class="flex items-center gap-3">
+                <a href="https://github.com/TheSmallHanCat/flow2api" target="_blank" class="hidden sm:inline-flex items-center gap-1 text-xs text-slate-500 hover:text-slate-900 transition-colors" title="GitHub 仓库">
+                    <svg class="h-4 w-4" fill="currentColor" viewBox="0 0 24 24"><path fill-rule="evenodd" clip-rule="evenodd" d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.53 1.032 1.53 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z"/></svg>
+                    <span>GitHub</span>
+                </a>
+                <span class="hidden sm:inline text-slate-200">|</span>
+                <button onclick="refreshAllCurrentTab()" class="text-xs font-medium text-slate-600 hover:text-slate-900 transition-colors">
+                    刷新
+                </button>
+                <span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-xs bg-emerald-50 text-emerald-700 font-medium border border-emerald-100">
+                    <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                    <span>服务正常</span>
                 </span>
-                <span>正在生成: <strong class="font-semibold">Nano Banana 2.1</strong> · <span class="font-mono">12s</span></span>
-              </div>
+                <button onclick="logout()" class="text-xs text-slate-500 hover:text-slate-900 transition-colors ml-1">
+                    退出
+                </button>
             </div>
-            <div class="flex items-center gap-2 text-xs text-slate-500 font-medium">
-              <span>1K: <strong class="text-slate-800">14</strong></span>
-              <span>2K: <strong class="text-blue-600">8</strong></span>
-              <span>4K: <strong class="text-purple-600">2</strong></span>
-            </div>
-          </div>
+        </div>
+    </header>
+
+    <!-- ======================== 主视口：统一定格在 max-w-7xl 黄金居中 ======================== -->
+    <main class="mx-auto w-full max-w-7xl px-4 sm:px-6 py-5 sm:py-6 flex-1 flex flex-col">
+
+        <!-- 顶部极简扁平导航 Tab (支持横滑) -->
+        <div class="border-b border-slate-200 mb-6 overflow-x-auto custom-scrollbar shrink-0 select-none">
+            <nav class="flex space-x-8 min-w-max">
+                <button onclick="switchTab('overview')" id="tab-overview" class="tab-btn border-b-2 border-slate-900 text-slate-900 text-sm font-bold py-2.5 px-1 flex items-center gap-2">
+                    <span>概览与账号</span>
+                </button>
+
+                <button onclick="switchTab('chat-paint')" id="tab-chat-paint" class="tab-btn border-b-2 border-transparent text-slate-500 hover:text-slate-800 text-sm font-medium py-2.5 px-1 flex items-center gap-1.5">
+                    <span>图片生成</span>
+                    <span class="text-[10px] px-1.5 py-0.2 rounded bg-blue-50 text-blue-600 font-semibold border border-blue-100">对话式</span>
+                </button>
+
+                <button onclick="switchTab('media-mgr')" id="tab-media-mgr" class="tab-btn border-b-2 border-transparent text-slate-500 hover:text-slate-800 text-sm font-medium py-2.5 px-1 flex items-center gap-1.5">
+                    <span>媒体管理</span>
+                    <span class="text-[10px] px-1.5 py-0.2 rounded bg-slate-100 text-slate-500">空间防爆</span>
+                </button>
+
+                <button onclick="switchTab('settings')" id="tab-settings" class="tab-btn border-b-2 border-transparent text-slate-500 hover:text-slate-800 text-sm font-medium py-2.5 px-1 flex items-center gap-1.5">
+                    <span>系统配置</span>
+                </button>
+
+                <button onclick="switchTab('logs')" id="tab-logs" class="tab-btn border-b-2 border-transparent text-slate-500 hover:text-slate-800 text-sm font-medium py-2.5 px-1 flex items-center gap-1.5">
+                    <span>请求日志</span>
+                </button>
+            </nav>
         </div>
 
-        <!-- 视频卡片 -->
-        <div class="bg-white rounded-xl p-4 border border-slate-200/80 shadow-sm">
-          <div class="flex items-center justify-between border-b border-slate-100 pb-2.5">
-            <span class="font-semibold text-xs sm:text-sm text-slate-800 flex items-center gap-1.5 sm:gap-2">
-              <svg class="w-4 h-4 text-purple-600 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><rect x="2" y="4" width="20" height="16" rx="2.18"/><path d="M7 2v20M17 2v20M2 12h20M2 7h5M2 17h5M17 17h5M17 7h5"/></svg>
-              <span>视频生成</span>
-              <span class="text-[10px] px-1.5 py-0.2 rounded bg-purple-50 text-purple-700 font-normal">Omni 1.1 Flash</span>
-            </span>
-            <span class="text-xs text-slate-400">累计产出：<span class="font-mono font-bold text-slate-700">186</span></span>
-          </div>
-          <div class="mt-2.5 flex flex-wrap items-center justify-between gap-2">
-            <div class="flex items-center gap-2.5 flex-wrap">
-              <div>
-                <span class="text-2xl sm:text-3xl font-extrabold text-slate-900">5</span>
-                <span class="text-xs text-slate-500 ml-1">今日生成 (支)</span>
-              </div>
-              <!-- 截图红框位置：直接显示当前运行任务 -->
-              <div id="live-vid-task" onclick="toggleTaskTag('vid')" class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-purple-50 text-purple-700 border border-purple-100 text-[11px] font-medium cursor-pointer shadow-sm hover:bg-purple-100 transition-colors" title="点击切换状态演示">
-                <span class="relative flex h-2 w-2 shrink-0">
-                  <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-purple-400 opacity-75"></span>
-                  <span class="relative inline-flex rounded-full h-2 w-2 bg-purple-600"></span>
-                </span>
-                <span>正在生成: <strong class="font-semibold">Omni 1.1 (6s)</strong> · <span class="font-mono">35s</span></span>
-              </div>
-            </div>
-            <div class="flex items-center gap-2 text-xs text-slate-500 font-medium">
-              <span>文生: <strong class="text-slate-800">3</strong></span>
-              <span>图生: <strong class="text-slate-800">2</strong></span>
-              <span>消耗: <strong class="text-amber-600">42点</strong></span>
-            </div>
-          </div>
-        </div>
-      </div>
+        <!-- ==================== TAB 1: 概览与账号 ==================== -->
+        <div id="panel-overview" class="space-y-5">
 
-      <!-- 中间：完整的【账号管理表格】(展示 5 个真实账号，移动端响应式，桌面端宽屏舒适) -->
-      <div class="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
-        <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2.5 p-3.5 sm:p-4 border-b border-slate-100">
-          <div>
-            <h3 class="text-sm sm:text-base font-bold text-slate-900">账号 Token 列表</h3>
-            <p class="text-xs text-slate-400 mt-0.5">管理 Google Flow 账号会话凭据与画板项目绑定状态</p>
-          </div>
-          <div class="flex items-center gap-2 w-full sm:w-auto justify-between sm:justify-end flex-wrap pt-1 sm:pt-0">
-            <label class="flex items-center gap-1.5 text-xs text-slate-500 cursor-pointer select-none">
-              <input type="checkbox" checked class="w-4 h-4 text-slate-900 rounded border-slate-300 focus:ring-0 cursor-pointer">
-              <span>自动刷新AT</span>
-            </label>
-            <!-- 账号脱敏切换小眼睛按钮 -->
-            <button onclick="togglePreviewEmailMask()" id="btnToggleEmailMask" class="inline-flex items-center justify-center rounded-lg border border-blue-200 bg-blue-50 text-blue-600 hover:text-slate-900 hover:bg-slate-50 h-8 w-8 transition-colors shrink-0" title="已脱敏隐藏（点击显示完整账号）">
-              <svg class="h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
-            </button>
-            <div class="flex items-center gap-1.5">
-              <button class="px-2.5 py-1.5 rounded-lg border border-slate-200 text-xs font-medium text-slate-700 hover:bg-slate-50 transition-colors">
-                刷新余额
-              </button>
-              <button class="px-3 py-1.5 rounded-lg bg-slate-900 text-white text-xs font-medium hover:bg-slate-800 transition-colors shadow-sm">
-                + 添加 Token
-              </button>
+            <!-- 第一排卡片：全局指标与资产状态 -->
+            <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+                <div class="bg-white rounded-xl p-3.5 border border-slate-200/80 shadow-sm">
+                    <p class="text-xs text-slate-500 mb-0.5">账号总数</p>
+                    <div class="text-2xl font-bold text-slate-900" id="statTotal">-</div>
+                    <p class="text-[11px] text-emerald-600 font-medium mt-1 truncate" id="statActiveSub">-</p>
+                </div>
+
+                <div class="bg-white rounded-xl p-3.5 border border-slate-200/80 shadow-sm">
+                    <p class="text-xs text-slate-500 mb-0.5">账号总点数</p>
+                    <div class="text-2xl font-bold text-slate-900" id="statCredits">-</div>
+                    <p class="text-[11px] text-slate-400 mt-1 truncate" id="statCreditsSub">-</p>
+                </div>
+
+                <div class="bg-white rounded-xl p-3.5 border border-slate-200/80 shadow-sm">
+                    <p class="text-xs text-slate-500 mb-0.5">今日已用点数</p>
+                    <div class="text-2xl font-bold text-slate-900" id="statTodayCredits">-</div>
+                    <p class="text-[11px] text-slate-400 mt-1 truncate">视频生成消耗</p>
+                </div>
+
+                <div class="bg-white rounded-xl p-3.5 border border-slate-200/80 shadow-sm">
+                    <p class="text-xs text-slate-500 mb-0.5">今日成功率</p>
+                    <div class="text-2xl font-bold text-emerald-600" id="statSuccessRate">100.0%</div>
+                    <p class="text-[11px] text-emerald-600 font-medium mt-1 truncate" id="statSuccessSub">健康稳定</p>
+                </div>
+
+                <div class="bg-white rounded-xl p-3.5 border border-slate-200/80 shadow-sm">
+                    <p class="text-xs text-slate-500 mb-0.5">今日总调用</p>
+                    <div class="text-2xl font-bold text-slate-900" id="statTotalCalls">-</div>
+                    <p class="text-[11px] text-slate-400 mt-1 truncate" id="statCallsSub">累计统计</p>
+                </div>
+
+                <div class="bg-white rounded-xl p-3.5 border border-slate-200/80 shadow-sm">
+                    <p class="text-xs text-slate-500 mb-0.5">平均耗时</p>
+                    <div class="text-2xl font-bold text-slate-900" id="statAvgDuration">-</div>
+                    <p class="text-[11px] text-slate-400 mt-1 truncate">今日成功请求均值</p>
+                </div>
             </div>
-          </div>
+
+            <!-- 第二排卡片：图片与视频业务拆解 (当前任务徽章直接嵌入红框位置) -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+                <!-- 图片卡片 -->
+                <div class="bg-white rounded-xl p-4 border border-slate-200/80 shadow-sm">
+                    <div class="flex items-center justify-between border-b border-slate-100 pb-2.5">
+                        <span class="font-semibold text-xs sm:text-sm text-slate-800 flex items-center gap-1.5 sm:gap-2">
+                            <svg class="w-4 h-4 text-blue-600 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>
+                            <span>图片生成</span>
+                            <span class="text-[10px] px-1.5 py-0.2 rounded bg-slate-100 text-slate-600 font-normal">不扣点数</span>
+                        </span>
+                        <span class="text-xs text-slate-400">累计出图：<span class="font-mono font-bold text-slate-700" id="statTotalImages">-</span></span>
+                    </div>
+                    <div class="mt-2.5 flex flex-wrap items-center justify-between gap-2">
+                        <div class="flex items-center gap-2.5 flex-wrap">
+                            <div>
+                                <span class="text-2xl sm:text-3xl font-extrabold text-slate-900" id="statTodayImages">-</span>
+                                <span class="text-xs text-slate-500 ml-1">今日生成 (张)</span>
+                            </div>
+                            <!-- 当前图片运行任务指示徽章 -->
+                            <div id="live-img-task" class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-slate-100 text-slate-500 text-[10px] border border-slate-200">
+                                <span>● 当前空闲</span>
+                            </div>
+                        </div>
+                        <div class="flex items-center gap-2 text-xs text-slate-500 font-medium">
+                            <span>1K: <strong class="text-slate-800" id="statImg1k">0</strong></span>
+                            <span>2K: <strong class="text-blue-600" id="statImg2k">0</strong></span>
+                            <span>4K: <strong class="text-purple-600" id="statImg4k">0</strong></span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 视频卡片 -->
+                <div class="bg-white rounded-xl p-4 border border-slate-200/80 shadow-sm">
+                    <div class="flex items-center justify-between border-b border-slate-100 pb-2.5">
+                        <span class="font-semibold text-xs sm:text-sm text-slate-800 flex items-center gap-1.5 sm:gap-2">
+                            <svg class="w-4 h-4 text-purple-600 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><rect x="2" y="4" width="20" height="16" rx="2.18"/><path d="M7 2v20M17 2v20M2 12h20M2 7h5M2 17h5M17 17h5M17 7h5"/></svg>
+                            <span>视频生成</span>
+                            <span class="text-[10px] px-1.5 py-0.2 rounded bg-purple-50 text-purple-700 font-normal">Omni 1.1 Flash</span>
+                        </span>
+                        <span class="text-xs text-slate-400">累计产出：<span class="font-mono font-bold text-slate-700" id="statTotalVideos">-</span></span>
+                    </div>
+                    <div class="mt-2.5 flex flex-wrap items-center justify-between gap-2">
+                        <div class="flex items-center gap-2.5 flex-wrap">
+                            <div>
+                                <span class="text-2xl sm:text-3xl font-extrabold text-slate-900" id="statTodayVideos">-</span>
+                                <span class="text-xs text-slate-500 ml-1">今日生成 (支)</span>
+                            </div>
+                            <!-- 当前视频运行任务指示徽章 -->
+                            <div id="live-vid-task" class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-slate-100 text-slate-500 text-[10px] border border-slate-200">
+                                <span>● 当前空闲</span>
+                            </div>
+                        </div>
+                        <div class="flex items-center gap-2 text-xs text-slate-500 font-medium">
+                            <span>文生: <strong class="text-slate-800" id="statVidT2v">0</strong></span>
+                            <span>图生: <strong class="text-slate-800" id="statVidI2v">0</strong></span>
+                            <span>消耗: <strong class="text-amber-600" id="statVidPoints">0点</strong></span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 中间：【账号 Token 列表】(移动端自适应卡片 + 桌面端标准表格) -->
+            <div class="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+                <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2.5 p-3.5 sm:p-4 border-b border-slate-100">
+                    <div>
+                        <h3 class="text-sm sm:text-base font-bold text-slate-900">账号 Token 列表</h3>
+                        <p class="text-xs text-slate-400 mt-0.5">管理 Google Flow 账号凭据与画板项目绑定状态</p>
+                    </div>
+                    <div class="flex items-center gap-2 w-full sm:w-auto justify-between sm:justify-end flex-wrap pt-1 sm:pt-0">
+                        <label class="flex items-center gap-1.5 text-xs text-slate-500 cursor-pointer select-none">
+                            <input type="checkbox" id="atAutoRefreshToggle" onchange="toggleATAutoRefresh()" class="w-4 h-4 text-slate-900 rounded border-slate-300 focus:ring-0 cursor-pointer">
+                            <span>自动刷新AT</span>
+                        </label>
+                        <!-- 账号脱敏切换小眼睛按钮 -->
+                        <button onclick="toggleEmailMask()" id="btnToggleEmailMask" class="inline-flex items-center justify-center rounded-lg border border-slate-200 text-slate-600 hover:text-slate-900 hover:bg-slate-50 h-8 w-8 transition-colors shrink-0" title="脱敏显示账号（方便截图）">
+                            <svg class="h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>
+                            </svg>
+                        </button>
+                        <div class="flex items-center gap-1.5">
+                            <button onclick="refreshAllCredits()" class="px-2.5 py-1.5 rounded-lg border border-slate-200 text-xs font-medium text-slate-700 hover:bg-slate-50 transition-colors">
+                                刷新余额
+                            </button>
+                            <button onclick="openAddModal()" class="px-3 py-1.5 rounded-lg bg-slate-900 text-white text-xs font-medium hover:bg-slate-800 transition-colors shadow-sm">
+                                + 添加 Token
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 移动端卡片视图 -->
+                <div class="block md:hidden divide-y divide-slate-100" id="tokenMobileCards">
+                    <div class="p-4 text-center text-xs text-slate-400">正在加载账号...</div>
+                </div>
+
+                <!-- 桌面端标准表格 -->
+                <div class="hidden md:block overflow-x-auto">
+                    <table class="w-full text-xs text-left">
+                        <thead class="bg-slate-50/80 text-slate-500 font-medium border-b border-slate-100">
+                            <tr>
+                                <th class="py-3 px-4">
+                                    <div class="flex items-center gap-1.5 cursor-pointer select-none" onclick="toggleEmailMask()" title="点击切换账号脱敏">
+                                        <span>账号邮箱</span>
+                                        <span id="thEmailMaskIcon" class="text-slate-400 hover:text-slate-700"></span>
+                                    </div>
+                                </th>
+                                <th class="py-3 px-3 text-center">状态</th>
+                                <th class="py-3 px-3 text-center">模式</th>
+                                <th class="py-3 px-3 text-center">AT 过期时间</th>
+                                <th class="py-3 px-3 text-center">点数余额</th>
+                                <th class="py-3 px-4">当前画板项目 ID</th>
+                                <th class="py-3 px-3 text-center">生成统计</th>
+                                <th class="py-3 px-4 text-right">操作</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-100 text-slate-700" id="tokenTableBody">
+                            <tr><td colspan="8" class="py-6 text-center text-slate-400">正在加载账号...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- 下方：【生成时间轴】(粗柱体 + 24小时分布 + 7天/30天切换) -->
+            <div class="rounded-xl border border-slate-200 bg-white shadow-sm p-4 sm:p-5 space-y-4">
+                <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                    <div>
+                        <h4 class="text-sm font-bold text-slate-900">生成时间轴 / 模型请求分布</h4>
+                        <p class="text-xs text-slate-400 mt-0.5">统计 24 小时各时段的真实出图与视频调用柱状分布</p>
+                    </div>
+
+                    <div class="flex items-center justify-between w-full sm:w-auto gap-3 flex-wrap">
+                        <div class="flex items-center gap-2 text-xs text-slate-600">
+                            <span class="w-3 h-3 rounded-sm bg-[#2e9e6b] shrink-0"></span>
+                            <span class="font-mono text-[11px]" id="chart-legend-label">Nano Banana 2.1</span>
+                        </div>
+                        <div class="inline-flex rounded-lg border border-slate-200 p-0.5 bg-slate-50 text-xs font-medium text-slate-600 shrink-0">
+                            <button onclick="switchTimelineView('today', this)" id="btn-chart-today" class="px-2.5 py-1 rounded-md bg-white text-slate-900 shadow-sm transition-all">今日</button>
+                            <button onclick="switchTimelineView('7d', this)" id="btn-chart-7d" class="px-2.5 py-1 rounded-md hover:text-slate-900 transition-all">7天</button>
+                            <button onclick="switchTimelineView('30d', this)" id="btn-chart-30d" class="px-2.5 py-1 rounded-md hover:text-slate-900 transition-all">30天</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 柱状图主区域 -->
+                <div class="relative pt-6 pb-2 overflow-x-auto custom-scrollbar">
+                    <!-- Tooltip 气泡 -->
+                    <div id="chart-tooltip" class="absolute pointer-events-none hidden z-20 bg-white border border-slate-200 rounded-xl px-3.5 py-2 shadow-xl transition-all -top-12">
+                        <span class="font-bold text-slate-900 block text-xs" id="tooltip-time">-</span>
+                        <div class="flex items-center gap-2 mt-1 text-xs text-slate-600">
+                            <span class="w-2.5 h-2.5 rounded-full bg-[#2e9e6b]"></span>
+                            <span id="tooltip-val" class="font-medium">-</span>
+                        </div>
+                    </div>
+
+                    <div class="min-w-[700px]">
+                        <div class="relative h-44 w-full flex items-end justify-between gap-2 border-b border-slate-200 px-3" id="chart-bars-container">
+                            <!-- 刻度参考虚线 -->
+                            <div class="absolute inset-x-0 top-0 border-b border-dashed border-slate-100 flex justify-between text-[10px] text-slate-300 pointer-events-none -translate-y-2.5"><span id="chart-scale-max">25</span></div>
+                            <div class="absolute inset-x-0 top-1/4 border-b border-dashed border-slate-100 flex justify-between text-[10px] text-slate-300 pointer-events-none -translate-y-2.5"><span id="chart-scale-75">20</span></div>
+                            <div class="absolute inset-x-0 top-2/4 border-b border-dashed border-slate-100 flex justify-between text-[10px] text-slate-300 pointer-events-none -translate-y-2.5"><span id="chart-scale-50">15</span></div>
+                            <div class="absolute inset-x-0 top-3/4 border-b border-dashed border-slate-100 flex justify-between text-[10px] text-slate-300 pointer-events-none -translate-y-2.5"><span id="chart-scale-25">10</span></div>
+
+                            <!-- 动态生成的粗壮柱子 -->
+                        </div>
+                        <div class="w-full flex justify-between text-[10px] text-slate-400 px-3 pt-2 select-none" id="chart-axis-labels">
+                            <!-- 轴刻度文字 -->
+                        </div>
+                    </div>
+                </div>
+            </div>
         </div>
 
-        <div class="overflow-x-auto custom-scrollbar">
-          <table class="w-full text-xs text-left min-w-[720px]">
-            <thead class="bg-slate-50/80 text-slate-500 font-medium border-b border-slate-100">
-              <tr>
-                <th class="py-3 px-4">
-                  <div class="flex items-center gap-1.5 cursor-pointer select-none" onclick="togglePreviewEmailMask()" title="点击切换账号脱敏">
-                    <span>账号邮箱</span>
-                    <span id="thEmailMaskIcon" class="text-blue-600">
-                      <svg class="h-3.5 w-3.5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+        <!-- ==================== TAB 2: 图片生成 (对话式工作台) ==================== -->
+        <div id="panel-chat-paint" class="hidden flex-1 flex flex-col md:flex-row rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden" style="min-height: 640px;">
+            <!-- 左侧任务历史 -->
+            <div class="w-full md:w-64 bg-slate-50/60 border-b md:border-b-0 md:border-r border-slate-200 flex flex-col shrink-0">
+                <div class="p-3 border-b border-slate-100 flex items-center justify-between">
+                    <span class="font-bold text-xs text-slate-700">生图任务历史</span>
+                    <button onclick="newChatSession()" class="flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded bg-slate-900 text-white hover:bg-slate-800 transition-colors shadow-sm">
+                        <span>+ 新任务</span>
+                    </button>
+                </div>
+                <div class="flex-1 overflow-y-auto p-2 space-y-1.5 custom-scrollbar" id="chatSessionList">
+                    <!-- 动态生成历史会话 -->
+                </div>
+            </div>
+
+            <!-- 右侧生图聊天工作区 -->
+            <div class="flex-1 flex flex-col bg-[#fafafa]">
+                <div class="h-11 bg-white border-b border-slate-200/80 px-4 sm:px-6 flex items-center justify-between shrink-0">
+                    <div class="flex items-center gap-2">
+                        <span class="font-bold text-xs text-slate-800 truncate" id="currentChatTitle">新画图任务</span>
+                    </div>
+                    <button onclick="clearCurrentChatMessages()" class="text-xs text-slate-400 hover:text-slate-600">清空对话</button>
+                </div>
+
+                <!-- 消息气泡瀑布流 -->
+                <div class="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 custom-scrollbar" id="chatMessagesContainer">
+                    <div class="text-center py-16 text-slate-400 text-xs">
+                        <p>请在下方输入画面提示词，选择模型并开始生成</p>
+                    </div>
+                </div>
+
+                <!-- 底部交互工作栏 -->
+                <div class="p-3 sm:p-4 bg-white border-t border-slate-200">
+                    <div class="bg-slate-50 rounded-xl border border-slate-200 p-2.5 sm:p-3 focus-within:bg-white focus-within:border-slate-400 transition-all">
+                        <!-- 垫图缩略预览 -->
+                        <div id="chatRefPreview" class="hidden mb-2 flex items-center gap-2 bg-slate-100 p-1.5 rounded-lg">
+                            <img id="chatRefThumb" src="" class="w-8 h-8 rounded object-cover border border-slate-300">
+                            <span class="text-xs text-slate-600 flex-1 truncate">已挂载参考垫图</span>
+                            <button onclick="removeChatRefImage()" class="text-slate-400 hover:text-red-500 text-xs px-1">✕</button>
+                        </div>
+
+                        <textarea id="chatPromptInput" rows="2" placeholder="输入你想生成的画面提示词，支持粘贴截图或选择参考图..." class="w-full bg-transparent resize-none focus:outline-none text-xs text-slate-900 placeholder-slate-400 leading-relaxed"></textarea>
+
+                        <div class="flex items-center justify-between pt-2 border-t border-slate-200/60 mt-1 select-none flex-wrap gap-2">
+                            <div class="flex items-center gap-1.5 sm:gap-2 flex-wrap">
+                                <label class="cursor-pointer px-2.5 py-1 rounded bg-white border border-slate-200 hover:bg-slate-50 text-xs text-slate-700 transition-colors inline-flex items-center gap-1 shrink-0">
+                                    <svg class="w-3.5 h-3.5 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/></svg>
+                                    <span>参考图</span>
+                                    <input type="file" accept="image/*" class="hidden" onchange="handleChatFileInput(event)">
+                                </label>
+
+                                <select id="chatSelectModel" onchange="onChatModelChange()" class="bg-white border border-slate-200 rounded px-2.5 py-1 text-xs font-semibold text-slate-900 focus:outline-none cursor-pointer">
+                                    <option value="Nano Banana 2.1">🍌 Nano Banana 2.1 (BELUGA)</option>
+                                    <option value="Nano Banana 2 Lite">🍌 Nano Banana 2 Lite</option>
+                                    <option value="Nano Banana Pro">🍌 Nano Banana Pro</option>
+                                    <option value="Omni 1.1 Flash">🎬 Omni 1.1 Flash (视频)</option>
+                                </select>
+
+                                <select id="chatSelectAspect" class="bg-white border border-slate-200 rounded px-2.5 py-1 text-xs text-slate-700 focus:outline-none cursor-pointer">
+                                    <option value="9:16">9:16 竖屏</option>
+                                    <option value="16:9">16:9 横屏</option>
+                                    <option value="1:1">1:1 正方</option>
+                                    <option value="4:3">4:3</option>
+                                    <option value="3:4">3:4</option>
+                                </select>
+
+                                <div id="chatBoxResolution">
+                                    <select id="chatSelectSize" class="bg-white border border-slate-200 rounded px-2.5 py-1 text-xs text-slate-700 focus:outline-none cursor-pointer">
+                                        <option value="2k">2K 原生重塑</option>
+                                        <option value="4k">4K 超分 (Lanczos3)</option>
+                                        <option value="1k">1K 标清</option>
+                                    </select>
+                                </div>
+
+                                <div id="chatBoxDuration" class="hidden">
+                                    <select id="chatSelectDuration" class="bg-purple-50 border border-purple-200 text-purple-700 rounded px-2.5 py-1 text-xs font-semibold focus:outline-none cursor-pointer">
+                                        <option value="6">时长: 6 秒</option>
+                                        <option value="4">时长: 4 秒</option>
+                                        <option value="8">时长: 8 秒</option>
+                                        <option value="10">时长: 10 秒</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <button onclick="handleChatSend()" id="btnChatSend" class="px-4 py-1.5 rounded-lg bg-slate-900 text-white text-xs font-medium hover:bg-slate-800 transition-colors shrink-0 ml-auto">
+                                生成画面
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ==================== TAB 3: 本地媒体管理 ==================== -->
+        <div id="panel-media-mgr" class="hidden space-y-4">
+            <div class="bg-white rounded-xl p-4 border border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-sm">
+                <div>
+                    <h3 class="font-bold text-slate-900 text-sm">本地媒体缓存空间监控</h3>
+                    <p class="text-xs text-slate-400 mt-0.5" id="mediaStatsSummary">正在统计 tmp/ 目录存储...</p>
+                </div>
+                <div class="flex items-center gap-2 flex-wrap">
+                    <button onclick="triggerCleanup('7d')" class="text-xs px-3 py-1.5 rounded border border-slate-200 hover:bg-slate-50 transition-colors">清理 7 天前</button>
+                    <button onclick="triggerCleanup('3d')" class="text-xs px-3 py-1.5 rounded border border-slate-200 hover:bg-slate-50 transition-colors">清理 3 天前</button>
+                    <button onclick="triggerCleanup('all')" class="text-xs px-3 py-1.5 rounded bg-red-50 text-red-600 border border-red-200 hover:bg-red-100 transition-colors">清空全部缓存</button>
+                </div>
+            </div>
+
+            <!-- 筛选工具条 -->
+            <div class="flex items-center justify-between text-xs text-slate-500 px-1">
+                <div class="flex items-center gap-2">
+                    <span>筛选类型:</span>
+                    <button onclick="filterMediaFiles('all')" id="btnMediaFilterAll" class="px-2 py-0.5 rounded bg-slate-900 text-white font-medium">全部</button>
+                    <button onclick="filterMediaFiles('image')" id="btnMediaFilterImg" class="px-2 py-0.5 rounded bg-slate-100 hover:bg-slate-200">仅图片</button>
+                    <button onclick="filterMediaFiles('video')" id="btnMediaFilterVid" class="px-2 py-0.5 rounded bg-slate-100 hover:bg-slate-200">仅视频</button>
+                </div>
+                <span id="mediaTotalCountText">共 0 个文件</span>
+            </div>
+
+            <!-- 媒体列表视图 (正方形轻量缩略图 + 详细信息 + 操作) -->
+            <div class="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+                <!-- 移动端自适应列表 -->
+                <div class="block md:hidden divide-y divide-slate-100" id="mediaMobileList">
+                    <div class="p-6 text-center text-xs text-slate-400">正在加载媒体...</div>
+                </div>
+
+                <!-- 桌面端紧凑列表 -->
+                <div class="hidden md:block overflow-x-auto">
+                    <table class="w-full text-xs text-left">
+                        <thead class="bg-slate-50/80 text-slate-500 font-medium border-b border-slate-100">
+                            <tr>
+                                <th class="py-3 px-4 w-24">缩略图</th>
+                                <th class="py-3 px-4">文件名</th>
+                                <th class="py-3 px-3 text-center">类型</th>
+                                <th class="py-3 px-3 text-center">分辨率 / 尺寸</th>
+                                <th class="py-3 px-3 text-center">文件大小</th>
+                                <th class="py-3 px-3 text-center">生成时间</th>
+                                <th class="py-3 px-4 text-right">操作</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-100 text-slate-700" id="mediaTableBody">
+                            <tr><td colspan="7" class="py-8 text-center text-slate-400">正在加载媒体列表...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- ==================== TAB 4: 系统配置 ==================== -->
+        <div id="panel-settings" class="hidden space-y-5">
+            <div class="grid gap-5 grid-cols-1 lg:grid-cols-2">
+
+                <!-- 核心：图片放大 / 4K 分级超分策略 -->
+                <div class="bg-white rounded-xl p-5 border border-slate-200/80 shadow-sm flex flex-col justify-between lg:col-span-2">
+                    <div class="space-y-4">
+                        <div class="flex items-center justify-between border-b border-slate-100 pb-3 flex-wrap gap-2">
+                            <div>
+                                <h3 class="font-bold text-slate-900 text-sm flex items-center gap-2">
+                                    <span>图片放大 / 4K 分级超分策略</span>
+                                    <span class="text-[10px] px-2 py-0.5 rounded bg-blue-50 text-blue-700 font-semibold border border-blue-100">核心配置</span>
+                                </h3>
+                                <p class="text-xs text-slate-400 mt-0.5">智能适配各类账号等级：优先利用官方原生能力，缺失时由本地超分算法无缝补齐</p>
+                            </div>
+                            <span class="text-xs text-emerald-600 font-medium">● 引擎就绪</span>
+                        </div>
+
+                        <div class="flex items-center gap-3 p-3 rounded-lg bg-slate-50 border border-slate-200">
+                            <input type="checkbox" id="cfgAutoUpscale" checked class="w-4 h-4 text-slate-900 rounded border-slate-300 focus:ring-0 cursor-pointer">
+                            <label for="cfgAutoUpscale" class="text-xs font-semibold text-slate-800 cursor-pointer flex-1">
+                                图片尺寸不足时自动放大 (默认开启)
+                            </label>
+                            <span class="text-[11px] text-slate-500">检测到客户端请求 2K/4K 且账号不足时自动触发</span>
+                        </div>
+
+                        <div class="space-y-1.5">
+                            <label class="block text-xs font-semibold text-slate-700">超分放大引擎</label>
+                            <select id="cfgUpscaleEngine" class="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs font-medium text-slate-800 focus:outline-none">
+                                <option value="lanczos3">Sharp / Lanczos3 (推荐 · 高清锐化重采样 · 速度极快)</option>
+                                <option value="bicubic">Bicubic 三次样条插值 (平滑过渡)</option>
+                            </select>
+                        </div>
+
+                        <div class="bg-slate-50/80 rounded-xl p-3.5 border border-slate-200/60 space-y-2 text-xs text-slate-600">
+                            <span class="font-bold text-slate-800 block text-[11px] uppercase tracking-wider text-blue-600">4K / 2K 超分分级执行机制：</span>
+                            <ul class="space-y-1.5 pl-4 list-disc text-[11px] leading-relaxed text-slate-600">
+                                <li>
+                                    <strong class="text-slate-900">👑 Ultra 顶级账号 (有官方4K权限)</strong>：
+                                    请求 4K 时，<span class="text-emerald-700 font-medium">直接调用 Google Flow 原生 4K 模型放大，完全不走本地超分</span>，100% 原汁原味交付。
+                                </li>
+                                <li>
+                                    <strong class="text-slate-900">💎 Pro 付费账号 (有原生2K、无4K)</strong>：
+                                    请求 4K 时，系统<span class="text-blue-700 font-medium">先调用 Google 官方原生模型放大到 2K 底图</span>，接着<span class="text-blue-700 font-medium">由本地 Sharp / Lanczos3 算法无损超分到 4K 补齐分辨率交付</span>。
+                                </li>
+                                <li>
+                                    <strong class="text-slate-900">⚪ Free 普通账号 (仅有1K权限)</strong>：
+                                    请求 4K 时，由于账号只能拿到 1K 初始图，系统<span class="text-purple-700 font-medium">直接以 1K 底图通过 Lanczos3 算法超分至 4K 交付</span>；请求 2K 则超分至 2K 交付。
+                                </li>
+                            </ul>
+                        </div>
+                    </div>
+
+                    <div class="pt-4 border-t border-slate-100 flex justify-end mt-2">
+                        <button onclick="saveAllGenerationConfig()" class="px-4 py-1.5 rounded-lg bg-slate-900 text-white text-xs font-medium hover:bg-slate-800 shadow-sm transition-colors">
+                            保存超分配置
+                        </button>
+                    </div>
+                </div>
+
+                <!-- 安全配置 -->
+                <div class="bg-white rounded-xl p-5 border border-slate-200/80 shadow-sm flex flex-col justify-between">
+                    <div>
+                        <h3 class="text-sm font-bold text-slate-900 mb-3">安全配置 (管理员密码)</h3>
+                        <div class="space-y-3">
+                            <div>
+                                <label class="text-xs text-slate-500 mb-1 block">管理员用户名</label>
+                                <input id="cfgAdminUsername" type="text" class="flex h-8 w-full rounded-lg border border-slate-200 bg-slate-50 px-2.5 text-xs text-slate-800 focus:outline-none">
+                            </div>
+                            <div>
+                                <label class="text-xs text-slate-500 mb-1 block">旧密码</label>
+                                <input id="cfgOldPassword" type="password" placeholder="输入旧密码" class="flex h-8 w-full rounded-lg border border-slate-200 bg-white px-2.5 text-xs text-slate-800 focus:outline-none">
+                            </div>
+                            <div>
+                                <label class="text-xs text-slate-500 mb-1 block">新密码</label>
+                                <input id="cfgNewPassword" type="password" placeholder="输入新密码" class="flex h-8 w-full rounded-lg border border-slate-200 bg-white px-2.5 text-xs text-slate-800 focus:outline-none">
+                            </div>
+                        </div>
+                    </div>
+                    <button onclick="updateAdminPassword()" class="mt-4 w-full py-1.5 rounded-lg bg-slate-900 text-white text-xs font-medium hover:bg-slate-800">修改密码</button>
+                </div>
+
+                <!-- API 密钥配置 -->
+                <div class="bg-white rounded-xl p-5 border border-slate-200/80 shadow-sm flex flex-col justify-between">
+                    <div>
+                        <h3 class="text-sm font-bold text-slate-900 mb-3">API 密钥配置</h3>
+                        <div class="space-y-3">
+                            <div>
+                                <label class="text-xs text-slate-500 mb-1 block">当前 API Key</label>
+                                <input id="cfgCurrentAPIKey" type="text" disabled readonly class="flex h-8 w-full rounded-lg border border-slate-200 bg-slate-50 px-2.5 text-xs font-mono text-slate-500">
+                            </div>
+                            <div>
+                                <label class="text-xs text-slate-500 mb-1 block">设置新 API Key</label>
+                                <input id="cfgNewAPIKey" type="text" placeholder="输入新的 API Key" class="flex h-8 w-full rounded-lg border border-slate-200 bg-white px-2.5 text-xs text-slate-800 focus:outline-none">
+                                <p class="text-[11px] text-slate-400 mt-1">用于客户端调用的 Bearer 认证密钥</p>
+                            </div>
+                        </div>
+                    </div>
+                    <button onclick="updateAPIKey()" class="mt-4 w-full py-1.5 rounded-lg bg-slate-900 text-white text-xs font-medium hover:bg-slate-800">更新 API Key</button>
+                </div>
+
+                <!-- 代理配置 -->
+                <div class="bg-white rounded-xl p-5 border border-slate-200/80 shadow-sm flex flex-col justify-between">
+                    <div>
+                        <h3 class="text-sm font-bold text-slate-900 mb-3">代理配置</h3>
+                        <div class="space-y-3">
+                            <label class="inline-flex items-center gap-2 cursor-pointer">
+                                <input type="checkbox" id="cfgProxyEnabled" class="w-4 h-4 text-slate-900 rounded border-slate-300">
+                                <span class="text-xs font-medium text-slate-700">启用请求代理 (透明网关建议关闭)</span>
+                            </label>
+                            <div>
+                                <label class="text-xs text-slate-500 mb-1 block">请求代理地址</label>
+                                <input id="cfgProxyUrl" type="text" class="flex h-8 w-full rounded-lg border border-slate-200 bg-white px-2.5 text-xs text-slate-800 focus:outline-none">
+                            </div>
+                            <div class="pt-2 border-t border-slate-100">
+                                <label class="inline-flex items-center gap-2 cursor-pointer">
+                                    <input type="checkbox" id="cfgMediaProxyEnabled" class="w-4 h-4 text-slate-900 rounded border-slate-300" onchange="toggleMediaProxyInput()">
+                                    <span class="text-xs font-medium text-slate-700">媒体上传下载独立代理</span>
+                                </label>
+                                <div id="mediaProxyUrlInput" class="hidden mt-2">
+                                    <input id="cfgMediaProxyUrl" class="flex h-8 w-full rounded-lg border border-slate-200 bg-white px-2.5 text-xs text-slate-800 focus:outline-none" placeholder="http://127.0.0.1:7897">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-2 gap-2 mt-4">
+                        <button onclick="testProxyConfig()" id="btnTestProxy" class="py-1.5 rounded-lg border border-slate-200 text-xs text-slate-700 hover:bg-slate-50">测试连通</button>
+                        <button onclick="saveProxyConfig()" class="py-1.5 rounded-lg bg-slate-900 text-white text-xs font-medium hover:bg-slate-800">保存代理</button>
+                    </div>
+                </div>
+
+                <!-- 生成与超时配置 -->
+                <div class="bg-white rounded-xl p-5 border border-slate-200/80 shadow-sm flex flex-col justify-between">
+                    <div>
+                        <h3 class="text-sm font-bold text-slate-900 mb-3">生成与超时配置</h3>
+                        <div class="space-y-3">
+                            <div class="grid grid-cols-2 gap-2.5">
+                                <div>
+                                    <label class="text-xs text-slate-500 mb-1 block">图片超时 (秒)</label>
+                                    <input id="cfgImageTimeout" type="number" class="flex h-8 w-full rounded-lg border border-slate-200 bg-white px-2.5 text-xs text-slate-800 focus:outline-none">
+                                </div>
+                                <div>
+                                    <label class="text-xs text-slate-500 mb-1 block">视频超时 (秒)</label>
+                                    <input id="cfgVideoTimeout" type="number" class="flex h-8 w-full rounded-lg border border-slate-200 bg-white px-2.5 text-xs text-slate-800 focus:outline-none">
+                                </div>
+                            </div>
+                            <div class="grid grid-cols-2 gap-2.5">
+                                <div>
+                                    <label class="text-xs text-slate-500 mb-1 block">兜底换号 (次)</label>
+                                    <input id="cfgImageFallbackAttempts" type="number" class="flex h-8 w-full rounded-lg border border-slate-200 bg-white px-2.5 text-xs text-slate-800 focus:outline-none">
+                                </div>
+                                <div>
+                                    <label class="text-xs text-slate-500 mb-1 block">最大重试次数</label>
+                                    <input id="cfgMaxRetries" type="number" class="flex h-8 w-full rounded-lg border border-slate-200 bg-white px-2.5 text-xs text-slate-800 focus:outline-none">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <button onclick="saveAllGenerationConfig()" class="mt-4 w-full py-1.5 rounded-lg bg-slate-900 text-white text-xs font-medium hover:bg-slate-800">保存生成配置</button>
+                </div>
+
+                <!-- 缓存配置 -->
+                <div class="bg-white rounded-xl p-5 border border-slate-200/80 shadow-sm flex flex-col justify-between">
+                    <div>
+                        <h3 class="text-sm font-bold text-slate-900 mb-3">本地缓存配置</h3>
+                        <div class="space-y-3">
+                            <label class="inline-flex items-center gap-2 cursor-pointer">
+                                <input type="checkbox" id="cfgCacheEnabled" onchange="toggleCacheOptions()" class="w-4 h-4 text-slate-900 rounded border-slate-300">
+                                <span class="text-xs font-medium text-slate-700">启用本地媒体缓存 (tmp/)</span>
+                            </label>
+                            <div id="cacheOptions">
+                                <div>
+                                    <label class="text-xs text-slate-500 mb-1 block">缓存过期 (秒，0为不自动删)</label>
+                                    <input id="cfgCacheTimeout" type="number" class="flex h-8 w-full rounded-lg border border-slate-200 bg-white px-2.5 text-xs text-slate-800 focus:outline-none">
+                                </div>
+                                <div class="mt-2">
+                                    <label class="text-xs text-slate-500 mb-1 block">对外访问域名 (留空为本机 IP)</label>
+                                    <input id="cfgCacheBaseUrl" type="text" class="flex h-8 w-full rounded-lg border border-slate-200 bg-white px-2.5 text-xs text-slate-800 focus:outline-none">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <button onclick="saveCacheConfig()" class="mt-4 w-full py-1.5 rounded-lg bg-slate-900 text-white text-xs font-medium hover:bg-slate-800">保存缓存配置</button>
+                </div>
+
+                <!-- 企业微信通知配置 -->
+                <div class="bg-white rounded-xl p-5 border border-slate-200/80 shadow-sm flex flex-col justify-between">
+                    <div>
+                        <h3 class="text-sm font-bold text-slate-900 mb-3">企业微信通知配置</h3>
+                        <div class="space-y-3">
+                            <label class="inline-flex items-center gap-2 cursor-pointer">
+                                <input type="checkbox" id="cfgWebhookEnabled" onchange="toggleWebhookOptions()" class="w-4 h-4 text-slate-900 rounded border-slate-300">
+                                <span class="text-xs font-medium text-slate-700">启用企微群机器人告警汇报</span>
+                            </label>
+                            <div id="webhookOptions">
+                                <div>
+                                    <label class="text-xs text-slate-500 mb-1 block">Webhook 机器人地址</label>
+                                    <input id="cfgWecomWebhookUrl" type="text" class="flex h-8 w-full rounded-lg border border-slate-200 bg-white px-2.5 text-xs text-slate-800 focus:outline-none">
+                                </div>
+                                <div class="grid grid-cols-2 gap-2 text-xs text-slate-600 mt-2">
+                                    <label class="inline-flex items-center gap-1.5">
+                                        <input type="checkbox" id="cfgNotifyOnExpired" class="w-3.5 h-3.5 text-slate-900 rounded">
+                                        <span>失效即时告警</span>
+                                    </label>
+                                    <label class="inline-flex items-center gap-1.5">
+                                        <input type="checkbox" id="cfgDailyReportEnabled" class="w-3.5 h-3.5 text-slate-900 rounded">
+                                        <span>每日定时汇报</span>
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="flex gap-2 mt-4">
+                        <button onclick="saveWebhookConfig()" class="flex-1 py-1.5 rounded-lg bg-slate-900 text-white text-xs font-medium hover:bg-slate-800">保存通知</button>
+                        <button onclick="testWebhook()" class="px-3 py-1.5 rounded-lg border border-slate-200 text-xs text-slate-700 hover:bg-slate-50">测试</button>
+                    </div>
+                </div>
+
+                <!-- 验证码服务配置 -->
+                <div class="bg-white rounded-xl p-5 border border-slate-200/80 shadow-sm flex flex-col justify-between lg:col-span-2">
+                    <div>
+                        <h3 class="text-sm font-bold text-slate-900 mb-3">验证码服务配置 (当前: 免费浏览器扩展)</h3>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                                <label class="text-xs text-slate-500 mb-1 block">打码获取方式</label>
+                                <select id="cfgCaptchaMethod" onchange="toggleCaptchaOptions()" class="w-full bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-slate-800 focus:outline-none">
+                                    <option value="extension">浏览器扩展插件打码 (当前使用 · 100% 免费稳定)</option>
+                                    <option value="yescaptcha">YesCaptcha 第三方云端打码</option>
+                                    <option value="capsolver">CapSolver 第三方云端打码</option>
+                                    <option value="capmonster">CapMonster 第三方云端打码</option>
+                                </select>
+                                <p class="text-[11px] text-slate-400 mt-1">扩展运行于本机 Chrome，通过原生 Hook 拦截官方 grecaptcha 获得 0.9 满分 Token</p>
+                            </div>
+                            <div>
+                                <label class="text-xs text-slate-500 mb-1 block">第三方平台 API Key</label>
+                                <input id="cfgYescaptchaApiKey" type="text" placeholder="使用扩展打码时留空即可" class="flex h-8 w-full rounded-lg border border-slate-200 bg-white px-2.5 text-xs text-slate-800 focus:outline-none">
+                            </div>
+                        </div>
+                    </div>
+                    <div class="flex justify-end mt-4">
+                        <button onclick="saveCaptchaConfig()" class="px-4 py-1.5 rounded-lg bg-slate-900 text-white text-xs font-medium hover:bg-slate-800">保存打码配置</button>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+
+        <!-- ==================== TAB 5: 请求日志 ==================== -->
+        <div id="panel-logs" class="hidden space-y-4">
+            <div class="bg-white rounded-xl p-4 border border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-sm">
+                <div>
+                    <h3 class="font-bold text-slate-900 text-sm">生成请求审计日志</h3>
+                    <p class="text-xs text-slate-400 mt-0.5">记录每笔图片与视频生成的耗时、状态码与执行过程</p>
+                </div>
+                <div class="flex items-center gap-2 flex-wrap">
+                    <span id="logsAutoRefreshBadge" class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs bg-emerald-50 text-emerald-700 font-medium border border-emerald-100 shadow-sm">
+                        <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                        <span>自动实时刷新 (2.5s)</span>
                     </span>
-                  </div>
-                </th>
-                <th class="py-3 px-3 text-center">状态</th>
-                <th class="py-3 px-3 text-center">模式</th>
-                <th class="py-3 px-3 text-center">AT 过期时间</th>
-                <th class="py-3 px-3 text-center">点数余额</th>
-                <th class="py-3 px-4">当前画板项目 ID</th>
-                <th class="py-3 px-3 text-center">生成统计</th>
-                <th class="py-3 px-4 text-right">操作</th>
-              </tr>
-            </thead>
-            <tbody class="divide-y divide-slate-100 text-slate-700" id="previewTokenTbody">
-              <tr class="hover:bg-slate-50/60 transition-colors">
-                <td class="py-3 px-4 font-medium text-slate-900 preview-email" data-full="danborad916@gmail.com">da***16@gmail.com</td>
-                <td class="py-3 px-3 text-center"><span class="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium bg-emerald-50 text-emerald-700">启用</span></td>
-                <td class="py-3 px-3 text-center"><span class="inline-flex items-center px-1.5 py-0.5 rounded text-[11px] bg-slate-100 text-slate-600 font-medium">协议</span></td>
-                <td class="py-3 px-3 text-center font-mono text-slate-500">今天 21:16 (12小时)</td>
-                <td class="py-3 px-3 text-center">
-                  <button class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 hover:bg-blue-100 font-semibold font-mono" title="点击刷新余额">
-                    <span>1,000</span>
-                    <svg class="w-3 h-3 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
-                  </button>
-                </td>
-                <td class="py-3 px-4 font-mono text-slate-500 text-[11px]">0ac9aeac-640b-4e05-a279-ac7dea6a7651</td>
-                <td class="py-3 px-3 text-center text-slate-500 font-mono">图 418 / 视 62</td>
-                <td class="py-3 px-4 text-right space-x-1">
-                  <button class="px-2 py-1 text-slate-600 hover:text-slate-900 font-medium">编辑</button>
-                  <button class="px-2 py-1 text-blue-600 hover:underline">刷新AT</button>
-                </td>
-              </tr>
-              <tr class="hover:bg-slate-50/60 transition-colors">
-                <td class="py-3 px-4 font-medium text-slate-900 preview-email" data-full="sebaytinlaho@gmail.com">se***ho@gmail.com</td>
-                <td class="py-3 px-3 text-center"><span class="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium bg-emerald-50 text-emerald-700">启用</span></td>
-                <td class="py-3 px-3 text-center"><span class="inline-flex items-center px-1.5 py-0.5 rounded text-[11px] bg-slate-100 text-slate-600 font-medium">协议</span></td>
-                <td class="py-3 px-3 text-center font-mono text-slate-500">今天 23:36 (14小时)</td>
-                <td class="py-3 px-3 text-center">
-                  <button class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 hover:bg-blue-100 font-semibold font-mono" title="点击刷新余额">
-                    <span>1,000</span>
-                    <svg class="w-3 h-3 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
-                  </button>
-                </td>
-                <td class="py-3 px-4 font-mono text-slate-500 text-[11px]">5fa36fb3-075a-41ef-8bb7-c58cb7634dbd</td>
-                <td class="py-3 px-3 text-center text-slate-500 font-mono">图 520 / 视 48</td>
-                <td class="py-3 px-4 text-right space-x-1">
-                  <button class="px-2 py-1 text-slate-600 hover:text-slate-900 font-medium">编辑</button>
-                  <button class="px-2 py-1 text-blue-600 hover:underline">刷新AT</button>
-                </td>
-              </tr>
-              <tr class="hover:bg-slate-50/60 transition-colors">
-                <td class="py-3 px-4 font-medium text-slate-900 preview-email" data-full="capocciadrinkley388@gmail.com">ca***88@gmail.com</td>
-                <td class="py-3 px-3 text-center"><span class="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium bg-emerald-50 text-emerald-700">启用</span></td>
-                <td class="py-3 px-3 text-center"><span class="inline-flex items-center px-1.5 py-0.5 rounded text-[11px] bg-slate-100 text-slate-600 font-medium">协议</span></td>
-                <td class="py-3 px-3 text-center font-mono text-slate-500">明天 06:21 (22小时)</td>
-                <td class="py-3 px-3 text-center">
-                  <button class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 hover:bg-blue-100 font-semibold font-mono" title="点击刷新余额">
-                    <span>1,000</span>
-                    <svg class="w-3 h-3 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
-                  </button>
-                </td>
-                <td class="py-3 px-4 font-mono text-slate-500 text-[11px]">5628552e-2880-407e-afdc-8d30d2f23e11</td>
-                <td class="py-3 px-3 text-center text-slate-500 font-mono">图 360 / 视 42</td>
-                <td class="py-3 px-4 text-right space-x-1">
-                  <button class="px-2 py-1 text-slate-600 hover:text-slate-900 font-medium">编辑</button>
-                  <button class="px-2 py-1 text-blue-600 hover:underline">刷新AT</button>
-                </td>
-              </tr>
-              <tr class="hover:bg-slate-50/60 transition-colors">
-                <td class="py-3 px-4 font-medium text-slate-900 preview-email" data-full="danborad@gmail.com">da***ad@gmail.com</td>
-                <td class="py-3 px-3 text-center"><span class="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium bg-emerald-50 text-emerald-700">启用</span></td>
-                <td class="py-3 px-3 text-center"><span class="inline-flex items-center px-1.5 py-0.5 rounded text-[11px] bg-slate-100 text-slate-600 font-medium">协议</span></td>
-                <td class="py-3 px-3 text-center font-mono text-slate-500">明天 00:04 (15小时)</td>
-                <td class="py-3 px-3 text-center">
-                  <button class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 hover:bg-blue-100 font-semibold font-mono" title="点击刷新余额">
-                    <span>1,000</span>
-                    <svg class="w-3 h-3 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
-                  </button>
-                </td>
-                <td class="py-3 px-4 font-mono text-slate-500 text-[11px]">c397aaa8-dd71-4444-8b5e-1467f1f04a9f</td>
-                <td class="py-3 px-3 text-center text-slate-500 font-mono">图 114 / 视 34</td>
-                <td class="py-3 px-4 text-right space-x-1">
-                  <button class="px-2 py-1 text-slate-600 hover:text-slate-900 font-medium">编辑</button>
-                  <button class="px-2 py-1 text-blue-600 hover:underline">刷新AT</button>
-                </td>
-              </tr>
-              <tr class="hover:bg-slate-50/60 transition-colors">
-                <td class="py-3 px-4 font-medium text-slate-900 preview-email" data-full="flow.backup05@gmail.com">fl***05@gmail.com</td>
-                <td class="py-3 px-3 text-center"><span class="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium bg-emerald-50 text-emerald-700">启用</span></td>
-                <td class="py-3 px-3 text-center"><span class="inline-flex items-center px-1.5 py-0.5 rounded text-[11px] bg-slate-100 text-slate-600 font-medium">备用</span></td>
-                <td class="py-3 px-3 text-center font-mono text-slate-500">明天 14:20 (28小时)</td>
-                <td class="py-3 px-3 text-center">
-                  <button class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 hover:bg-blue-100 font-semibold font-mono" title="点击刷新余额">
-                    <span>1,000</span>
-                    <svg class="w-3 h-3 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
-                  </button>
-                </td>
-                <td class="py-3 px-4 font-mono text-slate-500 text-[11px]">8e1f02ac-22bb-4122-990a-661da129ef90</td>
-                <td class="py-3 px-3 text-center text-slate-500 font-mono">图 0 / 视 0</td>
-                <td class="py-3 px-4 text-right space-x-1">
-                  <button class="px-2 py-1 text-slate-600 hover:text-slate-900 font-medium">编辑</button>
-                  <button class="px-2 py-1 text-blue-600 hover:underline">刷新AT</button>
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      <!-- 下方：生成时间轴 (粗壮翠绿方柱，完全对标参考图) -->
-      <div class="rounded-xl border border-slate-200 bg-white shadow-sm p-4 sm:p-5 space-y-4">
-        <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-          <div>
-            <h4 class="text-sm font-bold text-slate-900">生成时间轴 / 模型请求分布</h4>
-            <p class="text-xs text-slate-400 mt-0.5">统计今日 24 小时各时段的真实出图与视频调用柱状分布</p>
-          </div>
-
-          <div class="flex items-center justify-between w-full sm:w-auto gap-3 flex-wrap">
-            <div class="flex items-center gap-2 text-xs text-slate-600">
-              <span class="w-3 h-3 rounded-sm bg-[#2e9e6b] shrink-0"></span>
-              <span class="font-mono text-[11px]">Nano Banana 2.1</span>
-            </div>
-            <div class="inline-flex rounded-lg border border-slate-200 p-0.5 bg-slate-50 text-xs font-medium text-slate-600 shrink-0">
-              <button class="px-2.5 py-1 rounded-md bg-white text-slate-900 shadow-sm">今日</button>
-              <button class="px-2.5 py-1 rounded-md hover:text-slate-900">7天</button>
-              <button class="px-2.5 py-1 rounded-md hover:text-slate-900">30天</button>
-            </div>
-          </div>
-        </div>
-
-        <div class="relative pt-6 pb-2 overflow-x-auto custom-scrollbar">
-          <div class="min-w-[700px]">
-            <div class="relative h-44 w-full flex items-end justify-between gap-2 border-b border-slate-200 px-3">
-              <div class="absolute inset-x-0 top-0 border-b border-dashed border-slate-100 flex justify-between text-[10px] text-slate-300 pointer-events-none -translate-y-2.5"><span>25</span></div>
-              <div class="absolute inset-x-0 top-1/4 border-b border-dashed border-slate-100 flex justify-between text-[10px] text-slate-300 pointer-events-none -translate-y-2.5"><span>20</span></div>
-              <div class="absolute inset-x-0 top-2/4 border-b border-dashed border-slate-100 flex justify-between text-[10px] text-slate-300 pointer-events-none -translate-y-2.5"><span>15</span></div>
-              <div class="absolute inset-x-0 top-3/4 border-b border-dashed border-slate-100 flex justify-between text-[10px] text-slate-300 pointer-events-none -translate-y-2.5"><span>10</span></div>
-
-              <!-- 粗大柱状体 -->
-              <div class="flex-1 h-full flex items-end justify-center"><div class="w-full max-w-[28px] bg-[#2e9e6b] rounded-t-sm" style="height: 0%"></div></div>
-              <div class="flex-1 h-full flex items-end justify-center"><div class="w-full max-w-[28px] bg-[#2e9e6b] rounded-t-sm" style="height: 0%"></div></div>
-              <div class="flex-1 h-full flex items-end justify-center"><div class="w-full max-w-[28px] bg-[#2e9e6b] rounded-t-sm" style="height: 0%"></div></div>
-              <div class="flex-1 h-full flex items-end justify-center"><div class="w-full max-w-[28px] bg-[#2e9e6b] rounded-t-sm" style="height: 0%"></div></div>
-              <div class="flex-1 h-full flex items-end justify-center"><div class="w-full max-w-[28px] bg-[#2e9e6b] rounded-t-sm" style="height: 0%"></div></div>
-              <div class="flex-1 h-full flex items-end justify-center"><div class="w-full max-w-[28px] bg-[#2e9e6b] rounded-t-sm" style="height: 0%"></div></div>
-              <div class="flex-1 h-full flex items-end justify-center"><div class="w-full max-w-[28px] bg-[#2e9e6b] rounded-t-sm" style="height: 0%"></div></div>
-              <div class="flex-1 h-full flex items-end justify-center"><div class="w-full max-w-[28px] bg-[#2e9e6b] rounded-t-sm" style="height: 0%"></div></div>
-              <div class="flex-1 h-full flex items-end justify-center"><div class="w-full max-w-[28px] bg-[#2e9e6b] rounded-t-sm" style="height: 0%"></div></div>
-              <div class="flex-1 h-full flex items-end justify-center"><div class="w-full max-w-[28px] bg-[#2e9e6b] rounded-t-sm" style="height: 4%"></div></div>
-              <div class="flex-1 h-full flex items-end justify-center"><div class="w-full max-w-[28px] bg-[#2e9e6b] rounded-t-sm" style="height: 8%"></div></div>
-              <div class="flex-1 h-full flex items-end justify-center"><div class="w-full max-w-[28px] bg-[#2e9e6b] rounded-t-sm" style="height: 4%"></div></div>
-              <div class="flex-1 h-full flex items-end justify-center"><div class="w-full max-w-[28px] bg-[#2e9e6b] rounded-t-sm" style="height: 8%"></div></div>
-              <div class="flex-1 h-full flex items-end justify-center"><div class="w-full max-w-[28px] bg-[#2e9e6b] rounded-t-sm" style="height: 0%"></div></div>
-              <div class="flex-1 h-full flex items-end justify-center"><div class="w-full max-w-[28px] bg-[#2e9e6b] rounded-t-sm" style="height: 96%"></div></div>
-              <div class="flex-1 h-full flex items-end justify-center"><div class="w-full max-w-[28px] bg-[#2e9e6b] rounded-t-sm" style="height: 56%"></div></div>
-              <div class="flex-1 h-full flex items-end justify-center"><div class="w-full max-w-[28px] bg-[#2e9e6b] rounded-t-sm" style="height: 96%"></div></div>
-              <div class="flex-1 h-full flex items-end justify-center"><div class="w-full max-w-[28px] bg-[#2e9e6b] rounded-t-sm" style="height: 8%"></div></div>
-              <div class="flex-1 h-full flex items-end justify-center"><div class="w-full max-w-[28px] bg-[#2e9e6b] rounded-t-sm" style="height: 0%"></div></div>
-              <div class="flex-1 h-full flex items-end justify-center"><div class="w-full max-w-[28px] bg-[#2e9e6b] rounded-t-sm" style="height: 0%"></div></div>
-              <div class="flex-1 h-full flex items-end justify-center"><div class="w-full max-w-[28px] bg-[#2e9e6b] rounded-t-sm" style="height: 0%"></div></div>
-              <div class="flex-1 h-full flex items-end justify-center"><div class="w-full max-w-[28px] bg-[#2e9e6b] rounded-t-sm" style="height: 0%"></div></div>
-              <div class="flex-1 h-full flex items-end justify-center"><div class="w-full max-w-[28px] bg-[#2e9e6b] rounded-t-sm" style="height: 0%"></div></div>
-              <div class="flex-1 h-full flex items-end justify-center"><div class="w-full max-w-[28px] bg-[#2e9e6b] rounded-t-sm" style="height: 0%"></div></div>
-            </div>
-            <div class="w-full flex justify-between text-[10px] text-slate-400 px-3 pt-2 select-none">
-              <span>00:00</span><span>01:00</span><span>02:00</span><span>03:00</span><span>04:00</span><span>05:00</span><span>06:00</span><span>07:00</span><span>08:00</span><span>09:00</span><span>10:00</span><span>11:00</span><span>12:00</span><span>13:00</span><span class="font-bold text-slate-700">14:00</span><span>15:00</span><span class="font-bold text-slate-700">16:00</span><span>17:00</span><span>18:00</span><span>19:00</span><span>20:00</span><span>21:00</span><span>22:00</span><span>23:00</span>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- ==================== TAB 2: 图片生成 (完全复刻参考图 2 的对话式生图工作台) ==================== -->
-    <div id="panel-chat-paint" class="hidden flex-1 flex flex-col md:flex-row rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden" style="min-height: 640px;">
-      <!-- 左侧对话任务列表 -->
-      <div class="w-full md:w-64 bg-slate-50/60 border-b md:border-b-0 md:border-r border-slate-200 flex flex-col shrink-0">
-        <div class="p-3 border-b border-slate-100 flex items-center justify-between">
-          <span class="font-bold text-xs text-slate-700">生图任务历史</span>
-          <button onclick="newChatSession()" class="flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded bg-slate-900 text-white hover:bg-slate-800 transition-colors shadow-sm">
-            <span>+ 新对话</span>
-          </button>
-        </div>
-        <div class="flex-1 overflow-y-auto p-2 space-y-1.5 custom-scrollbar">
-          <div class="p-2.5 rounded-lg bg-white border border-slate-200/90 shadow-sm cursor-pointer">
-            <div class="flex items-center justify-between">
-              <p class="text-xs font-bold text-slate-800 truncate">盛唐应天门古风少女</p>
-              <span class="text-[10px] px-1.5 py-0.2 rounded bg-blue-50 text-blue-700 font-medium">2K</span>
-            </div>
-            <p class="text-[11px] text-slate-400 mt-1 flex justify-between">
-              <span>Nano Banana 2.1</span>
-              <span>10:24</span>
-            </p>
-          </div>
-          <div class="p-2.5 rounded-lg hover:bg-white/80 border border-transparent cursor-pointer text-slate-600 transition-colors">
-            <div class="flex items-center justify-between">
-              <p class="text-xs font-medium truncate">赛博朋克雨夜街道跑车</p>
-              <span class="text-[10px] px-1.5 py-0.2 rounded bg-purple-50 text-purple-700 font-medium">视频</span>
-            </div>
-            <p class="text-[11px] text-slate-400 mt-1 flex justify-between">
-              <span>Omni 1.1 6s</span>
-              <span>昨天</span>
-            </p>
-          </div>
-        </div>
-      </div>
-
-      <!-- 右侧生图聊天工作区 (复刻参考图 2) -->
-      <div class="flex-1 flex flex-col bg-[#fafafa]">
-        <!-- 顶栏标题 -->
-        <div class="h-11 bg-white border-b border-slate-200/80 px-4 sm:px-6 flex items-center justify-between shrink-0">
-          <div class="flex items-center gap-2">
-            <span class="font-bold text-xs text-slate-800" id="current-chat-title">盛唐应天门古风少女</span>
-            <span class="text-[10px] px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 font-medium">生成完毕</span>
-          </div>
-          <button onclick="clearChatMessages()" class="text-xs text-slate-400 hover:text-slate-600">清空对话</button>
-        </div>
-
-        <!-- 消息流 -->
-        <div class="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 custom-scrollbar" id="chat-messages-container">
-          <!-- 用户提示词气泡 -->
-          <div class="flex items-start gap-2.5 justify-end chat-bubble-enter">
-            <div class="max-w-[85%] sm:max-w-xl bg-slate-900 text-white rounded-xl px-4 py-2.5 shadow-sm text-xs leading-relaxed">
-              <p>盛唐夜景，洛阳应天门前，一位身穿绯红襦裙的少女回眸浅笑，手持精美宫灯，电影级光影质感，极具东方美学细节。</p>
-              <div class="mt-1 text-[10px] text-slate-400 text-right">9:16 竖屏 · 2K 原生 · Nano Banana 2.1</div>
-            </div>
-          </div>
-
-          <!-- AI 生成图片卡片 (复刻参考图 2) -->
-          <div class="flex items-start gap-2.5 chat-bubble-enter">
-            <div class="max-w-[92%] sm:max-w-xl bg-white border border-slate-200 rounded-xl p-3 shadow-sm space-y-2.5">
-              <div class="relative rounded-lg overflow-hidden bg-black">
-                <img src="https://images.unsplash.com/photo-1534447677768-be436bb09401?w=800&q=80" alt="Generated" class="w-full max-h-[380px] object-cover cursor-pointer hover:opacity-95" onclick="previewImageModal(this.src)">
-                <div class="absolute top-2 right-2 px-2 py-0.5 rounded bg-black/70 text-white text-[10px] font-mono">
-                  1536 × 2752 (2K)
+                    <button onclick="refreshLogs()" class="text-xs px-3 py-1.5 rounded border border-slate-200 hover:bg-slate-50 transition-colors">手动刷新</button>
+                    <button onclick="clearAllLogs()" class="text-xs px-3 py-1.5 rounded bg-red-50 text-red-600 border border-red-200 hover:bg-red-100 transition-colors">清空日志</button>
                 </div>
-              </div>
-              <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs pt-1">
-                <span class="text-[11px] text-emerald-600 font-medium">✅ 生成成功 · 耗时 22.4s</span>
-                <div class="flex items-center gap-1.5 self-end sm:self-auto">
-                  <button onclick="quotePrompt('盛唐夜景，洛阳应天门前，一位身穿绯红襦裙的少女回眸浅笑...')" class="px-2.5 py-1 rounded border border-slate-200 hover:bg-slate-50 text-slate-600 text-xs">引用</button>
-                  <button onclick="copyToClipboard('http://192.168.31.63:8000/tmp/sample_2k.jpg')" class="px-2.5 py-1 rounded border border-slate-200 hover:bg-slate-50 text-slate-600 text-xs">复制链接</button>
-                  <button class="px-3 py-1 rounded bg-slate-900 text-white text-xs font-medium">下载</button>
+            </div>
+
+            <div class="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+                <div class="overflow-x-auto">
+                    <table class="w-full text-xs text-left">
+                        <thead class="bg-slate-50/80 text-slate-500 font-medium border-b border-slate-100">
+                            <tr>
+                                <th class="py-2.5 px-3">操作</th>
+                                <th class="py-2.5 px-3">Token 邮箱</th>
+                                <th class="py-2.5 px-3 text-center">状态</th>
+                                <th class="py-2.5 px-3 text-center">进度</th>
+                                <th class="py-2.5 px-3 text-center">状态码</th>
+                                <th class="py-2.5 px-3">结果摘要</th>
+                                <th class="py-2.5 px-3">耗时(s)</th>
+                                <th class="py-2.5 px-3">时间</th>
+                                <th class="py-2.5 px-3 text-center">详情</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-100" id="logsTableBody">
+                            <tr><td colspan="9" class="py-8 text-center text-slate-400">正在加载日志...</td></tr>
+                        </tbody>
+                    </table>
                 </div>
-              </div>
             </div>
-          </div>
         </div>
 
-        <!-- 底部输入栏 (复刻参考图 2：圆角大输入框，集成模型旋转、比例、分辨率选择) -->
-        <div class="p-3 sm:p-4 bg-white border-t border-slate-200">
-          <div class="bg-slate-50 rounded-xl border border-slate-200 p-2.5 sm:p-3 focus-within:bg-white focus-within:border-slate-400 transition-all">
-            <textarea id="prompt-input" rows="2" placeholder="输入你想生成的画面提示词，支持粘贴或拖入参考图..." class="w-full bg-transparent resize-none focus:outline-none text-xs text-slate-900 placeholder-slate-400 leading-relaxed"></textarea>
+    </main>
 
-            <div class="flex items-center justify-between pt-2 border-t border-slate-200/60 mt-1 select-none flex-wrap gap-2">
-              <div class="flex items-center gap-1.5 sm:gap-2 flex-wrap">
-                <!-- 垫图上传 -->
-                <label class="cursor-pointer px-2.5 py-1 rounded bg-white border border-slate-200 hover:bg-slate-50 text-xs text-slate-700 transition-colors inline-flex items-center gap-1 shrink-0">
-                  <svg class="w-3.5 h-3.5 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/></svg>
-                  <span>参考图</span>
-                  <input type="file" accept="image/*" class="hidden" onchange="handleFileInput(event)">
-                </label>
-
-                <!-- 模型切换 (直接选择 Nano Banana 系列) -->
-                <select id="select-model" onchange="onModelChange()" class="bg-white border border-slate-200 rounded px-2.5 py-1 text-xs font-semibold text-slate-900 focus:outline-none cursor-pointer">
-                  <option value="Nano Banana 2.1">🍌 Nano Banana 2.1 (BELUGA)</option>
-                  <option value="Nano Banana 2 Lite">🍌 Nano Banana 2 Lite</option>
-                  <option value="Nano Banana Pro">🍌 Nano Banana Pro</option>
-                  <option value="Omni 1.1 Flash">🎬 Omni 1.1 Flash (视频)</option>
-                </select>
-
-                <!-- 比例 -->
-                <select id="select-aspect" class="bg-white border border-slate-200 rounded px-2.5 py-1 text-xs text-slate-700 focus:outline-none cursor-pointer">
-                  <option value="9:16">9:16 竖屏</option>
-                  <option value="16:9">16:9 横屏</option>
-                  <option value="1:1">1:1 正方</option>
-                  <option value="4:3">4:3</option>
-                  <option value="3:4">3:4</option>
-                </select>
-
-                <!-- 画质 -->
-                <div id="box-resolution">
-                  <select id="select-size" class="bg-white border border-slate-200 rounded px-2.5 py-1 text-xs text-slate-700 focus:outline-none cursor-pointer">
-                    <option value="2k">2K 原生重塑</option>
-                    <option value="4k">4K 超分 (Lanczos3)</option>
-                    <option value="1k">1K 标清</option>
-                  </select>
-                </div>
-
-                <!-- 视频时长 -->
-                <div id="box-duration" class="hidden">
-                  <select id="select-duration" class="bg-purple-50 border border-purple-200 text-purple-700 rounded px-2.5 py-1 text-xs font-semibold focus:outline-none cursor-pointer">
-                    <option value="6">时长: 6 秒</option>
-                    <option value="4">时长: 4 秒</option>
-                    <option value="8">时长: 8 秒</option>
-                    <option value="10">时长: 10 秒</option>
-                  </select>
-                </div>
-              </div>
-
-              <!-- 发送生图按钮 -->
-              <button onclick="handleSendPrompt()" class="px-4 py-1.5 rounded-lg bg-slate-900 text-white text-xs font-medium hover:bg-slate-800 transition-colors shrink-0 ml-auto">
-                生成画面
-              </button>
+    <!-- ==================== 模态框组 ==================== -->
+    <!-- 添加 Token Modal -->
+    <div id="addModal" class="hidden fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
+        <div class="bg-white rounded-xl border border-slate-200 w-full max-w-xl shadow-2xl p-5 space-y-4 my-auto">
+            <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+                <h3 class="text-base font-bold text-slate-900">添加 Google Flow Token</h3>
+                <button onclick="closeAddModal()" class="text-slate-400 hover:text-slate-600">✕</button>
             </div>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- ==================== TAB 3: 本地媒体管理 (空间防爆与清理) ==================== -->
-    <div id="panel-media-mgr" class="hidden space-y-4">
-      <div class="bg-white rounded-xl p-4 border border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-sm">
-        <div>
-          <h3 class="font-bold text-slate-900 text-sm">本地媒体缓存空间监控</h3>
-          <p class="text-xs text-slate-400 mt-0.5">文件落盘在服务器 <code class="font-mono bg-slate-100 px-1 py-0.5 rounded">tmp/</code> 目录，当前共 15 个媒体文件 · 占用 52.8 MB</p>
-        </div>
-        <div class="flex items-center gap-2">
-          <button onclick="alert('已成功清理 7 天前的媒体缓存文件！')" class="text-xs px-3 py-1.5 rounded border border-slate-200 hover:bg-slate-50 transition-colors">清理 7 天前</button>
-          <button onclick="alert('已清空全部本地媒体缓存！')" class="text-xs px-3 py-1.5 rounded bg-red-50 text-red-600 border border-red-200 hover:bg-red-100 transition-colors">清空全部缓存</button>
-        </div>
-      </div>
-
-      <div class="grid grid-cols-2 md:grid-cols-4 gap-3.5">
-        <div class="bg-white rounded-xl border border-slate-200 overflow-hidden p-2.5 space-y-2 shadow-sm">
-          <div class="aspect-[9/16] bg-black rounded-lg overflow-hidden">
-            <img src="https://images.unsplash.com/photo-1534447677768-be436bb09401?w=600&q=80" class="w-full h-full object-cover">
-          </div>
-          <div class="flex items-center justify-between text-xs text-slate-500">
-            <span>2K · 2.8 MB</span>
-            <button class="text-red-500 hover:underline">删除</button>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- ==================== TAB 4: 系统配置 (全量设置项 + 4K分级超分策略) ==================== -->
-    <div id="panel-settings" class="hidden space-y-5">
-      <div class="grid gap-5 grid-cols-1 lg:grid-cols-2">
-
-        <!-- 核心：图片放大 / 4K 分级超分策略 (通栏展开) -->
-        <div class="bg-white rounded-xl p-5 border border-slate-200/80 shadow-sm flex flex-col justify-between lg:col-span-2">
-          <div class="space-y-4">
-            <div class="flex items-center justify-between border-b border-slate-100 pb-3 flex-wrap gap-2">
-              <div>
-                <h3 class="font-bold text-slate-900 text-sm flex items-center gap-2">
-                  <span>图片放大 / 4K 分级超分策略</span>
-                  <span class="text-[10px] px-2 py-0.5 rounded bg-blue-50 text-blue-700 font-semibold border border-blue-100">核心配置</span>
-                </h3>
-                <p class="text-xs text-slate-400 mt-0.5">智能适配各类账号等级：优先利用官方原生能力，缺失时由本地超分算法无缝补齐</p>
-              </div>
-              <span class="text-xs text-emerald-600 font-medium">● 引擎就绪</span>
-            </div>
-
-            <div class="flex items-center gap-3 p-3 rounded-lg bg-slate-50 border border-slate-200">
-              <input type="checkbox" id="cfgAutoUpscale" checked class="w-4 h-4 text-slate-900 rounded border-slate-300 focus:ring-0 cursor-pointer">
-              <label for="cfgAutoUpscale" class="text-xs font-semibold text-slate-800 cursor-pointer flex-1">
-                图片尺寸不足时自动放大 (默认开启)
-              </label>
-              <span class="text-[11px] text-slate-500">检测到客户端请求 2K/4K 且账号不足时自动触发</span>
-            </div>
-
-            <div class="space-y-1.5">
-              <label class="block text-xs font-semibold text-slate-700">超分放大引擎</label>
-              <select class="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs font-medium text-slate-800 focus:outline-none">
-                <option value="lanczos3">Sharp / Lanczos3 (推荐 · 高清锐化重采样 · 速度极快)</option>
-                <option value="bicubic">Bicubic 三次样条插值 (平滑过渡)</option>
-              </select>
-            </div>
-
-            <!-- 详细的分级逻辑示意说明 -->
-            <div class="bg-slate-50/80 rounded-xl p-3.5 border border-slate-200/60 space-y-2 text-xs text-slate-600">
-              <span class="font-bold text-slate-800 block text-[11px] uppercase tracking-wider text-blue-600">4K / 2K 超分分级执行机制：</span>
-              <ul class="space-y-1.5 pl-4 list-disc text-[11px] leading-relaxed text-slate-600">
-                <li>
-                  <strong class="text-slate-900">👑 Ultra 顶级账号 (有官方4K权限)</strong>：
-                  请求 4K 时，<span class="text-emerald-700 font-medium">直接调用 Google Flow 原生 4K 模型放大，完全不走本地超分</span>，100% 原汁原味交付。
-                </li>
-                <li>
-                  <strong class="text-slate-900">💎 Pro 付费账号 (有原生2K、无4K)</strong>：
-                  请求 4K 时，系统<span class="text-blue-700 font-medium">先调用 Google 官方原生模型放大到 2K 底图</span>，接着<span class="text-blue-700 font-medium">由本地 Sharp / Lanczos3 算法无损超分到 4K 补齐分辨率交付</span>。
-                </li>
-                <li>
-                  <strong class="text-slate-900">⚪ Free 普通账号 (仅有1K权限)</strong>：
-                  请求 4K 时，由于账号只能拿到 1K 初始图，系统<span class="text-purple-700 font-medium">直接以 1K 底图通过 Lanczos3 算法超分至 4K 交付</span>；请求 2K 则超分至 2K 交付。
-                </li>
-              </ul>
-            </div>
-          </div>
-
-          <div class="pt-4 border-t border-slate-100 flex justify-end mt-2">
-            <button onclick="alert('图片放大策略已保存！')" class="px-4 py-1.5 rounded-lg bg-slate-900 text-white text-xs font-medium hover:bg-slate-800 shadow-sm transition-colors">
-              保存超分配置
-            </button>
-          </div>
-        </div>
-
-        <!-- 安全配置 -->
-        <div class="bg-white rounded-xl p-5 border border-slate-200/80 shadow-sm flex flex-col justify-between">
-          <div>
-            <h3 class="text-sm font-bold text-slate-900 mb-3">安全配置 (管理员密码)</h3>
-            <div class="space-y-3">
-              <div>
-                <label class="text-xs text-slate-500 mb-1 block">管理员用户名</label>
-                <input type="text" value="admin" class="flex h-8 w-full rounded-lg border border-slate-200 bg-slate-50 px-2.5 text-xs text-slate-800 focus:outline-none">
-              </div>
-              <div>
-                <label class="text-xs text-slate-500 mb-1 block">旧密码</label>
-                <input type="password" placeholder="输入旧密码" class="flex h-8 w-full rounded-lg border border-slate-200 bg-white px-2.5 text-xs text-slate-800 focus:outline-none">
-              </div>
-              <div>
-                <label class="text-xs text-slate-500 mb-1 block">新密码</label>
-                <input type="password" placeholder="输入新密码" class="flex h-8 w-full rounded-lg border border-slate-200 bg-white px-2.5 text-xs text-slate-800 focus:outline-none">
-              </div>
-            </div>
-          </div>
-          <button class="mt-4 w-full py-1.5 rounded-lg bg-slate-900 text-white text-xs font-medium hover:bg-slate-800">修改密码</button>
-        </div>
-
-        <!-- API 密钥配置 -->
-        <div class="bg-white rounded-xl p-5 border border-slate-200/80 shadow-sm flex flex-col justify-between">
-          <div>
-            <h3 class="text-sm font-bold text-slate-900 mb-3">API 密钥配置</h3>
-            <div class="space-y-3">
-              <div>
-                <label class="text-xs text-slate-500 mb-1 block">当前 API Key</label>
-                <input type="text" value="878e72482ca1b746f0ed1cac7b58f1a8c072e35f3607d7e7" disabled readonly class="flex h-8 w-full rounded-lg border border-slate-200 bg-slate-50 px-2.5 text-xs font-mono text-slate-500">
-              </div>
-              <div>
-                <label class="text-xs text-slate-500 mb-1 block">设置新 API Key</label>
-                <input type="text" placeholder="输入新的 API Key" class="flex h-8 w-full rounded-lg border border-slate-200 bg-white px-2.5 text-xs text-slate-800 focus:outline-none">
-                <p class="text-[11px] text-slate-400 mt-1">用于客户端调用的 Bearer 认证密钥</p>
-              </div>
-            </div>
-          </div>
-          <button class="mt-4 w-full py-1.5 rounded-lg bg-slate-900 text-white text-xs font-medium hover:bg-slate-800">更新 API Key</button>
-        </div>
-
-        <!-- 代理配置 -->
-        <div class="bg-white rounded-xl p-5 border border-slate-200/80 shadow-sm flex flex-col justify-between">
-          <div>
-            <h3 class="text-sm font-bold text-slate-900 mb-3">代理配置</h3>
-            <div class="space-y-3">
-              <label class="inline-flex items-center gap-2 cursor-pointer">
-                <input type="checkbox" class="w-4 h-4 text-slate-900 rounded border-slate-300">
-                <span class="text-xs font-medium text-slate-700">启用请求代理 (透明网关建议关闭)</span>
-              </label>
-              <div>
-                <label class="text-xs text-slate-500 mb-1 block">请求代理地址</label>
-                <input type="text" value="http://192.168.31.3:7890" class="flex h-8 w-full rounded-lg border border-slate-200 bg-white px-2.5 text-xs text-slate-800 focus:outline-none">
-              </div>
-            </div>
-          </div>
-          <button class="mt-4 w-full py-1.5 rounded-lg bg-slate-900 text-white text-xs font-medium hover:bg-slate-800">保存代理配置</button>
-        </div>
-
-        <!-- 生成与超时配置 -->
-        <div class="bg-white rounded-xl p-5 border border-slate-200/80 shadow-sm flex flex-col justify-between">
-          <div>
-            <h3 class="text-sm font-bold text-slate-900 mb-3">生成与超时配置</h3>
-            <div class="space-y-3">
-              <div class="grid grid-cols-2 gap-2.5">
+            <div class="space-y-3 max-h-[70vh] overflow-y-auto custom-scrollbar pr-1">
                 <div>
-                  <label class="text-xs text-slate-500 mb-1 block">图片超时 (秒)</label>
-                  <input type="number" value="300" class="flex h-8 w-full rounded-lg border border-slate-200 bg-white px-2.5 text-xs text-slate-800 focus:outline-none">
+                    <label class="text-xs font-medium block text-slate-700 mb-1">Session Token (ST) <span class="text-red-500">*</span></label>
+                    <textarea id="addTokenST" rows="3" class="w-full text-xs font-mono p-2.5 border border-slate-200 rounded-lg bg-slate-50 focus:bg-white focus:outline-none" placeholder="输入从浏览器 Cookie 中复制的 __Secure-next-auth.session-token"></textarea>
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="text-xs font-medium block text-slate-700 mb-1">备注信息</label>
+                        <input id="addTokenRemark" type="text" class="w-full text-xs p-2 border border-slate-200 rounded-lg bg-white" placeholder="如：主号1">
+                    </div>
+                    <div>
+                        <label class="text-xs font-medium block text-slate-700 mb-1">画板 Project ID</label>
+                        <input id="addTokenProjectId" type="text" class="w-full text-xs font-mono p-2 border border-slate-200 rounded-lg bg-white" placeholder="留空自动生成">
+                    </div>
+                </div>
+            </div>
+            <div class="pt-3 border-t border-slate-100 flex justify-end gap-2">
+                <button onclick="closeAddModal()" class="px-3.5 py-1.5 rounded-lg border border-slate-200 text-xs text-slate-600 hover:bg-slate-50">取消</button>
+                <button onclick="submitAddToken()" id="addTokenBtn" class="px-4 py-1.5 rounded-lg bg-slate-900 text-white text-xs font-medium hover:bg-slate-800">
+                    <span id="addTokenBtnText">保存并添加</span>
+                    <span id="addTokenBtnSpinner" class="hidden">添加中...</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 编辑 Token Modal -->
+    <div id="editModal" class="hidden fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
+        <div class="bg-white rounded-xl border border-slate-200 w-full max-w-xl shadow-2xl p-5 space-y-4 my-auto">
+            <input type="hidden" id="editTokenId">
+            <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+                <h3 class="text-base font-bold text-slate-900">编辑 Token 配置</h3>
+                <button onclick="closeEditModal()" class="text-slate-400 hover:text-slate-600">✕</button>
+            </div>
+            <div class="space-y-3 max-h-[70vh] overflow-y-auto custom-scrollbar pr-1">
+                <div>
+                    <label class="text-xs font-medium block text-slate-700 mb-1">Session Token (ST)</label>
+                    <textarea id="editTokenST" rows="3" class="w-full text-xs font-mono p-2.5 border border-slate-200 rounded-lg bg-slate-50 focus:bg-white focus:outline-none"></textarea>
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="text-xs font-medium block text-slate-700 mb-1">备注</label>
+                        <input id="editTokenRemark" type="text" class="w-full text-xs p-2 border border-slate-200 rounded-lg bg-white">
+                    </div>
+                    <div>
+                        <label class="text-xs font-medium block text-slate-700 mb-1">当前画板 Project ID</label>
+                        <input id="editTokenProjectId" type="text" class="w-full text-xs font-mono p-2 border border-slate-200 rounded-lg bg-white">
+                    </div>
                 </div>
                 <div>
-                  <label class="text-xs text-slate-500 mb-1 block">视频超时 (秒)</label>
-                  <input type="number" value="1500" class="flex h-8 w-full rounded-lg border border-slate-200 bg-white px-2.5 text-xs text-slate-800 focus:outline-none">
+                    <label class="text-xs font-medium block text-slate-700 mb-1">自定义打码代理 (留空使用全局)</label>
+                    <input id="editTokenCaptchaProxyUrl" type="text" class="w-full text-xs font-mono p-2 border border-slate-200 rounded-lg bg-white">
                 </div>
-              </div>
-              <div class="grid grid-cols-2 gap-2.5">
-                <div>
-                  <label class="text-xs text-slate-500 mb-1 block">兜底换号 (次)</label>
-                  <input type="number" value="1" class="flex h-8 w-full rounded-lg border border-slate-200 bg-white px-2.5 text-xs text-slate-800 focus:outline-none">
-                </div>
-                <div>
-                  <label class="text-xs text-slate-500 mb-1 block">最大重试次数</label>
-                  <input type="number" value="3" class="flex h-8 w-full rounded-lg border border-slate-200 bg-white px-2.5 text-xs text-slate-800 focus:outline-none">
-                </div>
-              </div>
             </div>
-          </div>
-          <button class="mt-4 w-full py-1.5 rounded-lg bg-slate-900 text-white text-xs font-medium hover:bg-slate-800">保存生成配置</button>
+            <div class="pt-3 border-t border-slate-100 flex justify-between items-center">
+                <button onclick="deleteCurrentEditToken()" class="text-xs text-red-600 hover:underline">删除此账号</button>
+                <div class="flex gap-2">
+                    <button onclick="closeEditModal()" class="px-3.5 py-1.5 rounded-lg border border-slate-200 text-xs text-slate-600 hover:bg-slate-50">取消</button>
+                    <button onclick="submitEditToken()" id="editTokenBtn" class="px-4 py-1.5 rounded-lg bg-slate-900 text-white text-xs font-medium hover:bg-slate-800">
+                        <span id="editTokenBtnText">保存修改</span>
+                        <span id="editTokenBtnSpinner" class="hidden">保存中...</span>
+                    </button>
+                </div>
+            </div>
         </div>
-      </div>
     </div>
 
-    <!-- ==================== TAB 5: 请求日志 ==================== -->
-    <div id="panel-logs" class="hidden space-y-4">
-      <div class="bg-white rounded-xl p-4 border border-slate-200 flex items-center justify-between">
-        <div>
-          <h3 class="font-bold text-slate-900 text-sm">生成请求审计日志</h3>
-          <p class="text-xs text-slate-400 mt-0.5">记录每笔图片与视频生成的耗时、状态码与执行过程</p>
+    <!-- 日志详情 Modal -->
+    <div id="logDetailModal" class="hidden fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+        <div class="bg-white rounded-xl border border-slate-200 w-full max-w-3xl shadow-2xl p-5 space-y-4 max-h-[85vh] flex flex-col">
+            <div class="flex items-center justify-between border-b border-slate-100 pb-2.5">
+                <h3 class="text-sm font-bold text-slate-900">请求日志详情</h3>
+                <button onclick="closeLogDetailModal()" class="text-slate-400 hover:text-slate-600">✕</button>
+            </div>
+            <div class="flex-1 overflow-y-auto custom-scrollbar" id="logDetailContent">
+                <div class="py-8 text-center text-xs text-slate-400">加载详情中...</div>
+            </div>
         </div>
-        <button class="text-xs px-3 py-1.5 rounded border border-slate-200 hover:bg-slate-50">清空日志</button>
-      </div>
-      <div class="rounded-xl border border-slate-200 bg-white p-8 text-center text-xs text-slate-400">
-        日志列表正常拉取中...
-      </div>
     </div>
 
-    <!-- 大图灯箱 -->
-    <div id="image-modal" class="fixed inset-0 z-50 bg-black/80 hidden flex items-center justify-center p-4" onclick="closeImageModal()">
-      <img id="modal-img" src="" class="max-w-full max-h-[85vh] rounded-lg shadow-2xl object-contain">
+    <!-- 媒体大图 / 视频预览 Lightbox (点击遮罩关闭，内部阻止冒泡) -->
+    <div id="media-modal" class="fixed inset-0 z-50 bg-black/85 backdrop-blur-sm hidden flex items-center justify-center p-4" onclick="closeMediaModal()">
+        <div class="relative max-w-5xl max-h-[92vh] flex flex-col items-center" onclick="event.stopPropagation()">
+            <div id="media-modal-body" class="w-full flex items-center justify-center"></div>
+            <div class="mt-3 flex items-center gap-3 text-white text-xs">
+                <a id="media-modal-download" href="" download class="px-3.5 py-1.5 bg-white/20 hover:bg-white/30 rounded-lg transition-colors flex items-center gap-1.5">
+                    <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+                    <span>下载原文件</span>
+                </a>
+                <button onclick="closeMediaModal()" class="px-3.5 py-1.5 bg-white/20 hover:bg-white/30 rounded-lg transition-colors">
+                    关闭预览
+                </button>
+            </div>
+        </div>
     </div>
-  </main>
 
-  <script>
-    function switchTab(tabId) {
-      const tabs = ['overview', 'chat-paint', 'media-mgr', 'settings', 'logs'];
-      tabs.forEach(t => {
-        const panel = document.getElementById('panel-' + t);
-        const btn = document.getElementById('tab-' + t);
-        if (panel) panel.classList.add('hidden');
-        if (btn) {
-          btn.className = "tab-btn border-b-2 border-transparent text-slate-500 hover:text-slate-800 text-sm font-medium py-2.5 px-1 flex items-center gap-1.5";
+    <!-- 全局轻提示 Toast -->
+    <div id="toast-container" class="fixed bottom-4 right-4 z-50 space-y-2 pointer-events-none"></div>
+
+    <!-- ==================== 前端核心 JavaScript 脚本 ==================== -->
+    <script>
+        const $ = id => document.getElementById(id);
+        let allTokens = [];
+        let allLogs = [];
+        let activeTab = 'overview';
+        let currentTimelineRange = 'today';
+        let chartDataCache = null;
+        let liveTaskPollTimer = null;
+        let adminApiKey = '';
+
+        // API 统一封装
+        async function apiRequest(url, options = {}) {
+            options.credentials = 'include';
+            options.headers = options.headers || {};
+            if (options.body && typeof options.body === 'string' && !options.headers['Content-Type']) {
+                options.headers['Content-Type'] = 'application/json';
+            }
+            try {
+                const res = await fetch(url, options);
+                if (res.status === 401 && !url.includes('/login')) {
+                    location.href = '/login';
+                    return null;
+                }
+                return res;
+            } catch (err) {
+                console.error('API Error:', err);
+                showToast('网络请求异常: ' + err.message, 'error');
+                return null;
+            }
         }
-      });
 
-      const activePanel = document.getElementById('panel-' + tabId);
-      const activeBtn = document.getElementById('tab-' + tabId);
-      if (activePanel) activePanel.classList.remove('hidden');
-      if (activeBtn) {
-        activeBtn.className = "tab-btn border-b-2 border-slate-900 text-slate-900 text-sm font-bold py-2.5 px-1 flex items-center gap-2";
-      }
-    }
-
-    function onModelChange() {
-      const model = document.getElementById('select-model').value;
-      const isVideo = model.includes('Omni');
-      document.getElementById('box-duration').classList.toggle('hidden', !isVideo);
-      document.getElementById('box-resolution').classList.toggle('hidden', isVideo);
-    }
-
-    function handleSendPrompt() {
-      const input = document.getElementById('prompt-input');
-      const text = input.value.trim();
-      if (!text) return;
-
-      const model = document.getElementById('select-model').value;
-      const aspect = document.getElementById('select-aspect').value;
-      const size = document.getElementById('select-size').value.toUpperCase();
-      const container = document.getElementById('chat-messages-container');
-
-      const userBubble = document.createElement('div');
-      userBubble.className = "flex items-start gap-2.5 justify-end chat-bubble-enter";
-      userBubble.innerHTML = `
-        <div class="max-w-[85%] sm:max-w-xl bg-slate-900 text-white rounded-xl px-4 py-2.5 shadow-sm text-xs leading-relaxed">
-          <p>${escapeHtml(text)}</p>
-          <div class="mt-1 text-[10px] text-slate-400 text-right">${aspect} · ${size} · ${model}</div>
-        </div>
-      `;
-      container.appendChild(userBubble);
-      input.value = '';
-
-      const loadingBubble = document.createElement('div');
-      loadingBubble.className = "flex items-start gap-2.5 chat-bubble-enter";
-      loadingBubble.innerHTML = `
-        <div class="max-w-md bg-white border border-slate-200 rounded-xl p-3 shadow-sm flex items-center gap-2.5 text-xs text-slate-600">
-          <div class="w-4 h-4 border-2 border-slate-900 border-t-transparent rounded-full animate-spin"></div>
-          <span>正在生成中，请稍候...</span>
-        </div>
-      `;
-      container.appendChild(loadingBubble);
-      container.scrollTop = container.scrollHeight;
-
-      setTimeout(() => {
-        loadingBubble.remove();
-        const resBubble = document.createElement('div');
-        resBubble.className = "flex items-start gap-2.5 chat-bubble-enter";
-        const sampleUrl = "https://images.unsplash.com/photo-1543466835-00a7907e9de1?w=800&q=80";
-
-        resBubble.innerHTML = `
-          <div class="max-w-[92%] sm:max-w-xl bg-white border border-slate-200 rounded-xl p-3 shadow-sm space-y-2.5">
-            <div class="relative rounded-lg overflow-hidden bg-black">
-              <img src="${sampleUrl}" class="w-full max-h-[380px] object-cover cursor-pointer hover:opacity-95" onclick="previewImageModal(this.src)">
-              <div class="absolute top-2 right-2 px-2 py-0.5 rounded bg-black/70 text-white text-[10px] font-mono">
-                ${size === '4K' ? '5504×3072 (4K)' : '2752×1536 (2K)'}
-              </div>
-            </div>
-            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs pt-1">
-              <span class="text-[11px] text-emerald-600 font-medium">✅ 生成成功 · 耗时 19.8s</span>
-              <div class="flex items-center gap-1.5 self-end sm:self-auto">
-                <button onclick="quotePrompt('${escapeHtml(text)}')" class="px-2.5 py-1 rounded border border-slate-200 hover:bg-slate-50 text-slate-600 text-xs">引用</button>
-                <button onclick="copyToClipboard('${sampleUrl}')" class="px-2.5 py-1 rounded border border-slate-200 hover:bg-slate-50 text-slate-600 text-xs">复制链接</button>
-                <button class="px-3 py-1 rounded bg-slate-900 text-white text-xs font-medium">下载</button>
-              </div>
-            </div>
-          </div>
-        `;
-        container.appendChild(resBubble);
-        container.scrollTop = container.scrollHeight;
-      }, 1500);
-    }
-
-    function toggleTaskTag(type) {
-      if (type === 'img') {
-        const el = document.getElementById('live-img-task');
-        if (el.dataset.state === 'idle') {
-          el.dataset.state = 'running';
-          el.className = "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-blue-50 text-blue-700 border border-blue-100 text-[11px] font-medium cursor-pointer shadow-sm hover:bg-blue-100 transition-colors";
-          el.innerHTML = `
-            <span class="relative flex h-2 w-2 shrink-0">
-              <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
-              <span class="relative inline-flex rounded-full h-2 w-2 bg-blue-600"></span>
-            </span>
-            <span>正在生成: <strong class="font-semibold">Nano Banana 2.1</strong> · <span class="font-mono">12s</span></span>
-          `;
-        } else {
-          el.dataset.state = 'idle';
-          el.className = "inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-slate-100 text-slate-500 border border-slate-200 text-[10px] font-normal cursor-pointer hover:bg-slate-200 transition-colors";
-          el.innerHTML = `<span>● 当前空闲</span>`;
+        function showToast(msg, type = 'info', duration = 2500) {
+            const container = $('toast-container');
+            const el = document.createElement('div');
+            const bgClass = type === 'success' ? 'bg-emerald-600 text-white' : (type === 'error' ? 'bg-red-600 text-white' : 'bg-slate-900 text-white');
+            el.className = `px-4 py-2 rounded-lg text-xs font-medium shadow-xl pointer-events-auto transition-all animate-slide-up flex items-center gap-2 ${bgClass}`;
+            el.textContent = msg;
+            container.appendChild(el);
+            setTimeout(() => {
+                el.style.opacity = '0';
+                el.style.transform = 'translateY(10px)';
+                setTimeout(() => el.remove(), 250);
+            }, duration);
         }
-      } else if (type === 'vid') {
-        const el = document.getElementById('live-vid-task');
-        if (el.dataset.state === 'idle') {
-          el.dataset.state = 'running';
-          el.className = "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-purple-50 text-purple-700 border border-purple-100 text-[11px] font-medium cursor-pointer shadow-sm hover:bg-purple-100 transition-colors";
-          el.innerHTML = `
-            <span class="relative flex h-2 w-2 shrink-0">
-              <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-purple-400 opacity-75"></span>
-              <span class="relative inline-flex rounded-full h-2 w-2 bg-purple-600"></span>
-            </span>
-            <span>正在生成: <strong class="font-semibold">Omni 1.1 (6s)</strong> · <span class="font-mono">35s</span></span>
-          `;
-        } else {
-          el.dataset.state = 'idle';
-          el.className = "inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-slate-100 text-slate-500 border border-slate-200 text-[10px] font-normal cursor-pointer hover:bg-slate-200 transition-colors";
-          el.innerHTML = `<span>● 当前空闲</span>`;
+
+        // Tab 切换逻辑
+        function switchTab(tabId) {
+            activeTab = tabId;
+            const tabs = ['overview', 'chat-paint', 'media-mgr', 'settings', 'logs'];
+            tabs.forEach(t => {
+                const panel = $('panel-' + t);
+                const btn = $('tab-' + t);
+                if (panel) panel.classList.add('hidden');
+                if (btn) {
+                    btn.className = "tab-btn border-b-2 border-transparent text-slate-500 hover:text-slate-800 text-sm font-medium py-2.5 px-1 flex items-center gap-1.5";
+                }
+            });
+
+            const activePanel = $('panel-' + tabId);
+            const activeBtn = $('tab-' + tabId);
+            if (activePanel) activePanel.classList.remove('hidden');
+            if (activeBtn) {
+                activeBtn.className = "tab-btn border-b-2 border-slate-900 text-slate-900 text-sm font-bold py-2.5 px-1 flex items-center gap-1.5";
+            }
+
+            if (tabId === 'overview') {
+                stopLogsAutoRefresh();
+                loadStats();
+                loadTokens();
+                loadLiveTasks();
+            } else if (tabId === 'media-mgr') {
+                stopLogsAutoRefresh();
+                loadMediaStats();
+                loadMediaFiles();
+            } else if (tabId === 'settings') {
+                stopLogsAutoRefresh();
+                loadAllSettings();
+            } else if (tabId === 'logs') {
+                loadLogs();
+                startLogsAutoRefresh();
+            } else {
+                stopLogsAutoRefresh();
+            }
         }
-      }
-    }
 
-    function handleFileInput(e) {
-      alert('已选中参考图片，将自动作为垫图生成！');
-    }
-
-    function quotePrompt(text) {
-      document.getElementById('prompt-input').value = text;
-      document.getElementById('prompt-input').focus();
-    }
-
-    function copyToClipboard(text) {
-      navigator.clipboard.writeText(text).then(() => alert('链接已复制！'));
-    }
-
-    function previewImageModal(url) {
-      document.getElementById('modal-img').src = url;
-      document.getElementById('image-modal').classList.remove('hidden');
-    }
-
-    function closeImageModal() {
-      document.getElementById('image-modal').classList.add('hidden');
-    }
-
-    function newChatSession() {
-      document.getElementById('chat-messages-container').innerHTML = `
-        <div class="text-center py-16 text-slate-400 text-xs">
-          <p>已开启新会话，请在下方选择模型并输入生成画面的提示词</p>
-        </div>
-      `;
-      document.getElementById('current-chat-title').textContent = "新建画图任务";
-    }
-
-    function clearChatMessages() {
-      if (confirm('确定要清空当前会话的生成记录吗？')) {
-        document.getElementById('chat-messages-container').innerHTML = '';
-      }
-    }
-
-    let isPreviewEmailMasked = true;
-    function togglePreviewEmailMask() {
-      isPreviewEmailMasked = !isPreviewEmailMasked;
-      const eyeSvg = `<svg class="h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>`;
-      const eyeOffSvg = `<svg class="h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>`;
-      
-      const btn = document.getElementById('btnToggleEmailMask');
-      if (btn) {
-        btn.innerHTML = isPreviewEmailMasked ? eyeOffSvg : eyeSvg;
-        btn.classList.toggle('text-blue-600', isPreviewEmailMasked);
-        btn.classList.toggle('bg-blue-50', isPreviewEmailMasked);
-        btn.classList.toggle('border-blue-200', isPreviewEmailMasked);
-      }
-      const thIcon = document.getElementById('thEmailMaskIcon');
-      if (thIcon) {
-        thIcon.innerHTML = isPreviewEmailMasked ? eyeOffSvg : eyeSvg;
-      }
-      document.querySelectorAll('.preview-email').forEach(el => {
-        const full = el.dataset.full;
-        if (!full) return;
-        if (isPreviewEmailMasked) {
-          const atIdx = full.indexOf('@');
-          const name = full.slice(0, atIdx);
-          const domain = full.slice(atIdx);
-          el.textContent = name.slice(0, 2) + '***' + name.slice(-2) + domain;
-        } else {
-          el.textContent = full;
+        function refreshAllCurrentTab() {
+            showToast('刷新数据...', 'info', 1000);
+            switchTab(activeTab);
         }
-      });
-    }
 
-    function escapeHtml(str) {
-      return str.replace(/[&<>"']/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[m]);
-    }
-  </script>
+        // 1. 统计数据加载
+        async function loadStats() {
+            const res = await apiRequest('/api/stats');
+            if (!res) return;
+            const d = await res.json();
+            chartDataCache = d;
+
+            $('statTotal').textContent = d.total_tokens || 0;
+            $('statActiveSub').textContent = `${d.active_tokens || 0} 正常 · ${(d.total_tokens || 0) - (d.active_tokens || 0)} 异常`;
+            $('statCredits').innerHTML = `${(d.active_credits || 0).toLocaleString()} <span class="text-xs font-normal text-slate-400">点</span>`;
+            $('statCreditsSub').textContent = d.active_tokens ? `均分 ${Math.round(d.active_credits / d.active_tokens)} 点/号` : '-';
+            $('statTodayCredits').innerHTML = `${(d.today_video_credits || 0)} <span class="text-xs font-normal text-slate-400">点</span>`;
+            
+            const rate = d.today_success_rate !== undefined ? d.today_success_rate : 100.0;
+            $('statSuccessRate').textContent = rate + '%';
+            $('statSuccessSub').textContent = rate >= 95 ? '健康稳定' : '存在部分异常';
+            
+            $('statTotalCalls').innerHTML = `${d.today_total_calls || 0} <span class="text-xs font-normal text-slate-400">次</span>`;
+            $('statCallsSub').textContent = `总调用 ${(d.total_images || 0) + (d.total_videos || 0)} 次`;
+            
+            $('statAvgDuration').innerHTML = `${d.today_avg_duration || 0} <span class="text-xs font-normal text-slate-400">秒</span>`;
+            
+            $('statTotalImages').textContent = `${(d.total_images || 0)} 张`;
+            $('statTodayImages').textContent = d.today_images || 0;
+            $('statImg1k').textContent = d.today_images_1k || 0;
+            $('statImg2k').textContent = d.today_images_2k || 0;
+            $('statImg4k').textContent = d.today_images_4k || 0;
+
+            $('statTotalVideos').textContent = `${(d.total_videos || 0)} 支`;
+            $('statTodayVideos').textContent = d.today_videos || 0;
+            $('statVidT2v').textContent = d.today_videos_t2v || 0;
+            $('statVidI2v').textContent = d.today_videos_i2v || 0;
+            $('statVidPoints').textContent = `${d.today_video_credits || 0}点`;
+
+            renderTimelineChart(currentTimelineRange);
+        }
+
+        // 2. 实时任务轮询与徽章更新
+        async function loadLiveTasks() {
+            const res = await apiRequest('/api/live-tasks');
+            if (!res) return;
+            const d = await res.json();
+            const tasks = d.live_tasks || [];
+
+            const imgTask = tasks.find(t => t.type === 'image');
+            const vidTask = tasks.find(t => t.type === 'video');
+
+            const imgEl = $('live-img-task');
+            if (imgTask) {
+                imgEl.className = "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-blue-50 text-blue-700 border border-blue-100 text-[11px] font-medium shadow-sm";
+                imgEl.innerHTML = `
+                    <span class="relative flex h-2 w-2 shrink-0">
+                        <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
+                        <span class="relative inline-flex rounded-full h-2 w-2 bg-blue-600"></span>
+                    </span>
+                    <span>正在出图: <strong class="font-semibold">${escapeHtml(imgTask.model)}</strong> · <span class="font-mono">${imgTask.duration}s</span></span>
+                `;
+            } else {
+                imgEl.className = "inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-slate-100 text-slate-500 text-[10px] border border-slate-200";
+                imgEl.innerHTML = `<span>● 当前空闲</span>`;
+            }
+
+            const vidEl = $('live-vid-task');
+            if (vidTask) {
+                vidEl.className = "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-purple-50 text-purple-700 border border-purple-100 text-[11px] font-medium shadow-sm";
+                vidEl.innerHTML = `
+                    <span class="relative flex h-2 w-2 shrink-0">
+                        <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-purple-400 opacity-75"></span>
+                        <span class="relative inline-flex rounded-full h-2 w-2 bg-purple-600"></span>
+                    </span>
+                    <span>正在生成视频: <strong class="font-semibold">${escapeHtml(vidTask.model)}</strong> · <span class="font-mono">${vidTask.duration}s</span></span>
+                `;
+            } else {
+                vidEl.className = "inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-slate-100 text-slate-500 text-[10px] border border-slate-200";
+                vidEl.innerHTML = `<span>● 当前空闲</span>`;
+            }
+        }
+
+        // 3. 时间轴柱状图渲染
+        function renderTimelineChart(range) {
+            currentTimelineRange = range;
+            const container = $('chart-bars-container');
+            const labelsContainer = $('chart-axis-labels');
+            if (!chartDataCache) return;
+
+            // 保持刻度虚线
+            container.innerHTML = `
+                <div class="absolute inset-x-0 top-0 border-b border-dashed border-slate-100 flex justify-between text-[10px] text-slate-300 pointer-events-none -translate-y-2.5"><span id="chart-scale-max">25</span></div>
+                <div class="absolute inset-x-0 top-1/4 border-b border-dashed border-slate-100 flex justify-between text-[10px] text-slate-300 pointer-events-none -translate-y-2.5"><span id="chart-scale-75">20</span></div>
+                <div class="absolute inset-x-0 top-2/4 border-b border-dashed border-slate-100 flex justify-between text-[10px] text-slate-300 pointer-events-none -translate-y-2.5"><span id="chart-scale-50">15</span></div>
+                <div class="absolute inset-x-0 top-3/4 border-b border-dashed border-slate-100 flex justify-between text-[10px] text-slate-300 pointer-events-none -translate-y-2.5"><span id="chart-scale-25">10</span></div>
+            `;
+            labelsContainer.innerHTML = '';
+
+            let dataItems = [];
+            if (range === 'today') {
+                const hourly = chartDataCache.timeline_24h || new Array(24).fill(0);
+                for (let i = 0; i < 24; i++) {
+                    dataItems.push({ label: `${String(i).padStart(2, '0')}:00`, count: hourly[i] || 0 });
+                }
+            } else if (range === '7d') {
+                dataItems = chartDataCache.timeline_7d || [];
+                if (!dataItems.length) dataItems = [{ day: '无数据', count: 0 }];
+            } else {
+                dataItems = chartDataCache.timeline_30d || [];
+                if (!dataItems.length) dataItems = [{ day: '无数据', count: 0 }];
+            }
+
+            const maxCount = Math.max(10, ...dataItems.map(d => d.count || 0));
+            $('chart-scale-max').textContent = maxCount;
+            $('chart-scale-75').textContent = Math.round(maxCount * 0.75);
+            $('chart-scale-50').textContent = Math.round(maxCount * 0.5);
+            $('chart-scale-25').textContent = Math.round(maxCount * 0.25);
+
+            dataItems.forEach((item, idx) => {
+                const count = item.count || 0;
+                const label = item.label || item.day || '';
+                const pct = Math.min(100, Math.round((count / maxCount) * 100));
+
+                const barGroup = document.createElement('div');
+                barGroup.className = "flex-1 h-full flex items-end justify-center group cursor-pointer";
+                barGroup.onmouseenter = (e) => showTooltip(e, label, `${count} 次`);
+                barGroup.onmouseleave = hideTooltip;
+
+                const bar = document.createElement('div');
+                bar.className = "w-full max-w-[28px] bg-[#2e9e6b] rounded-t-sm transition-all group-hover:brightness-110";
+                bar.style.height = `${pct}%`;
+                barGroup.appendChild(bar);
+                container.appendChild(barGroup);
+
+                const span = document.createElement('span');
+                if (range === 'today') {
+                    span.textContent = (idx % 2 === 0 || idx === 23) ? label : '';
+                    if (count > 0) span.className = "font-bold text-slate-700";
+                } else {
+                    span.textContent = label;
+                }
+                labelsContainer.appendChild(span);
+            });
+        }
+
+        function switchTimelineView(range, btn) {
+            ['btn-chart-today', 'btn-chart-7d', 'btn-chart-30d'].forEach(id => {
+                const b = $(id);
+                if (b) b.className = "px-2.5 py-1 rounded-md hover:text-slate-900 transition-all";
+            });
+            btn.className = "px-2.5 py-1 rounded-md bg-white text-slate-900 shadow-sm transition-all";
+            renderTimelineChart(range);
+        }
+
+        function showTooltip(e, time, val) {
+            const tip = $('chart-tooltip');
+            $('tooltip-time').textContent = time;
+            $('tooltip-val').textContent = `请求量: ${val}`;
+            const target = e.currentTarget;
+            tip.style.left = `${target.offsetLeft - 30}px`;
+            tip.style.top = `${target.offsetTop - 55}px`;
+            tip.classList.remove('hidden');
+        }
+
+        function hideTooltip() {
+            $('chart-tooltip').classList.add('hidden');
+        }
+
+        // 4. Token 账号管理逻辑
+        window.isEmailMasked = localStorage.getItem('flow2api_mask_emails') !== '0'; // 默认开启脱敏
+
+        function formatTokenEmail(email) {
+            if (!email) return '-';
+            if (!window.isEmailMasked) return email;
+            const atIdx = email.indexOf('@');
+            if (atIdx === -1) {
+                if (email.length <= 4) return '***';
+                return email.slice(0, 2) + '***' + email.slice(-2);
+            }
+            const name = email.slice(0, atIdx);
+            const domain = email.slice(atIdx);
+            if (name.length <= 2) {
+                return name[0] + '***' + domain;
+            }
+            if (name.length <= 4) {
+                return name.slice(0, 1) + '***' + name.slice(-1) + domain;
+            }
+            return name.slice(0, 2) + '***' + name.slice(-2) + domain;
+        }
+
+        function updateEmailMaskButtons() {
+            const eyeSvg = `<svg class="h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>`;
+            const eyeOffSvg = `<svg class="h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>`;
+
+            const btn = $('btnToggleEmailMask');
+            if (btn) {
+                btn.innerHTML = window.isEmailMasked ? eyeOffSvg : eyeSvg;
+                btn.title = window.isEmailMasked ? '已脱敏隐藏（点击显示完整账号）' : '点击开启脱敏隐藏（方便截图分享）';
+                btn.classList.toggle('text-blue-600', window.isEmailMasked);
+                btn.classList.toggle('bg-blue-50', window.isEmailMasked);
+                btn.classList.toggle('border-blue-200', window.isEmailMasked);
+            }
+            const thIcon = $('thEmailMaskIcon');
+            if (thIcon) {
+                thIcon.innerHTML = window.isEmailMasked ? eyeOffSvg : eyeSvg;
+                thIcon.classList.toggle('text-blue-600', window.isEmailMasked);
+            }
+        }
+
+        function toggleEmailMask() {
+            window.isEmailMasked = !window.isEmailMasked;
+            localStorage.setItem('flow2api_mask_emails', window.isEmailMasked ? '1' : '0');
+            updateEmailMaskButtons();
+            renderTokensTable(allTokens);
+            renderTokensMobile(allTokens);
+            if (allLogs && allLogs.length) renderLogsTable(allLogs);
+            showToast(window.isEmailMasked ? '已开启账号脱敏保护（可安全截图）' : '已恢复完整账号显示', 'info', 1800);
+        }
+
+        async function loadTokens() {
+            const res = await apiRequest('/api/tokens');
+            if (!res) return;
+            allTokens = await res.json();
+            updateEmailMaskButtons();
+            renderTokensTable(allTokens);
+            renderTokensMobile(allTokens);
+        }
+
+        function renderTokensTable(tokens) {
+            const tbody = $('tokenTableBody');
+            if (!tokens.length) {
+                tbody.innerHTML = '<tr><td colspan="8" class="py-8 text-center text-slate-400">暂无 Token，请点击右上角添加</td></tr>';
+                return;
+            }
+            tbody.innerHTML = tokens.map(t => {
+                const expText = formatTokenExpiry(t.at_expires);
+                const isProtocol = t.protocol_mode === 'protocol';
+                const emailText = formatTokenEmail(t.email);
+                return `
+                    <tr class="hover:bg-slate-50/60 transition-colors">
+                        <td class="py-3 px-4 font-medium text-slate-900 truncate max-w-[200px]" title="${escapeHtml(emailText)}">
+                            ${escapeHtml(emailText)}
+                        </td>
+                        <td class="py-3 px-3 text-center">
+                            <span class="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium ${t.is_active ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-500'}">
+                                ${t.is_active ? '启用' : '禁用'}
+                            </span>
+                        </td>
+                        <td class="py-3 px-3 text-center">
+                            <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[11px] bg-slate-100 text-slate-600 font-medium">
+                                ${isProtocol ? '协议' : 'ST'}
+                            </span>
+                        </td>
+                        <td class="py-3 px-3 text-center font-mono text-slate-500 text-xs">
+                            ${expText}
+                        </td>
+                        <td class="py-3 px-3 text-center">
+                            <button onclick="refreshTokenCredits(${t.id})" class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 hover:bg-blue-100 font-semibold font-mono" title="点击刷新余额">
+                                <span>${t.credits !== undefined ? t.credits : '-'}</span>
+                                <svg class="w-3 h-3 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+                            </button>
+                        </td>
+                        <td class="py-3 px-4 font-mono text-slate-500 text-[11px] truncate max-w-[160px]" title="${escapeHtml(t.current_project_id || '-')}">
+                            ${escapeHtml(t.current_project_id || '-')}
+                        </td>
+                        <td class="py-3 px-3 text-center text-slate-500 font-mono text-xs">
+                            图 ${t.image_count || 0} / 视 ${t.video_count || 0}
+                        </td>
+                        <td class="py-3 px-4 text-right space-x-1.5 whitespace-nowrap">
+                            <button onclick="openEditModal(${t.id})" class="px-2 py-1 text-slate-600 hover:text-slate-900 font-medium">编辑</button>
+                            <button onclick="refreshTokenAT(${t.id})" class="px-2 py-1 text-blue-600 hover:underline">刷新AT</button>
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+        }
+
+        function renderTokensMobile(tokens) {
+            const container = $('tokenMobileCards');
+            if (!tokens.length) {
+                container.innerHTML = '<div class="p-6 text-center text-xs text-slate-400">暂无 Token</div>';
+                return;
+            }
+            container.innerHTML = tokens.map(t => {
+                const emailText = formatTokenEmail(t.email);
+                return `
+                    <div class="p-3.5 space-y-2.5">
+                        <div class="flex items-center justify-between gap-2">
+                            <span class="font-bold text-xs text-slate-900 truncate">${escapeHtml(emailText)}</span>
+                            <span class="px-2 py-0.5 rounded text-[10px] font-medium ${t.is_active ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-500'} shrink-0">${t.is_active ? '启用' : '禁用'}</span>
+                        </div>
+                        <div class="grid grid-cols-2 gap-2 text-[11px] bg-slate-50 p-2.5 rounded-lg border border-slate-100">
+                            <div>
+                                <span class="text-slate-400 block text-[10px] mb-0.5">点数余额</span>
+                                <button onclick="refreshTokenCredits(${t.id})" class="inline-flex items-center gap-1 font-bold text-blue-600 font-mono">
+                                    <span>${t.credits !== undefined ? t.credits : '-'} 点</span>
+                                    <svg class="w-3 h-3 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+                                </button>
+                            </div>
+                            <div>
+                                <span class="text-slate-400 block text-[10px] mb-0.5">AT 过期时间</span>
+                                <span class="text-slate-700 font-mono text-[10px]">${formatTokenExpiry(t.at_expires)}</span>
+                            </div>
+                            <div>
+                                <span class="text-slate-400 block text-[10px] mb-0.5">运行模式</span>
+                                <span class="text-slate-700 font-medium">${t.protocol_mode === 'protocol' ? '协议模式' : 'Session'}</span>
+                            </div>
+                            <div>
+                                <span class="text-slate-400 block text-[10px] mb-0.5">累计出图/视</span>
+                                <span class="text-slate-700 font-mono">图 ${t.image_count || 0} / 视 ${t.video_count || 0}</span>
+                            </div>
+                        </div>
+                        <div class="flex items-center justify-between pt-0.5">
+                            <span class="text-[10px] text-slate-400 font-mono truncate max-w-[130px]">项目: ${(t.current_project_id || '-').slice(0, 8)}...</span>
+                            <div class="flex items-center gap-1.5">
+                                <button onclick="openEditModal(${t.id})" class="px-2.5 py-1 text-xs border border-slate-200 rounded-md text-slate-700 hover:bg-slate-50">编辑</button>
+                                <button onclick="refreshTokenAT(${t.id})" class="px-2.5 py-1 text-xs bg-slate-900 text-white rounded-md hover:bg-slate-800">刷新AT</button>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function formatTokenExpiry(exp) {
+            if (!exp) return '-';
+            const d = new Date(exp);
+            const now = new Date();
+            const diff = d - now;
+            const hours = Math.floor(diff / 36e5);
+            if (diff < 0) return '已过期';
+            if (hours < 1) return `${Math.floor(diff / 6e4)}分钟后`;
+            if (hours < 24) return `剩余 ${hours}小时`;
+            return `${Math.floor(diff / 864e5)}天后`;
+        }
+
+        async function refreshTokenAT(id) {
+            showToast('正在更新 AT...', 'info');
+            const res = await apiRequest(`/api/tokens/${id}/refresh-at`, { method: 'POST' });
+            if (!res) return;
+            const d = await res.json();
+            if (d.success) {
+                showToast('AT 刷新成功！', 'success');
+                await loadTokens();
+            } else {
+                showToast('刷新失败: ' + (d.detail || d.message || '未知错误'), 'error');
+            }
+        }
+
+        async function refreshTokenCredits(id) {
+            showToast('正在查询余额...', 'info');
+            const res = await apiRequest(`/api/tokens/${id}/refresh-credits`, { method: 'POST' });
+            if (!res) return;
+            const d = await res.json();
+            if (d.success) {
+                showToast(`余额: ${d.credits} 点`, 'success');
+                await loadTokens();
+            } else {
+                showToast('查询失败: ' + (d.detail || d.message || '未知错误'), 'error');
+            }
+        }
+
+        async function refreshAllCredits() {
+            showToast('正在批量刷新余额...', 'info');
+            const res = await apiRequest('/api/tokens/refresh-all-credits', { method: 'POST' });
+            if (!res) return;
+            const d = await res.json();
+            if (d.success) {
+                showToast(`刷新完成：更新 ${d.updated || 0} 个`, 'success');
+                await loadTokens();
+                await loadStats();
+            }
+        }
+
+        // Token 模态框控制
+        function openAddModal() { $('addModal').classList.remove('hidden'); }
+        function closeAddModal() { $('addModal').classList.add('hidden'); $('addTokenST').value = ''; }
+        function openEditModal(id) {
+            const token = allTokens.find(t => t.id === id);
+            if (!token) return showToast('Token 不存在', 'error');
+            $('editTokenId').value = token.id;
+            $('editTokenST').value = token.st || '';
+            $('editTokenRemark').value = token.remark || '';
+            $('editTokenProjectId').value = token.current_project_id || '';
+            $('editTokenCaptchaProxyUrl').value = token.captcha_proxy_url || '';
+            $('editModal').classList.remove('hidden');
+        }
+        function closeEditModal() { $('editModal').classList.add('hidden'); }
+
+        async function submitAddToken() {
+            const st = $('addTokenST').value.trim();
+            if (!st) return showToast('请输入 Session Token', 'error');
+            const remark = $('addTokenRemark').value.trim();
+            const projectId = $('addTokenProjectId').value.trim();
+
+            $('addTokenBtnText').classList.add('hidden');
+            $('addTokenBtnSpinner').classList.remove('hidden');
+            try {
+                const res = await apiRequest('/api/tokens', {
+                    method: 'POST',
+                    body: JSON.stringify({ st, remark: remark || null, project_id: projectId || null })
+                });
+                if (!res) return;
+                const d = await res.json();
+                if (d.success) {
+                    showToast('添加成功', 'success');
+                    closeAddModal();
+                    await loadTokens();
+                    await loadStats();
+                } else {
+                    showToast('添加失败: ' + (d.detail || d.message || '错误'), 'error');
+                }
+            } finally {
+                $('addTokenBtnText').classList.remove('hidden');
+                $('addTokenBtnSpinner').classList.add('hidden');
+            }
+        }
+
+        async function submitEditToken() {
+            const id = $('editTokenId').value;
+            const st = $('editTokenST').value.trim();
+            const remark = $('editTokenRemark').value.trim();
+            const projectId = $('editTokenProjectId').value.trim();
+            const captchaProxy = $('editTokenCaptchaProxyUrl').value.trim();
+
+            $('editTokenBtnText').classList.add('hidden');
+            $('editTokenBtnSpinner').classList.remove('hidden');
+            try {
+                const res = await apiRequest(`/api/tokens/${id}`, {
+                    method: 'PUT',
+                    body: JSON.stringify({ st, remark: remark || null, project_id: projectId || null, captcha_proxy_url: captchaProxy })
+                });
+                if (!res) return;
+                const d = await res.json();
+                if (d.success) {
+                    showToast('保存成功', 'success');
+                    closeEditModal();
+                    await loadTokens();
+                } else {
+                    showToast('保存失败: ' + (d.detail || d.message || '错误'), 'error');
+                }
+            } finally {
+                $('editTokenBtnText').classList.remove('hidden');
+                $('editTokenBtnSpinner').classList.add('hidden');
+            }
+        }
+
+        async function deleteCurrentEditToken() {
+            const id = $('editTokenId').value;
+            if (!confirm('确定要删除这个账号 Token 吗？此操作不可恢复。')) return;
+            const res = await apiRequest(`/api/tokens/${id}`, { method: 'DELETE' });
+            if (!res) return;
+            const d = await res.json();
+            if (d.success) {
+                showToast('已删除', 'success');
+                closeEditModal();
+                await loadTokens();
+                await loadStats();
+            }
+        }
+
+        // 5. 本地媒体管理逻辑
+        let currentMediaFilter = 'all';
+
+        async function loadMediaStats() {
+            const res = await apiRequest('/api/media/stats');
+            if (!res) return;
+            const d = await res.json();
+            const totalMb = roundMb(d.total_bytes);
+            const freeGb = roundGb(d.free_disk_bytes);
+            $('mediaStatsSummary').innerHTML = `
+                本地缓存共 <strong class="text-slate-800">${d.image_count + d.video_count}</strong> 个媒体文件 (图片 ${d.image_count} / 视频 ${d.video_count}) · 
+                占用 <strong class="text-blue-600">${totalMb} MB</strong> · 磁盘剩余 <strong class="text-emerald-600">${freeGb} GB</strong>
+            `;
+        }
+
+        async function loadMediaFiles() {
+            const res = await apiRequest(`/api/media/files?media_type=${currentMediaFilter}&limit=100`);
+            if (!res) return;
+            const d = await res.json();
+            const files = d.files || [];
+            $('mediaTotalCountText').textContent = `共 ${d.total || 0} 个文件`;
+            renderMediaList(files);
+        }
+
+        function renderMediaList(files) {
+            const tbody = $('mediaTableBody');
+            const mobileList = $('mediaMobileList');
+
+            if (!files.length) {
+                if (tbody) tbody.innerHTML = '<tr><td colspan="7" class="py-12 text-center text-slate-400">本地媒体库暂无缓存文件</td></tr>';
+                if (mobileList) mobileList.innerHTML = '<div class="py-12 text-center text-xs text-slate-400">本地媒体库暂无缓存文件</div>';
+                return;
+            }
+
+            // 桌面端表格渲染 (正方形轻量缩略图 + 详细信息)
+            if (tbody) {
+                tbody.innerHTML = files.map(f => {
+                    const isVid = f.type === 'video';
+                    const resBadgeClass = f.resolution_label === '4K' ? 'bg-purple-50 text-purple-700 border-purple-200' : (f.resolution_label === '2K' ? 'bg-blue-50 text-blue-700 border-blue-200' : 'bg-slate-100 text-slate-600 border-slate-200');
+                    return `
+                        <tr class="hover:bg-slate-50/60 transition-colors">
+                            <td class="py-2.5 px-4">
+                                <div class="w-16 h-16 rounded-lg overflow-hidden border border-slate-200 bg-slate-100 flex items-center justify-center shrink-0 cursor-pointer hover:opacity-90 transition-opacity relative group" onclick="openMediaPreview('${f.url}', '${f.type}')" title="点击查看原图/点播">
+                                    <img src="${f.thumbnail_url || f.url}" loading="lazy" class="w-full h-full object-cover">
+                                    ${isVid ? `<span class="absolute inset-0 bg-black/30 flex items-center justify-center text-white text-xs">▶</span>` : ''}
+                                </div>
+                            </td>
+                            <td class="py-2.5 px-4 font-medium text-slate-900">
+                                <div class="font-mono text-xs truncate max-w-[280px]" title="${escapeHtml(f.filename)}">${escapeHtml(f.filename)}</div>
+                                <span class="inline-block mt-1 px-1.5 py-0.2 rounded text-[10px] font-semibold border ${resBadgeClass}">${f.resolution_label || '1K'}</span>
+                            </td>
+                            <td class="py-2.5 px-3 text-center">
+                                <span class="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium ${isVid ? 'bg-purple-50 text-purple-700' : 'bg-blue-50 text-blue-700'}">
+                                    ${isVid ? '视频 MP4' : '图片 JPG'}
+                                </span>
+                            </td>
+                            <td class="py-2.5 px-3 text-center font-mono text-slate-500 text-xs">
+                                ${f.dimensions || (isVid ? '720p / 1080p' : '-')}
+                            </td>
+                            <td class="py-2.5 px-3 text-center font-mono text-slate-500 text-xs">
+                                ${roundMb(f.size_bytes)} MB
+                            </td>
+                            <td class="py-2.5 px-3 text-center font-mono text-slate-400 text-xs">
+                                ${formatTime(f.created_at)}
+                            </td>
+                            <td class="py-2.5 px-4 text-right space-x-2 whitespace-nowrap">
+                                <button onclick="openMediaPreview('${f.url}', '${f.type}')" class="px-2.5 py-1 text-xs font-medium text-slate-700 hover:text-slate-900 border border-slate-200 rounded-md hover:bg-slate-50 transition-colors">
+                                    ${isVid ? '播放' : '查看原图'}
+                                </button>
+                                <a href="${f.url}" download class="px-2 py-1 text-xs text-blue-600 hover:underline">下载</a>
+                                <button onclick="deleteSingleMediaFile('${f.filename}')" class="px-2 py-1 text-xs text-red-500 hover:underline">删除</button>
+                            </td>
+                        </tr>
+                    `;
+                }).join('');
+            }
+
+            // 移动端列表渲染 (左侧正方形缩略图 + 右侧信息)
+            if (mobileList) {
+                mobileList.innerHTML = files.map(f => {
+                    const isVid = f.type === 'video';
+                    return `
+                        <div class="p-3 flex items-center gap-3">
+                            <div class="w-16 h-16 rounded-lg overflow-hidden border border-slate-200 bg-slate-100 flex items-center justify-center shrink-0 cursor-pointer relative" onclick="openMediaPreview('${f.url}', '${f.type}')">
+                                <img src="${f.thumbnail_url || f.url}" loading="lazy" class="w-full h-full object-cover">
+                                ${isVid ? `<span class="absolute inset-0 bg-black/30 flex items-center justify-center text-white text-xs">▶</span>` : ''}
+                            </div>
+                            <div class="flex-1 min-w-0 space-y-1">
+                                <div class="flex items-center justify-between">
+                                    <span class="text-xs font-bold text-slate-800 truncate">${escapeHtml(f.filename)}</span>
+                                    <span class="font-mono text-[11px] text-slate-500">${roundMb(f.size_bytes)}MB</span>
+                                </div>
+                                <div class="flex items-center gap-2 text-[11px] text-slate-400">
+                                    <span>${f.dimensions || (isVid ? '视频' : '图片')}</span>
+                                    <span>·</span>
+                                    <span>${formatTime(f.created_at)}</span>
+                                </div>
+                                <div class="flex items-center gap-3 pt-0.5 text-xs">
+                                    <button onclick="openMediaPreview('${f.url}', '${f.type}')" class="text-blue-600 font-medium hover:underline">${isVid ? '播放' : '查看原图'}</button>
+                                    <a href="${f.url}" download class="text-slate-600 hover:underline">下载</a>
+                                    <button onclick="deleteSingleMediaFile('${f.filename}')" class="text-red-500 hover:underline">删除</button>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+            }
+        }
+
+        function filterMediaFiles(type) {
+            currentMediaFilter = type;
+            $('btnMediaFilterAll').className = type === 'all' ? "px-2 py-0.5 rounded bg-slate-900 text-white font-medium" : "px-2 py-0.5 rounded bg-slate-100 hover:bg-slate-200";
+            $('btnMediaFilterImg').className = type === 'image' ? "px-2 py-0.5 rounded bg-slate-900 text-white font-medium" : "px-2 py-0.5 rounded bg-slate-100 hover:bg-slate-200";
+            $('btnMediaFilterVid').className = type === 'video' ? "px-2 py-0.5 rounded bg-slate-900 text-white font-medium" : "px-2 py-0.5 rounded bg-slate-100 hover:bg-slate-200";
+            loadMediaFiles();
+        }
+
+        async function deleteSingleMediaFile(name) {
+            if (!confirm(`确定要彻底删除文件 ${name} 吗？`)) return;
+            const res = await apiRequest(`/api/media/files/${encodeURIComponent(name)}`, { method: 'DELETE' });
+            if (!res) return;
+            const d = await res.json();
+            if (d.success) {
+                showToast('已删除', 'success');
+                await loadMediaStats();
+                await loadMediaFiles();
+            }
+        }
+
+        async function triggerCleanup(type) {
+            const map = { '7d': '7 天前', '3d': '3 天前', 'all': '全部' };
+            if (!confirm(`确定要清理 ${map[type] || type} 的本地媒体缓存吗？`)) return;
+            showToast('正在清理...', 'info');
+            const res = await apiRequest('/api/media/cleanup', {
+                method: 'POST',
+                body: JSON.stringify({ cleanup_type: type })
+            });
+            if (!res) return;
+            const d = await res.json();
+            if (d.success) {
+                showToast(d.message || '清理完成', 'success');
+                await loadMediaStats();
+                await loadMediaFiles();
+            }
+        }
+
+        // 6. 系统设置配置加载与保存
+        async function loadAllSettings() {
+            // 生成与超时配置
+            const rGen = await apiRequest('/api/generation/timeout');
+            if (rGen) {
+                const d = await rGen.json();
+                if (d.success && d.config) {
+                    $('cfgImageTimeout').value = d.config.image_timeout || 300;
+                    $('cfgVideoTimeout').value = d.config.video_timeout || 1500;
+                    $('cfgMaxRetries').value = d.config.max_retries || 3;
+                    $('cfgImageFallbackAttempts').value = d.config.image_fallback_attempts ?? 1;
+                    $('cfgAutoUpscale').checked = d.config.auto_upscale_enabled !== false;
+                    $('cfgUpscaleEngine').value = d.config.upscale_engine || 'lanczos3';
+                }
+            }
+
+            // 安全与当前 API Key
+            const rAdmin = await apiRequest('/api/admin/config');
+            if (rAdmin) {
+                const d = await rAdmin.json();
+                $('cfgAdminUsername').value = d.admin_username || 'admin';
+                $('cfgCurrentAPIKey').value = d.api_key || '';
+                adminApiKey = d.api_key || '';
+            }
+
+            // 代理配置
+            const rProxy = await apiRequest('/api/proxy/config');
+            if (rProxy) {
+                const d = await rProxy.json();
+                $('cfgProxyEnabled').checked = d.proxy_enabled || false;
+                $('cfgProxyUrl').value = d.proxy_url || '';
+                $('cfgMediaProxyEnabled').checked = d.media_proxy_enabled || false;
+                $('cfgMediaProxyUrl').value = d.media_proxy_url || '';
+                toggleMediaProxyInput();
+            }
+
+            // 缓存配置
+            const rCache = await apiRequest('/api/cache/config');
+            if (rCache) {
+                const d = await rCache.json();
+                if (d.success && d.config) {
+                    $('cfgCacheEnabled').checked = d.config.enabled !== false;
+                    $('cfgCacheTimeout').value = d.config.timeout ?? 7200;
+                    $('cfgCacheBaseUrl').value = d.config.base_url || '';
+                    toggleCacheOptions();
+                }
+            }
+
+            // 企微配置
+            const rWebhook = await apiRequest('/api/webhook/config');
+            if (rWebhook) {
+                const d = await rWebhook.json();
+                if (d.success && d.config) {
+                    $('cfgWebhookEnabled').checked = d.config.enabled || false;
+                    $('cfgWecomWebhookUrl').value = d.config.wecom_webhook_url || '';
+                    $('cfgNotifyOnExpired').checked = d.config.notify_on_expired !== false;
+                    $('cfgDailyReportEnabled').checked = d.config.daily_report_enabled || false;
+                    toggleWebhookOptions();
+                }
+            }
+
+            // 验证码配置
+            const rCap = await apiRequest('/api/captcha/config');
+            if (rCap) {
+                const d = await rCap.json();
+                $('cfgCaptchaMethod').value = d.captcha_method || 'extension';
+                $('cfgYescaptchaApiKey').value = d.yescaptcha_api_key || '';
+            }
+        }
+
+        async function saveAllGenerationConfig() {
+            const body = {
+                image_timeout: parseInt($('cfgImageTimeout').value) || 300,
+                video_timeout: parseInt($('cfgVideoTimeout').value) || 1500,
+                max_retries: parseInt($('cfgMaxRetries').value) || 3,
+                image_fallback_attempts: parseInt($('cfgImageFallbackAttempts').value) || 1,
+                auto_upscale_enabled: $('cfgAutoUpscale').checked,
+                upscale_engine: $('cfgUpscaleEngine').value
+            };
+            const res = await apiRequest('/api/generation/timeout', { method: 'POST', body: JSON.stringify(body) });
+            if (res) showToast('生成与4K超分配置已保存', 'success');
+        }
+
+        async function saveProxyConfig() {
+            const body = {
+                proxy_enabled: $('cfgProxyEnabled').checked,
+                proxy_url: $('cfgProxyUrl').value.trim(),
+                media_proxy_enabled: $('cfgMediaProxyEnabled').checked,
+                media_proxy_url: $('cfgMediaProxyUrl').value.trim()
+            };
+            const res = await apiRequest('/api/proxy/config', { method: 'POST', body: JSON.stringify(body) });
+            if (res) showToast('代理配置已保存', 'success');
+        }
+
+        async function testProxyConfig() {
+            const url = $('cfgProxyUrl').value.trim();
+            if (!url) return showToast('请先填写代理地址', 'error');
+            $('btnTestProxy').disabled = true;
+            $('btnTestProxy').textContent = '测试中...';
+            try {
+                const res = await apiRequest('/api/proxy/test', {
+                    method: 'POST',
+                    body: JSON.stringify({ proxy_url: url, test_url: 'https://labs.google/' })
+                });
+                if (!res) return;
+                const d = await res.json();
+                showToast(d.success ? '代理测试连通成功！' : ('代理失败: ' + (d.message || '')), d.success ? 'success' : 'error');
+            } finally {
+                $('btnTestProxy').disabled = false;
+                $('btnTestProxy').textContent = '测试连通';
+            }
+        }
+
+        async function saveCacheConfig() {
+            await apiRequest('/api/cache/enabled', { method: 'POST', body: JSON.stringify({ enabled: $('cfgCacheEnabled').checked }) });
+            await apiRequest('/api/cache/config', { method: 'POST', body: JSON.stringify({ timeout: parseInt($('cfgCacheTimeout').value) || 7200 }) });
+            await apiRequest('/api/cache/base-url', { method: 'POST', body: JSON.stringify({ base_url: $('cfgCacheBaseUrl').value.trim() }) });
+            showToast('缓存配置已保存', 'success');
+        }
+
+        async function saveWebhookConfig() {
+            const body = {
+                enabled: $('cfgWebhookEnabled').checked,
+                wecom_webhook_url: $('cfgWecomWebhookUrl').value.trim(),
+                notify_on_expired: $('cfgNotifyOnExpired').checked,
+                daily_report_enabled: $('cfgDailyReportEnabled').checked
+            };
+            const res = await apiRequest('/api/webhook/config', { method: 'POST', body: JSON.stringify(body) });
+            if (res) showToast('企业微信通知配置已保存', 'success');
+        }
+
+        async function testWebhook() {
+            showToast('发送测试通知...', 'info');
+            const res = await apiRequest('/api/webhook/test', { method: 'POST', body: JSON.stringify({ wecom_webhook_url: $('cfgWecomWebhookUrl').value.trim() }) });
+            if (res) showToast('测试通知已发出，请在企业微信群查收', 'success');
+        }
+
+        async function saveCaptchaConfig() {
+            const body = {
+                captcha_method: $('cfgCaptchaMethod').value,
+                yescaptcha_api_key: $('cfgYescaptchaApiKey').value.trim()
+            };
+            const res = await apiRequest('/api/captcha/config', { method: 'POST', body: JSON.stringify(body) });
+            if (res) showToast('打码配置已保存', 'success');
+        }
+
+        async function updateAdminPassword() {
+            const oldP = $('cfgOldPassword').value.trim();
+            const newP = $('cfgNewPassword').value.trim();
+            if (!oldP || !newP) return showToast('请输入旧密码和新密码', 'error');
+            const res = await apiRequest('/api/admin/password', { method: 'POST', body: JSON.stringify({ old_password: oldP, new_password: newP }) });
+            if (!res) return;
+            const d = await res.json();
+            if (d.success) {
+                showToast('密码修改成功，请重新登录', 'success');
+                setTimeout(() => location.href = '/login', 1500);
+            } else {
+                showToast('修改失败: ' + (d.detail || '错误'), 'error');
+            }
+        }
+
+        async function updateAPIKey() {
+            const newK = $('cfgNewAPIKey').value.trim();
+            if (!newK) return showToast('请输入新的 API Key', 'error');
+            if (!confirm('确定更新 API Key 吗？客户端需要同步更换。')) return;
+            const res = await apiRequest('/api/admin/apikey', { method: 'POST', body: JSON.stringify({ new_api_key: newK }) });
+            if (!res) return;
+            const d = await res.json();
+            if (d.success) {
+                showToast('API Key 已更新', 'success');
+                $('cfgCurrentAPIKey').value = newK;
+                $('cfgNewAPIKey').value = '';
+                adminApiKey = newK;
+            }
+        }
+
+        function toggleMediaProxyInput() {
+            $('mediaProxyUrlInput').classList.toggle('hidden', !$('cfgMediaProxyEnabled').checked);
+        }
+        function toggleCacheOptions() {
+            $('cacheOptions').style.display = $('cfgCacheEnabled').checked ? 'block' : 'none';
+        }
+        function toggleWebhookOptions() {
+            $('webhookOptions').style.display = $('cfgWebhookEnabled').checked ? 'block' : 'none';
+        }
+        function toggleCaptchaOptions() {}
+
+        async function toggleATAutoRefresh() {
+            const enabled = $('atAutoRefreshToggle').checked;
+            await apiRequest('/api/token-refresh/config', { method: 'POST', body: JSON.stringify({ at_auto_refresh_enabled: enabled }) });
+            showToast(enabled ? '自动刷新 AT 已开启' : '自动刷新 AT 已关闭', 'info');
+        }
+
+        // 7. 请求日志逻辑与 2.5s 自动轮询
+        let logsAutoRefreshTimer = null;
+
+        function startLogsAutoRefresh() {
+            stopLogsAutoRefresh();
+            logsAutoRefreshTimer = setInterval(() => {
+                if (activeTab === 'logs' && $('logDetailModal').classList.contains('hidden')) {
+                    loadLogs(true);
+                }
+            }, 2500);
+        }
+
+        function stopLogsAutoRefresh() {
+            if (logsAutoRefreshTimer) {
+                clearInterval(logsAutoRefreshTimer);
+                logsAutoRefreshTimer = null;
+            }
+        }
+
+        async function loadLogs(silent = false) {
+            const res = await apiRequest('/api/logs?limit=50');
+            if (!res) return;
+            allLogs = await res.json();
+            renderLogsTable(allLogs);
+            if (!silent) {
+                showToast('日志已刷新', 'info', 1000);
+            }
+        }
+
+        function renderLogsTable(logs) {
+            const tbody = $('logsTableBody');
+            if (!logs.length) {
+                tbody.innerHTML = '<tr><td colspan="9" class="py-8 text-center text-slate-400">暂无请求日志</td></tr>';
+                return;
+            }
+            tbody.innerHTML = logs.map(l => {
+                const sc = l.status_code;
+                const scClass = sc === 200 ? 'bg-emerald-50 text-emerald-700' : (sc === 102 ? 'bg-amber-50 text-amber-700' : 'bg-red-50 text-red-600');
+                const timeText = l.created_at ? formatTime(l.created_at) : '-';
+                return `
+                    <tr class="hover:bg-slate-50/60 transition-colors">
+                        <td class="py-2.5 px-3 font-medium text-slate-800">${escapeHtml(l.operation || '-')}</td>
+                        <td class="py-2.5 px-3 text-slate-500 font-mono text-[11px] truncate max-w-[140px]" title="${escapeHtml(l.token_email || '')}">${escapeHtml(formatTokenEmail(l.token_email) || '未知')}</td>
+                        <td class="py-2.5 px-3 text-center"><span class="px-2 py-0.5 rounded text-[10px] bg-slate-100 text-slate-700 font-medium">${escapeHtml(l.status_text || '-')}</span></td>
+                        <td class="py-2.5 px-3 text-center font-mono text-slate-500">${l.progress || 0}%</td>
+                        <td class="py-2.5 px-3 text-center"><span class="px-2 py-0.5 rounded text-[10px] font-bold ${scClass}">${sc ?? '-'}</span></td>
+                        <td class="py-2.5 px-3 text-slate-600 truncate max-w-[180px]">${escapeHtml(l.error_summary || '已返回结果')}</td>
+                        <td class="py-2.5 px-3 font-mono text-slate-500">${Number(l.duration || 0).toFixed(1)}</td>
+                        <td class="py-2.5 px-3 text-slate-400 font-mono text-[11px]">${timeText}</td>
+                        <td class="py-2.5 px-3 text-center">
+                            <button onclick="showLogDetail(${l.id})" class="px-2 py-1 text-blue-600 hover:underline">详情</button>
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+        }
+
+        async function showLogDetail(id) {
+            $('logDetailModal').classList.remove('hidden');
+            $('logDetailContent').innerHTML = '<div class="py-8 text-center text-xs text-slate-400">正在拉取日志内容...</div>';
+            const res = await apiRequest(`/api/logs/${id}`);
+            if (!res) return;
+            const log = await res.json();
+            $('logDetailContent').innerHTML = `
+                <div class="space-y-3 text-xs">
+                    <div class="grid grid-cols-2 gap-2 p-3 bg-slate-50 rounded-lg border border-slate-100">
+                        <div>操作: <strong class="text-slate-800">${escapeHtml(log.operation || '-')}</strong></div>
+                        <div>状态码: <strong class="text-slate-800">${log.status_code || '-'}</strong></div>
+                        <div>耗时: <strong class="text-slate-800">${Number(log.duration || 0).toFixed(2)} 秒</strong></div>
+                        <div>Token: <span class="font-mono text-slate-700">${escapeHtml(log.token_email || '未知')}</span></div>
+                    </div>
+                    <div>
+                        <span class="font-semibold block mb-1 text-slate-700">请求体 (Request Payload):</span>
+                        <pre class="p-3 bg-slate-900 text-slate-100 rounded-lg overflow-x-auto font-mono text-[11px] leading-relaxed">${escapeHtml(formatJson(log.request_body))}</pre>
+                    </div>
+                    <div>
+                        <span class="font-semibold block mb-1 text-slate-700">响应体 (Response Payload):</span>
+                        <pre class="p-3 bg-slate-900 text-slate-100 rounded-lg overflow-x-auto font-mono text-[11px] leading-relaxed max-h-60">${escapeHtml(formatJson(log.response_body))}</pre>
+                    </div>
+                </div>
+            `;
+        }
+
+        function closeLogDetailModal() { $('logDetailModal').classList.add('hidden'); }
+        async function refreshLogs() { await loadLogs(); showToast('日志已刷新', 'info', 1000); }
+        async function clearAllLogs() {
+            if (!confirm('确定要清空全部请求日志吗？')) return;
+            const res = await apiRequest('/api/logs', { method: 'DELETE' });
+            if (res) { showToast('日志已清空', 'success'); await loadLogs(); }
+        }
+
+        // 8. 对话生图工作台交互与真实 API 调用
+        let chatSessions = [];
+        let activeChatSessionId = 1;
+        let attachedImageBase64 = null;
+
+        function initChatWorkbench() {
+            try {
+                chatSessions = JSON.parse(localStorage.getItem('flow2api_chat_sessions') || '[]');
+            } catch (e) { chatSessions = []; }
+            if (!chatSessions.length) {
+                chatSessions = [{
+                    id: 1,
+                    title: '新画图任务',
+                    model: 'Nano Banana 2.1',
+                    messages: []
+                }];
+            }
+            renderChatSessionList();
+            renderCurrentChatMessages();
+        }
+
+        function renderChatSessionList() {
+            const list = $('chatSessionList');
+            list.innerHTML = chatSessions.map(s => {
+                const isActive = s.id === activeChatSessionId;
+                const isVid = s.model && s.model.includes('Omni');
+                return `
+                    <div onclick="selectChatSession(${s.id})" class="p-2.5 rounded-lg cursor-pointer transition-colors ${isActive ? 'bg-white border border-slate-200/90 shadow-sm' : 'hover:bg-white/80 border border-transparent text-slate-600'}">
+                        <div class="flex items-center justify-between">
+                            <p class="text-xs font-bold text-slate-800 truncate">${escapeHtml(s.title || '新对话')}</p>
+                            <span class="text-[10px] px-1.5 py-0.2 rounded font-medium ${isVid ? 'bg-purple-50 text-purple-700' : 'bg-blue-50 text-blue-700'}">${isVid ? '视频' : '图片'}</span>
+                        </div>
+                        <p class="text-[11px] text-slate-400 mt-1 flex justify-between">
+                            <span class="truncate">${escapeHtml(s.model || 'Nano Banana 2.1')}</span>
+                            <span>${s.messages ? s.messages.length : 0} 条</span>
+                        </p>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function selectChatSession(id) {
+            activeChatSessionId = id;
+            renderChatSessionList();
+            renderCurrentChatMessages();
+        }
+
+        function renderCurrentChatMessages() {
+            const s = chatSessions.find(x => x.id === activeChatSessionId) || chatSessions[0];
+            $('currentChatTitle').textContent = s.title || '新画图任务';
+            const container = $('chatMessagesContainer');
+            if (!s.messages || !s.messages.length) {
+                container.innerHTML = `
+                    <div class="text-center py-16 text-slate-400 text-xs">
+                        <p>请在下方输入画面提示词，选择模型并开始生成</p>
+                    </div>
+                `;
+                return;
+            }
+
+            container.innerHTML = s.messages.map(m => {
+                if (m.role === 'user') {
+                    return `
+                        <div class="flex items-start gap-2.5 justify-end chat-bubble-enter">
+                            <div class="max-w-[85%] sm:max-w-xl bg-slate-900 text-white rounded-xl px-4 py-2.5 shadow-sm text-xs leading-relaxed">
+                                <p>${escapeHtml(m.content)}</p>
+                                <div class="mt-1 text-[10px] text-slate-400 text-right">${escapeHtml(m.meta || '')}</div>
+                            </div>
+                        </div>
+                    `;
+                } else {
+                    const isVid = m.mediaType === 'video';
+                    return `
+                        <div class="flex items-start gap-2.5 chat-bubble-enter">
+                            <div class="max-w-[92%] sm:max-w-xl bg-white border border-slate-200 rounded-xl p-3 shadow-sm space-y-2.5">
+                                <div class="relative rounded-lg overflow-hidden bg-black">
+                                    ${isVid ? `
+                                        <video src="${m.url}" controls class="w-full max-h-[380px] object-cover"></video>
+                                    ` : `
+                                        <img src="${m.url}" class="w-full max-h-[380px] object-cover cursor-pointer hover:opacity-95" onclick="previewImageModal('${m.url}')">
+                                    `}
+                                </div>
+                                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs pt-1">
+                                    <span class="text-[11px] text-emerald-600 font-medium">✅ 生成成功 · 耗时 ${m.duration || 0}s</span>
+                                    <div class="flex items-center gap-1.5 self-end sm:self-auto">
+                                        <button onclick="quotePrompt('${escapeHtml(m.prompt || '')}')" class="px-2.5 py-1 rounded border border-slate-200 hover:bg-slate-50 text-slate-600 text-xs">引用</button>
+                                        <button onclick="copyToClipboard('${m.url}')" class="px-2.5 py-1 rounded border border-slate-200 hover:bg-slate-50 text-slate-600 text-xs">复制链接</button>
+                                        <a href="${m.url}" download class="px-3 py-1 rounded bg-slate-900 text-white text-xs font-medium inline-block">下载</a>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                }
+            }).join('');
+            container.scrollTop = container.scrollHeight;
+        }
+
+        async function handleChatSend() {
+            const input = $('chatPromptInput');
+            const prompt = input.value.trim();
+            if (!prompt) return;
+
+            const model = $('chatSelectModel').value;
+            const aspect = $('chatSelectAspect').value;
+            const size = $('chatSelectSize').value;
+            const duration = $('chatSelectDuration').value;
+            const isVideo = model.includes('Omni');
+
+            const s = chatSessions.find(x => x.id === activeChatSessionId);
+            if (s && (!s.messages || !s.messages.length)) {
+                s.title = prompt.slice(0, 16);
+                s.model = model;
+            }
+
+            const metaStr = `${aspect} · ${size.toUpperCase()} · ${model}`;
+            s.messages = s.messages || [];
+            s.messages.push({ role: 'user', content: prompt, meta: metaStr });
+            input.value = '';
+            renderCurrentChatMessages();
+
+            // AI loading bubble
+            const container = $('chatMessagesContainer');
+            const loadingBubble = document.createElement('div');
+            loadingBubble.className = "flex items-start gap-2.5 chat-bubble-enter";
+            loadingBubble.id = "chatLoadingBubble";
+            loadingBubble.innerHTML = `
+                <div class="max-w-md bg-white border border-slate-200 rounded-xl p-3 shadow-sm flex items-center gap-2.5 text-xs text-slate-600">
+                    <div class="w-4 h-4 border-2 border-slate-900 border-t-transparent rounded-full animate-spin"></div>
+                    <span>正在获取 Token 并提交上游生成中...</span>
+                </div>
+            `;
+            container.appendChild(loadingBubble);
+            container.scrollTop = container.scrollHeight;
+
+            $('btnChatSend').disabled = true;
+            $('btnChatSend').textContent = '生成中...';
+
+            const startTime = Date.now();
+            try {
+                // 构建调用 payload
+                let targetModel = model;
+                const requestBody = {
+                    model: targetModel,
+                    messages: [{ role: 'user', content: prompt }],
+                    stream: false,
+                    size: size
+                };
+                if (attachedImageBase64) {
+                    requestBody.messages[0].content = [
+                        { type: 'text', text: prompt },
+                        { type: 'image_url', image_url: { url: attachedImageBase64 } }
+                    ];
+                }
+
+                // 优先使用 adminApiKey
+                const headers = { 'Content-Type': 'application/json' };
+                if (adminApiKey) {
+                    headers['Authorization'] = `Bearer ${adminApiKey}`;
+                }
+
+                const res = await fetch('/v1/chat/completions', {
+                    method: 'POST',
+                    headers,
+                    body: JSON.stringify(requestBody),
+                    credentials: 'include'
+                });
+
+                const durationSec = ((Date.now() - startTime) / 1000).toFixed(1);
+                loadingBubble.remove();
+
+                if (!res.ok) {
+                    const err = await res.json().catch(() => ({}));
+                    showToast('生成失败: ' + (err.error?.message || err.detail || res.statusText), 'error');
+                    return;
+                }
+
+                const data = await res.json();
+                const choice = (data.choices && data.choices[0]) || {};
+                const msgContent = choice.message?.content || '';
+                const url = data.url || extractUrl(msgContent);
+
+                if (url) {
+                    s.messages.push({
+                        role: 'assistant',
+                        mediaType: isVideo ? 'video' : 'image',
+                        url: url,
+                        prompt: prompt,
+                        duration: durationSec
+                    });
+                    saveChatSessions();
+                    renderCurrentChatMessages();
+                    renderChatSessionList();
+                    showToast('生成成功！', 'success');
+                } else {
+                    showToast('未能提取生成的文件 URL: ' + msgContent, 'error');
+                }
+            } catch (err) {
+                loadingBubble.remove();
+                showToast('请求异常: ' + err.message, 'error');
+            } finally {
+                $('btnChatSend').disabled = false;
+                $('btnChatSend').textContent = '生成画面';
+                removeChatRefImage();
+            }
+        }
+
+        function extractUrl(text) {
+            if (!text) return '';
+            const mImg = text.match(/!\[.*?\]\((.*?)\)/);
+            if (mImg) return mImg[1];
+            const mVid = text.match(/<video[^>]+src=['"](.*?)['"]/);
+            if (mVid) return mVid[1];
+            if (text.startsWith('http://') || text.startsWith('https://')) return text.trim();
+            return '';
+        }
+
+        function saveChatSessions() {
+            try {
+                localStorage.setItem('flow2api_chat_sessions', JSON.stringify(chatSessions.slice(0, 20)));
+            } catch (e) {}
+        }
+
+        function onChatModelChange() {
+            const model = $('chatSelectModel').value;
+            const isVideo = model.includes('Omni');
+            $('chatBoxDuration').classList.toggle('hidden', !isVideo);
+            $('chatBoxResolution').classList.toggle('hidden', isVideo);
+        }
+
+        function handleChatFileInput(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = function(evt) {
+                attachedImageBase64 = evt.target.result;
+                $('chatRefThumb').src = attachedImageBase64;
+                $('chatRefPreview').classList.remove('hidden');
+            };
+            reader.readAsDataURL(file);
+        }
+
+        function removeChatRefImage() {
+            attachedImageBase64 = null;
+            $('chatRefPreview').classList.add('hidden');
+            $('chatRefThumb').src = '';
+        }
+
+        function newChatSession() {
+            const newId = Date.now();
+            chatSessions.unshift({
+                id: newId,
+                title: '新画图任务',
+                model: $('chatSelectModel').value,
+                messages: []
+            });
+            activeChatSessionId = newId;
+            saveChatSessions();
+            renderChatSessionList();
+            renderCurrentChatMessages();
+            $('chatPromptInput').focus();
+        }
+
+        function clearCurrentChatMessages() {
+            const s = chatSessions.find(x => x.id === activeChatSessionId);
+            if (s && confirm('确定清空当前任务的消息记录吗？')) {
+                s.messages = [];
+                saveChatSessions();
+                renderCurrentChatMessages();
+            }
+        }
+
+        // 辅助通用
+        function roundMb(b) { return (Number(b || 0) / (1024 * 1024)).toFixed(1); }
+        function roundGb(b) { return (Number(b || 0) / (1024 * 1024 * 1024)).toFixed(1); }
+        function formatJson(str) {
+            if (!str) return '';
+            try { return JSON.stringify(JSON.parse(str), null, 2); } catch (_) { return str; }
+        }
+        function formatTime(val) {
+            if (!val) return '-';
+            let s = String(val).trim();
+            if (!s.endsWith('Z') && !/[+-]\d{2}:?\d{2}$/.test(s)) s = s.replace(' ', 'T') + 'Z';
+            const d = new Date(s);
+            if (isNaN(d.getTime())) return val;
+            return d.toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai', hour12: false });
+        }
+        function quotePrompt(t) { $('chatPromptInput').value = t; $('chatPromptInput').focus(); }
+        function copyToClipboard(t) { navigator.clipboard.writeText(t).then(() => showToast('链接已复制到剪贴板', 'success')); }
+        function previewImageModal(url) {
+            openMediaPreview(url, 'image');
+        }
+
+        function openMediaPreview(url, type) {
+            const modal = $('media-modal');
+            const body = $('media-modal-body');
+            const dl = $('media-modal-download');
+            if (dl) dl.href = url;
+            const isVid = type === 'video' || url.endsWith('.mp4') || url.endsWith('.webm');
+            if (isVid) {
+                body.innerHTML = `<video src="${url}" controls autoplay class="max-w-full max-h-[80vh] rounded-xl shadow-2xl bg-black"></video>`;
+            } else {
+                body.innerHTML = `<img src="${url}" class="max-w-full max-h-[82vh] rounded-xl shadow-2xl object-contain">`;
+            }
+            modal.classList.remove('hidden');
+        }
+
+        function closeMediaModal() {
+            const modal = $('media-modal');
+            const body = $('media-modal-body');
+            if (body) body.innerHTML = '';
+            modal.classList.add('hidden');
+        }
+
+        function closeImageModal() {
+            closeMediaModal();
+        }
+        function escapeHtml(s) { return String(s || '').replace(/[&<>"']/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[m]); }
+
+        async function logout() {
+            if (!confirm('确定要退出管理控制台吗？')) return;
+            await apiRequest('/api/admin/logout', { method: 'POST' });
+            location.href = '/login';
+        }
+
+        // 初始化
+        window.addEventListener('DOMContentLoaded', async () => {
+            updateEmailMaskButtons();
+            await loadAdminConfig();
+            switchTab('overview');
+            initChatWorkbench();
+            // 实时轮询当前任务状态（每3秒）
+            liveTaskPollTimer = setInterval(loadLiveTasks, 3000);
+        });
+
+        async function loadAdminConfig() {
+            const res = await apiRequest('/api/admin/config');
+            if (res) {
+                const d = await res.json();
+                adminApiKey = d.api_key || '';
+                if ($('cfgCurrentAPIKey')) $('cfgCurrentAPIKey').value = adminApiKey;
+            }
+        }
+    </script>
 </body>
 </html>
