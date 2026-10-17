@@ -227,6 +227,10 @@ tailwind.config = {
               <input type="checkbox" checked class="w-4 h-4 text-slate-900 rounded border-slate-300 focus:ring-0 cursor-pointer">
               <span>自动刷新AT</span>
             </label>
+            <!-- 账号脱敏切换小眼睛按钮 -->
+            <button onclick="togglePreviewEmailMask()" id="btnToggleEmailMask" class="inline-flex items-center justify-center rounded-lg border border-blue-200 bg-blue-50 text-blue-600 hover:text-slate-900 hover:bg-slate-50 h-8 w-8 transition-colors shrink-0" title="已脱敏隐藏（点击显示完整账号）">
+              <svg class="h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+            </button>
             <div class="flex items-center gap-1.5">
               <button class="px-2.5 py-1.5 rounded-lg border border-slate-200 text-xs font-medium text-slate-700 hover:bg-slate-50 transition-colors">
                 刷新余额
@@ -242,7 +246,14 @@ tailwind.config = {
           <table class="w-full text-xs text-left min-w-[720px]">
             <thead class="bg-slate-50/80 text-slate-500 font-medium border-b border-slate-100">
               <tr>
-                <th class="py-3 px-4">账号邮箱</th>
+                <th class="py-3 px-4">
+                  <div class="flex items-center gap-1.5 cursor-pointer select-none" onclick="togglePreviewEmailMask()" title="点击切换账号脱敏">
+                    <span>账号邮箱</span>
+                    <span id="thEmailMaskIcon" class="text-blue-600">
+                      <svg class="h-3.5 w-3.5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+                    </span>
+                  </div>
+                </th>
                 <th class="py-3 px-3 text-center">状态</th>
                 <th class="py-3 px-3 text-center">模式</th>
                 <th class="py-3 px-3 text-center">AT 过期时间</th>
@@ -252,9 +263,9 @@ tailwind.config = {
                 <th class="py-3 px-4 text-right">操作</th>
               </tr>
             </thead>
-            <tbody class="divide-y divide-slate-100 text-slate-700">
+            <tbody class="divide-y divide-slate-100 text-slate-700" id="previewTokenTbody">
               <tr class="hover:bg-slate-50/60 transition-colors">
-                <td class="py-3 px-4 font-medium text-slate-900">danborad916@gmail.com</td>
+                <td class="py-3 px-4 font-medium text-slate-900 preview-email" data-full="danborad916@gmail.com">da***16@gmail.com</td>
                 <td class="py-3 px-3 text-center"><span class="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium bg-emerald-50 text-emerald-700">启用</span></td>
                 <td class="py-3 px-3 text-center"><span class="inline-flex items-center px-1.5 py-0.5 rounded text-[11px] bg-slate-100 text-slate-600 font-medium">协议</span></td>
                 <td class="py-3 px-3 text-center font-mono text-slate-500">今天 21:16 (12小时)</td>
@@ -272,7 +283,7 @@ tailwind.config = {
                 </td>
               </tr>
               <tr class="hover:bg-slate-50/60 transition-colors">
-                <td class="py-3 px-4 font-medium text-slate-900">sebaytinlaho@gmail.com</td>
+                <td class="py-3 px-4 font-medium text-slate-900 preview-email" data-full="sebaytinlaho@gmail.com">se***ho@gmail.com</td>
                 <td class="py-3 px-3 text-center"><span class="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium bg-emerald-50 text-emerald-700">启用</span></td>
                 <td class="py-3 px-3 text-center"><span class="inline-flex items-center px-1.5 py-0.5 rounded text-[11px] bg-slate-100 text-slate-600 font-medium">协议</span></td>
                 <td class="py-3 px-3 text-center font-mono text-slate-500">今天 23:36 (14小时)</td>
@@ -290,7 +301,7 @@ tailwind.config = {
                 </td>
               </tr>
               <tr class="hover:bg-slate-50/60 transition-colors">
-                <td class="py-3 px-4 font-medium text-slate-900">capocciadrinkley388@gmail.com</td>
+                <td class="py-3 px-4 font-medium text-slate-900 preview-email" data-full="capocciadrinkley388@gmail.com">ca***88@gmail.com</td>
                 <td class="py-3 px-3 text-center"><span class="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium bg-emerald-50 text-emerald-700">启用</span></td>
                 <td class="py-3 px-3 text-center"><span class="inline-flex items-center px-1.5 py-0.5 rounded text-[11px] bg-slate-100 text-slate-600 font-medium">协议</span></td>
                 <td class="py-3 px-3 text-center font-mono text-slate-500">明天 06:21 (22小时)</td>
@@ -308,7 +319,7 @@ tailwind.config = {
                 </td>
               </tr>
               <tr class="hover:bg-slate-50/60 transition-colors">
-                <td class="py-3 px-4 font-medium text-slate-900">danborad@gmail.com</td>
+                <td class="py-3 px-4 font-medium text-slate-900 preview-email" data-full="danborad@gmail.com">da***ad@gmail.com</td>
                 <td class="py-3 px-3 text-center"><span class="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium bg-emerald-50 text-emerald-700">启用</span></td>
                 <td class="py-3 px-3 text-center"><span class="inline-flex items-center px-1.5 py-0.5 rounded text-[11px] bg-slate-100 text-slate-600 font-medium">协议</span></td>
                 <td class="py-3 px-3 text-center font-mono text-slate-500">明天 00:04 (15小时)</td>
@@ -326,7 +337,7 @@ tailwind.config = {
                 </td>
               </tr>
               <tr class="hover:bg-slate-50/60 transition-colors">
-                <td class="py-3 px-4 font-medium text-slate-900">flow.backup05@gmail.com</td>
+                <td class="py-3 px-4 font-medium text-slate-900 preview-email" data-full="flow.backup05@gmail.com">fl***05@gmail.com</td>
                 <td class="py-3 px-3 text-center"><span class="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium bg-emerald-50 text-emerald-700">启用</span></td>
                 <td class="py-3 px-3 text-center"><span class="inline-flex items-center px-1.5 py-0.5 rounded text-[11px] bg-slate-100 text-slate-600 font-medium">备用</span></td>
                 <td class="py-3 px-3 text-center font-mono text-slate-500">明天 14:20 (28小时)</td>
@@ -907,6 +918,37 @@ tailwind.config = {
       if (confirm('确定要清空当前会话的生成记录吗？')) {
         document.getElementById('chat-messages-container').innerHTML = '';
       }
+    }
+
+    let isPreviewEmailMasked = true;
+    function togglePreviewEmailMask() {
+      isPreviewEmailMasked = !isPreviewEmailMasked;
+      const eyeSvg = `<svg class="h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>`;
+      const eyeOffSvg = `<svg class="h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>`;
+      
+      const btn = document.getElementById('btnToggleEmailMask');
+      if (btn) {
+        btn.innerHTML = isPreviewEmailMasked ? eyeOffSvg : eyeSvg;
+        btn.classList.toggle('text-blue-600', isPreviewEmailMasked);
+        btn.classList.toggle('bg-blue-50', isPreviewEmailMasked);
+        btn.classList.toggle('border-blue-200', isPreviewEmailMasked);
+      }
+      const thIcon = document.getElementById('thEmailMaskIcon');
+      if (thIcon) {
+        thIcon.innerHTML = isPreviewEmailMasked ? eyeOffSvg : eyeSvg;
+      }
+      document.querySelectorAll('.preview-email').forEach(el => {
+        const full = el.dataset.full;
+        if (!full) return;
+        if (isPreviewEmailMasked) {
+          const atIdx = full.indexOf('@');
+          const name = full.slice(0, atIdx);
+          const domain = full.slice(atIdx);
+          el.textContent = name.slice(0, 2) + '***' + name.slice(-2) + domain;
+        } else {
+          el.textContent = full;
+        }
+      });
     }
 
     function escapeHtml(str) {

@@ -214,6 +214,12 @@
                             <input type="checkbox" id="atAutoRefreshToggle" onchange="toggleATAutoRefresh()" class="w-4 h-4 text-slate-900 rounded border-slate-300 focus:ring-0 cursor-pointer">
                             <span>自动刷新AT</span>
                         </label>
+                        <!-- 账号脱敏切换小眼睛按钮 -->
+                        <button onclick="toggleEmailMask()" id="btnToggleEmailMask" class="inline-flex items-center justify-center rounded-lg border border-slate-200 text-slate-600 hover:text-slate-900 hover:bg-slate-50 h-8 w-8 transition-colors shrink-0" title="脱敏显示账号（方便截图）">
+                            <svg class="h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>
+                            </svg>
+                        </button>
                         <div class="flex items-center gap-1.5">
                             <button onclick="refreshAllCredits()" class="px-2.5 py-1.5 rounded-lg border border-slate-200 text-xs font-medium text-slate-700 hover:bg-slate-50 transition-colors">
                                 刷新余额
@@ -235,7 +241,12 @@
                     <table class="w-full text-xs text-left">
                         <thead class="bg-slate-50/80 text-slate-500 font-medium border-b border-slate-100">
                             <tr>
-                                <th class="py-3 px-4">账号邮箱</th>
+                                <th class="py-3 px-4">
+                                    <div class="flex items-center gap-1.5 cursor-pointer select-none" onclick="toggleEmailMask()" title="点击切换账号脱敏">
+                                        <span>账号邮箱</span>
+                                        <span id="thEmailMaskIcon" class="text-slate-400 hover:text-slate-700"></span>
+                                    </div>
+                                </th>
                                 <th class="py-3 px-3 text-center">状态</th>
                                 <th class="py-3 px-3 text-center">模式</th>
                                 <th class="py-3 px-3 text-center">AT 过期时间</th>
@@ -1058,10 +1069,61 @@
         }
 
         // 4. Token 账号管理逻辑
+        window.isEmailMasked = localStorage.getItem('flow2api_mask_emails') !== '0'; // 默认开启脱敏
+
+        function formatTokenEmail(email) {
+            if (!email) return '-';
+            if (!window.isEmailMasked) return email;
+            const atIdx = email.indexOf('@');
+            if (atIdx === -1) {
+                if (email.length <= 4) return '***';
+                return email.slice(0, 2) + '***' + email.slice(-2);
+            }
+            const name = email.slice(0, atIdx);
+            const domain = email.slice(atIdx);
+            if (name.length <= 2) {
+                return name[0] + '***' + domain;
+            }
+            if (name.length <= 4) {
+                return name.slice(0, 1) + '***' + name.slice(-1) + domain;
+            }
+            return name.slice(0, 2) + '***' + name.slice(-2) + domain;
+        }
+
+        function updateEmailMaskButtons() {
+            const eyeSvg = `<svg class="h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>`;
+            const eyeOffSvg = `<svg class="h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>`;
+
+            const btn = $('btnToggleEmailMask');
+            if (btn) {
+                btn.innerHTML = window.isEmailMasked ? eyeOffSvg : eyeSvg;
+                btn.title = window.isEmailMasked ? '已脱敏隐藏（点击显示完整账号）' : '点击开启脱敏隐藏（方便截图分享）';
+                btn.classList.toggle('text-blue-600', window.isEmailMasked);
+                btn.classList.toggle('bg-blue-50', window.isEmailMasked);
+                btn.classList.toggle('border-blue-200', window.isEmailMasked);
+            }
+            const thIcon = $('thEmailMaskIcon');
+            if (thIcon) {
+                thIcon.innerHTML = window.isEmailMasked ? eyeOffSvg : eyeSvg;
+                thIcon.classList.toggle('text-blue-600', window.isEmailMasked);
+            }
+        }
+
+        function toggleEmailMask() {
+            window.isEmailMasked = !window.isEmailMasked;
+            localStorage.setItem('flow2api_mask_emails', window.isEmailMasked ? '1' : '0');
+            updateEmailMaskButtons();
+            renderTokensTable(allTokens);
+            renderTokensMobile(allTokens);
+            if (allLogs && allLogs.length) renderLogsTable(allLogs);
+            showToast(window.isEmailMasked ? '已开启账号脱敏保护（可安全截图）' : '已恢复完整账号显示', 'info', 1800);
+        }
+
         async function loadTokens() {
             const res = await apiRequest('/api/tokens');
             if (!res) return;
             allTokens = await res.json();
+            updateEmailMaskButtons();
             renderTokensTable(allTokens);
             renderTokensMobile(allTokens);
         }
@@ -1075,10 +1137,11 @@
             tbody.innerHTML = tokens.map(t => {
                 const expText = formatTokenExpiry(t.at_expires);
                 const isProtocol = t.protocol_mode === 'protocol';
+                const emailText = formatTokenEmail(t.email);
                 return `
                     <tr class="hover:bg-slate-50/60 transition-colors">
-                        <td class="py-3 px-4 font-medium text-slate-900 truncate max-w-[200px]" title="${escapeHtml(t.email || '-')}">
-                            ${escapeHtml(t.email || '-')}
+                        <td class="py-3 px-4 font-medium text-slate-900 truncate max-w-[200px]" title="${escapeHtml(emailText)}">
+                            ${escapeHtml(emailText)}
                         </td>
                         <td class="py-3 px-3 text-center">
                             <span class="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium ${t.is_active ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-500'}">
@@ -1121,10 +1184,11 @@
                 return;
             }
             container.innerHTML = tokens.map(t => {
+                const emailText = formatTokenEmail(t.email);
                 return `
                     <div class="p-3.5 space-y-2.5">
                         <div class="flex items-center justify-between gap-2">
-                            <span class="font-bold text-xs text-slate-900 truncate">${escapeHtml(t.email || '-')}</span>
+                            <span class="font-bold text-xs text-slate-900 truncate">${escapeHtml(emailText)}</span>
                             <span class="px-2 py-0.5 rounded text-[10px] font-medium ${t.is_active ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-500'} shrink-0">${t.is_active ? '启用' : '禁用'}</span>
                         </div>
                         <div class="grid grid-cols-2 gap-2 text-[11px] bg-slate-50 p-2.5 rounded-lg border border-slate-100">
@@ -1599,7 +1663,7 @@
                 return `
                     <tr class="hover:bg-slate-50/60 transition-colors">
                         <td class="py-2.5 px-3 font-medium text-slate-800">${escapeHtml(l.operation || '-')}</td>
-                        <td class="py-2.5 px-3 text-slate-500 font-mono text-[11px] truncate max-w-[140px]">${escapeHtml(l.token_email || '未知')}</td>
+                        <td class="py-2.5 px-3 text-slate-500 font-mono text-[11px] truncate max-w-[140px]" title="${escapeHtml(l.token_email || '')}">${escapeHtml(formatTokenEmail(l.token_email) || '未知')}</td>
                         <td class="py-2.5 px-3 text-center"><span class="px-2 py-0.5 rounded text-[10px] bg-slate-100 text-slate-700 font-medium">${escapeHtml(l.status_text || '-')}</span></td>
                         <td class="py-2.5 px-3 text-center font-mono text-slate-500">${l.progress || 0}%</td>
                         <td class="py-2.5 px-3 text-center"><span class="px-2 py-0.5 rounded text-[10px] font-bold ${scClass}">${sc ?? '-'}</span></td>
@@ -1949,6 +2013,7 @@
 
         // 初始化
         window.addEventListener('DOMContentLoaded', async () => {
+            updateEmailMaskButtons();
             await loadAdminConfig();
             switchTab('overview');
             initChatWorkbench();
