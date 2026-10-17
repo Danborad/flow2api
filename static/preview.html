@@ -2,7 +2,7 @@
 <html lang="zh-CN" class="h-full">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>管理控制台 - Flow2API</title>
     <!-- 纯净矢量 Favicon: 白底黑色 F 字符，极简大气 -->
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%23ffffff' stroke='%23cbd5e1' stroke-width='1.5'/%3E%3Ctext x='16' y='24' font-family='-apple-system, BlinkMacSystemFont, Roboto, sans-serif' font-size='22' font-weight='800' fill='%230f172a' text-anchor='middle'%3EF%3C/text%3E%3C/svg%3E">
@@ -28,28 +28,110 @@
         .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
         .custom-scrollbar::-webkit-scrollbar-thumb { background: #e2e8f0; border-radius: 9999px; }
         .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
-        .tab-btn { transition: all 0.15s ease; }
         .chat-bubble-enter { animation: bubbleIn 0.2s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
         @keyframes bubbleIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
         @keyframes slide-up { from { transform: translateY(100%); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
         .animate-slide-up { animation: slide-up .25s ease-out; }
     </style>
 </head>
-<body class="min-h-screen bg-[#fafafa] text-slate-900 antialiased flex flex-col">
+<body class="h-screen bg-[#fafafa] text-slate-900 antialiased flex overflow-hidden">
 
-    <!-- ======================== 经典原版顶部导航栏 ======================== -->
-    <header class="sticky top-0 z-40 w-full border-b border-slate-200/80 bg-white/95 backdrop-blur shadow-sm/30">
-        <div class="mx-auto flex h-14 max-w-7xl items-center justify-between px-4 sm:px-6">
-            <!-- 左侧：白底黑字 F 徽标 + 原版 Flow2API 文字标题 -->
-            <div class="flex items-center gap-3">
-                <div class="w-7 h-7 rounded-lg bg-white border border-slate-300 shadow-sm flex items-center justify-center font-extrabold text-sm text-slate-900 font-mono shrink-0">
-                    F
+    <!-- ==================== 移动端侧边栏遮罩 (Backdrop) ==================== -->
+    <div id="mobile-sidebar-backdrop" onclick="toggleSidebar(false)" class="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-40 hidden md:hidden transition-opacity duration-200"></div>
+
+    <!-- ==================== 统一侧边栏导航 (桌面端常驻256px，移动端抽屉滑出) ==================== -->
+    <aside id="main-sidebar" class="fixed inset-y-0 left-0 z-50 w-64 bg-white border-r border-slate-200/80 flex flex-col justify-between shrink-0 select-none shadow-xl md:shadow-none -translate-x-full md:translate-x-0 md:static transition-transform duration-200 ease-in-out">
+        <div>
+            <!-- 品牌栏 (白底黑字 F 徽标 + 纯文字 Flow2API) -->
+            <div class="h-14 flex items-center justify-between px-5 border-b border-slate-100">
+                <div class="flex items-center gap-2.5">
+                    <div class="w-7 h-7 rounded-lg bg-white border border-slate-300 shadow-sm flex items-center justify-center font-extrabold text-sm text-slate-900 font-mono shrink-0">
+                        F
+                    </div>
+                    <span class="font-bold text-base tracking-tight text-slate-900">Flow2API</span>
                 </div>
-                <span class="font-bold text-lg tracking-tight text-slate-900">Flow2API</span>
+                <!-- 移动端关闭按钮 -->
+                <button onclick="toggleSidebar(false)" class="md:hidden p-1.5 text-slate-400 hover:text-slate-600 rounded-lg focus:outline-none">
+                    <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                </button>
             </div>
 
-            <!-- 右侧操作与状态 (垂直严格对齐于 max-w-7xl) -->
+            <!-- 侧边栏导航列表 (扁平线框 SVG 图标) -->
+            <div class="px-3 py-4">
+                <p class="px-3 text-[11px] font-medium text-slate-400 tracking-wider mb-2">控制中心</p>
+                <nav class="space-y-1">
+                    <!-- 1. 概览中心 -->
+                    <button onclick="switchTab('overview')" id="nav-overview" class="nav-item w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold transition-all bg-slate-900 text-white shadow-sm">
+                        <svg class="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"/></svg>
+                        <span>概览中心</span>
+                    </button>
+
+                    <!-- 2. 图片生成 -->
+                    <button onclick="switchTab('chat-paint')" id="nav-chat-paint" class="nav-item w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all text-slate-600 hover:bg-slate-100 hover:text-slate-900">
+                        <svg class="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+                        <span class="flex-1 text-left">图片生成</span>
+                        <span class="text-[10px] px-1.5 py-0.2 rounded bg-slate-100 text-slate-600 font-medium">快捷</span>
+                    </button>
+
+                    <!-- 3. 媒体管理 -->
+                    <button onclick="switchTab('media-mgr')" id="nav-media-mgr" class="nav-item w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all text-slate-600 hover:bg-slate-100 hover:text-slate-900">
+                        <svg class="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><rect x="2" y="4" width="20" height="16" rx="2.18"/><path d="M7 2v20M17 2v20M2 12h20M2 7h5M2 17h5M17 17h5M17 7h5"/></svg>
+                        <span class="flex-1 text-left">媒体管理</span>
+                        <span class="text-[10px] px-1.5 py-0.2 rounded bg-slate-100 text-slate-500">防爆</span>
+                    </button>
+
+                    <!-- 4. 请求日志 -->
+                    <button onclick="switchTab('logs')" id="nav-logs" class="nav-item w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all text-slate-600 hover:bg-slate-100 hover:text-slate-900">
+                        <svg class="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                        <span>请求日志</span>
+                    </button>
+
+                    <!-- 5. 系统配置 -->
+                    <button onclick="switchTab('settings')" id="nav-settings" class="nav-item w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all text-slate-600 hover:bg-slate-100 hover:text-slate-900">
+                        <svg class="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+                        <span>系统配置</span>
+                    </button>
+
+                    <!-- 分隔线与测试工作台入口 -->
+                    <div class="pt-2 pb-1">
+                        <div class="border-t border-slate-100"></div>
+                    </div>
+                    <a href="/test" class="nav-item w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all text-slate-600 hover:bg-slate-100 hover:text-slate-900">
+                        <svg class="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg>
+                        <span class="flex-1 text-left">测试工作台</span>
+                        <span class="text-[10px] px-1.5 py-0.2 rounded bg-blue-50 text-blue-600 font-semibold">独立</span>
+                    </a>
+                </nav>
+            </div>
+        </div>
+
+        <!-- 侧栏底部：管理员在线与退出登录 -->
+        <div class="p-3 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
+            <div class="flex items-center gap-2">
+                <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
+                <span class="font-medium text-slate-700">管理员在线</span>
+            </div>
+            <button onclick="logout()" class="hover:text-slate-900 transition-colors px-2 py-1 rounded hover:bg-slate-100">退出</button>
+        </div>
+    </aside>
+
+    <!-- ==================== 右侧主工作区 (Header + 独立滚动容器) ==================== -->
+    <div class="flex-1 flex flex-col min-w-0 h-screen overflow-hidden">
+
+        <!-- 顶部状态栏 Header (移动端汉堡按钮 + 标题 + 快捷操作) -->
+        <header class="h-14 bg-white border-b border-slate-200/80 px-4 sm:px-6 flex items-center justify-between shrink-0 z-30 shadow-sm/30">
             <div class="flex items-center gap-3">
+                <!-- 移动端汉堡按钮 -->
+                <button onclick="toggleSidebar(true)" class="md:hidden p-1.5 -ml-1 text-slate-700 hover:bg-slate-100 rounded-lg focus:outline-none" aria-label="打开侧边栏菜单">
+                    <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg>
+                </button>
+                <div class="flex items-center gap-2 text-sm font-bold text-slate-900" id="header-page-title">
+                    <span>概览中心</span>
+                </div>
+            </div>
+
+            <!-- 右侧状态与刷新按钮 -->
+            <div class="flex items-center gap-2 sm:gap-3">
                 <a href="https://github.com/TheSmallHanCat/flow2api" target="_blank" class="hidden sm:inline-flex items-center gap-1 text-xs text-slate-500 hover:text-slate-900 transition-colors" title="GitHub 仓库">
                     <svg class="h-4 w-4" fill="currentColor" viewBox="0 0 24 24"><path fill-rule="evenodd" clip-rule="evenodd" d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.53 1.032 1.53 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z"/></svg>
                     <span>GitHub</span>
@@ -62,693 +144,655 @@
                     <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
                     <span>服务正常</span>
                 </span>
-                <button onclick="logout()" class="text-xs text-slate-500 hover:text-slate-900 transition-colors ml-1">
-                    退出
-                </button>
             </div>
-        </div>
-    </header>
+        </header>
 
-    <!-- ======================== 主视口：统一定格在 max-w-7xl 黄金居中 ======================== -->
-    <main class="mx-auto w-full max-w-7xl px-4 sm:px-6 py-5 sm:py-6 flex-1 flex flex-col">
+        <!-- 主内容滚动区 (自适应宽度，优雅居中，两端留白自然) -->
+        <main class="flex-1 overflow-y-auto custom-scrollbar">
+            <div class="w-full max-w-7xl mx-auto px-4 sm:px-6 py-5 sm:py-6">
 
-        <!-- 顶部极简扁平导航 Tab (支持横滑) -->
-        <div class="border-b border-slate-200 mb-6 overflow-x-auto custom-scrollbar shrink-0 select-none">
-            <nav class="flex space-x-8 min-w-max">
-                <button onclick="switchTab('overview')" id="tab-overview" class="tab-btn border-b-2 border-slate-900 text-slate-900 text-sm font-bold py-2.5 px-1 flex items-center gap-2">
-                    <span>概览与账号</span>
-                </button>
+                <!-- ==================== TAB 1: 概览与账号 ==================== -->
+                <div id="panel-overview" class="space-y-5">
+                    <!-- 第一排卡片：全局指标与资产状态 -->
+                    <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+                        <div class="bg-white rounded-xl p-3.5 border border-slate-200/80 shadow-sm">
+                            <p class="text-xs text-slate-500 mb-0.5">账号总数</p>
+                            <div class="text-2xl font-bold text-slate-900" id="statTotal">-</div>
+                            <p class="text-[11px] text-emerald-600 font-medium mt-1 truncate" id="statActiveSub">-</p>
+                        </div>
 
-                <button onclick="switchTab('chat-paint')" id="tab-chat-paint" class="tab-btn border-b-2 border-transparent text-slate-500 hover:text-slate-800 text-sm font-medium py-2.5 px-1 flex items-center gap-1.5">
-                    <span>图片生成</span>
-                    <span class="text-[10px] px-1.5 py-0.2 rounded bg-blue-50 text-blue-600 font-semibold border border-blue-100">对话式</span>
-                </button>
+                        <div class="bg-white rounded-xl p-3.5 border border-slate-200/80 shadow-sm">
+                            <p class="text-xs text-slate-500 mb-0.5">账号总点数</p>
+                            <div class="text-2xl font-bold text-slate-900" id="statCredits">-</div>
+                            <p class="text-[11px] text-slate-400 mt-1 truncate" id="statCreditsSub">-</p>
+                        </div>
 
-                <button onclick="switchTab('media-mgr')" id="tab-media-mgr" class="tab-btn border-b-2 border-transparent text-slate-500 hover:text-slate-800 text-sm font-medium py-2.5 px-1 flex items-center gap-1.5">
-                    <span>媒体管理</span>
-                    <span class="text-[10px] px-1.5 py-0.2 rounded bg-slate-100 text-slate-500">空间防爆</span>
-                </button>
+                        <div class="bg-white rounded-xl p-3.5 border border-slate-200/80 shadow-sm">
+                            <p class="text-xs text-slate-500 mb-0.5">今日已用点数</p>
+                            <div class="text-2xl font-bold text-slate-900" id="statTodayCredits">-</div>
+                            <p class="text-[11px] text-slate-400 mt-1 truncate">视频生成消耗</p>
+                        </div>
 
-                <button onclick="switchTab('settings')" id="tab-settings" class="tab-btn border-b-2 border-transparent text-slate-500 hover:text-slate-800 text-sm font-medium py-2.5 px-1 flex items-center gap-1.5">
-                    <span>系统配置</span>
-                </button>
+                        <div class="bg-white rounded-xl p-3.5 border border-slate-200/80 shadow-sm">
+                            <p class="text-xs text-slate-500 mb-0.5">今日成功率</p>
+                            <div class="text-2xl font-bold text-emerald-600" id="statSuccessRate">100.0%</div>
+                            <p class="text-[11px] text-emerald-600 font-medium mt-1 truncate" id="statSuccessSub">健康稳定</p>
+                        </div>
 
-                <button onclick="switchTab('logs')" id="tab-logs" class="tab-btn border-b-2 border-transparent text-slate-500 hover:text-slate-800 text-sm font-medium py-2.5 px-1 flex items-center gap-1.5">
-                    <span>请求日志</span>
-                </button>
-            </nav>
-        </div>
+                        <div class="bg-white rounded-xl p-3.5 border border-slate-200/80 shadow-sm">
+                            <p class="text-xs text-slate-500 mb-0.5">今日总调用</p>
+                            <div class="text-2xl font-bold text-slate-900" id="statTotalCalls">-</div>
+                            <p class="text-[11px] text-slate-400 mt-1 truncate">累计调用</p>
+                        </div>
 
-        <!-- ==================== TAB 1: 概览与账号 ==================== -->
-        <div id="panel-overview" class="space-y-5">
-
-            <!-- 第一排卡片：全局指标与资产状态 -->
-            <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-                <div class="bg-white rounded-xl p-3.5 border border-slate-200/80 shadow-sm">
-                    <p class="text-xs text-slate-500 mb-0.5">账号总数</p>
-                    <div class="text-2xl font-bold text-slate-900" id="statTotal">-</div>
-                    <p class="text-[11px] text-emerald-600 font-medium mt-1 truncate" id="statActiveSub">-</p>
-                </div>
-
-                <div class="bg-white rounded-xl p-3.5 border border-slate-200/80 shadow-sm">
-                    <p class="text-xs text-slate-500 mb-0.5">账号总点数</p>
-                    <div class="text-2xl font-bold text-slate-900" id="statCredits">-</div>
-                    <p class="text-[11px] text-slate-400 mt-1 truncate" id="statCreditsSub">-</p>
-                </div>
-
-                <div class="bg-white rounded-xl p-3.5 border border-slate-200/80 shadow-sm">
-                    <p class="text-xs text-slate-500 mb-0.5">今日已用点数</p>
-                    <div class="text-2xl font-bold text-slate-900" id="statTodayCredits">-</div>
-                    <p class="text-[11px] text-slate-400 mt-1 truncate">视频生成消耗</p>
-                </div>
-
-                <div class="bg-white rounded-xl p-3.5 border border-slate-200/80 shadow-sm">
-                    <p class="text-xs text-slate-500 mb-0.5">今日成功率</p>
-                    <div class="text-2xl font-bold text-emerald-600" id="statSuccessRate">100.0%</div>
-                    <p class="text-[11px] text-emerald-600 font-medium mt-1 truncate" id="statSuccessSub">健康稳定</p>
-                </div>
-
-                <div class="bg-white rounded-xl p-3.5 border border-slate-200/80 shadow-sm">
-                    <p class="text-xs text-slate-500 mb-0.5">今日总调用</p>
-                    <div class="text-2xl font-bold text-slate-900" id="statTotalCalls">-</div>
-                    <p class="text-[11px] text-slate-400 mt-1 truncate" id="statCallsSub">累计统计</p>
-                </div>
-
-                <div class="bg-white rounded-xl p-3.5 border border-slate-200/80 shadow-sm">
-                    <p class="text-xs text-slate-500 mb-0.5">平均耗时</p>
-                    <div class="text-2xl font-bold text-slate-900" id="statAvgDuration">-</div>
-                    <p class="text-[11px] text-slate-400 mt-1 truncate">今日成功请求均值</p>
-                </div>
-            </div>
-
-            <!-- 第二排卡片：图片与视频业务拆解 (当前任务徽章直接嵌入红框位置) -->
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-3.5">
-                <!-- 图片卡片 -->
-                <div class="bg-white rounded-xl p-4 border border-slate-200/80 shadow-sm">
-                    <div class="flex items-center justify-between border-b border-slate-100 pb-2.5">
-                        <span class="font-semibold text-xs sm:text-sm text-slate-800 flex items-center gap-1.5 sm:gap-2">
-                            <svg class="w-4 h-4 text-blue-600 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>
-                            <span>图片生成</span>
-                            <span class="text-[10px] px-1.5 py-0.2 rounded bg-slate-100 text-slate-600 font-normal">不扣点数</span>
-                        </span>
-                        <span class="text-xs text-slate-400">累计出图：<span class="font-mono font-bold text-slate-700" id="statTotalImages">-</span></span>
+                        <div class="bg-white rounded-xl p-3.5 border border-slate-200/80 shadow-sm">
+                            <p class="text-xs text-slate-500 mb-0.5">平均耗时</p>
+                            <div class="text-2xl font-bold text-slate-900" id="statAvgDuration">-</div>
+                            <p class="text-[11px] text-slate-400 mt-1 truncate">今日成功均值</p>
+                        </div>
                     </div>
-                    <div class="mt-2.5 flex flex-wrap items-center justify-between gap-2">
-                        <div class="flex items-center gap-2.5 flex-wrap">
-                            <div>
-                                <span class="text-2xl sm:text-3xl font-extrabold text-slate-900" id="statTodayImages">-</span>
-                                <span class="text-xs text-slate-500 ml-1">今日生成 (张)</span>
+
+                    <!-- 第二排卡片：图片与视频业务拆解 (当前任务徽章行内嵌入红框位置) -->
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+                        <!-- 图片卡片 -->
+                        <div class="bg-white rounded-xl p-4 border border-slate-200/80 shadow-sm">
+                            <div class="flex items-center justify-between border-b border-slate-100 pb-2.5">
+                                <span class="font-semibold text-xs sm:text-sm text-slate-800 flex items-center gap-1.5 sm:gap-2">
+                                    <svg class="w-4 h-4 text-blue-600 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>
+                                    <span>图片生成</span>
+                                    <span class="text-[10px] px-1.5 py-0.2 rounded bg-slate-100 text-slate-600 font-normal">不扣点数</span>
+                                </span>
+                                <span class="text-xs text-slate-400">累计出图：<span class="font-mono font-bold text-slate-700" id="statTotalImages">-</span></span>
                             </div>
-                            <!-- 当前图片运行任务指示徽章 -->
-                            <div id="live-img-task" class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-slate-100 text-slate-500 text-[10px] border border-slate-200">
-                                <span>● 当前空闲</span>
-                            </div>
-                        </div>
-                        <div class="flex items-center gap-2 text-xs text-slate-500 font-medium">
-                            <span>1K: <strong class="text-slate-800" id="statImg1k">0</strong></span>
-                            <span>2K: <strong class="text-blue-600" id="statImg2k">0</strong></span>
-                            <span>4K: <strong class="text-purple-600" id="statImg4k">0</strong></span>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- 视频卡片 -->
-                <div class="bg-white rounded-xl p-4 border border-slate-200/80 shadow-sm">
-                    <div class="flex items-center justify-between border-b border-slate-100 pb-2.5">
-                        <span class="font-semibold text-xs sm:text-sm text-slate-800 flex items-center gap-1.5 sm:gap-2">
-                            <svg class="w-4 h-4 text-purple-600 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><rect x="2" y="4" width="20" height="16" rx="2.18"/><path d="M7 2v20M17 2v20M2 12h20M2 7h5M2 17h5M17 17h5M17 7h5"/></svg>
-                            <span>视频生成</span>
-                            <span class="text-[10px] px-1.5 py-0.2 rounded bg-purple-50 text-purple-700 font-normal">Omni 1.1 Flash</span>
-                        </span>
-                        <span class="text-xs text-slate-400">累计产出：<span class="font-mono font-bold text-slate-700" id="statTotalVideos">-</span></span>
-                    </div>
-                    <div class="mt-2.5 flex flex-wrap items-center justify-between gap-2">
-                        <div class="flex items-center gap-2.5 flex-wrap">
-                            <div>
-                                <span class="text-2xl sm:text-3xl font-extrabold text-slate-900" id="statTodayVideos">-</span>
-                                <span class="text-xs text-slate-500 ml-1">今日生成 (支)</span>
-                            </div>
-                            <!-- 当前视频运行任务指示徽章 -->
-                            <div id="live-vid-task" class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-slate-100 text-slate-500 text-[10px] border border-slate-200">
-                                <span>● 当前空闲</span>
-                            </div>
-                        </div>
-                        <div class="flex items-center gap-2 text-xs text-slate-500 font-medium">
-                            <span>文生: <strong class="text-slate-800" id="statVidT2v">0</strong></span>
-                            <span>图生: <strong class="text-slate-800" id="statVidI2v">0</strong></span>
-                            <span>消耗: <strong class="text-amber-600" id="statVidPoints">0点</strong></span>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- 中间：【账号 Token 列表】(移动端自适应卡片 + 桌面端标准表格) -->
-            <div class="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
-                <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2.5 p-3.5 sm:p-4 border-b border-slate-100">
-                    <div>
-                        <h3 class="text-sm sm:text-base font-bold text-slate-900">账号 Token 列表</h3>
-                        <p class="text-xs text-slate-400 mt-0.5">管理 Google Flow 账号凭据与画板项目绑定状态</p>
-                    </div>
-                    <div class="flex items-center gap-2 w-full sm:w-auto justify-between sm:justify-end flex-wrap pt-1 sm:pt-0">
-                        <label class="flex items-center gap-1.5 text-xs text-slate-500 cursor-pointer select-none">
-                            <input type="checkbox" id="atAutoRefreshToggle" onchange="toggleATAutoRefresh()" class="w-4 h-4 text-slate-900 rounded border-slate-300 focus:ring-0 cursor-pointer">
-                            <span>自动刷新AT</span>
-                        </label>
-                        <!-- 账号脱敏切换小眼睛按钮 -->
-                        <button onclick="toggleEmailMask()" id="btnToggleEmailMask" class="inline-flex items-center justify-center rounded-lg border border-slate-200 text-slate-600 hover:text-slate-900 hover:bg-slate-50 h-8 w-8 transition-colors shrink-0" title="脱敏显示账号（方便截图）">
-                            <svg class="h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>
-                            </svg>
-                        </button>
-                        <div class="flex items-center gap-1.5">
-                            <button onclick="refreshAllCredits()" class="px-2.5 py-1.5 rounded-lg border border-slate-200 text-xs font-medium text-slate-700 hover:bg-slate-50 transition-colors">
-                                刷新余额
-                            </button>
-                            <button onclick="openAddModal()" class="px-3 py-1.5 rounded-lg bg-slate-900 text-white text-xs font-medium hover:bg-slate-800 transition-colors shadow-sm">
-                                + 添加 Token
-                            </button>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- 移动端卡片视图 -->
-                <div class="block md:hidden divide-y divide-slate-100" id="tokenMobileCards">
-                    <div class="p-4 text-center text-xs text-slate-400">正在加载账号...</div>
-                </div>
-
-                <!-- 桌面端标准表格 -->
-                <div class="hidden md:block overflow-x-auto">
-                    <table class="w-full text-xs text-left">
-                        <thead class="bg-slate-50/80 text-slate-500 font-medium border-b border-slate-100">
-                            <tr>
-                                <th class="py-3 px-4">
-                                    <div class="flex items-center gap-1.5 cursor-pointer select-none" onclick="toggleEmailMask()" title="点击切换账号脱敏">
-                                        <span>账号邮箱</span>
-                                        <span id="thEmailMaskIcon" class="text-slate-400 hover:text-slate-700"></span>
+                            <div class="mt-2.5 flex flex-wrap items-center justify-between gap-2">
+                                <div class="flex items-center gap-2.5 flex-wrap">
+                                    <div>
+                                        <span class="text-2xl sm:text-3xl font-extrabold text-slate-900" id="statTodayImages">-</span>
+                                        <span class="text-xs text-slate-500 ml-1">今日生成 (张)</span>
                                     </div>
-                                </th>
-                                <th class="py-3 px-3 text-center">状态</th>
-                                <th class="py-3 px-3 text-center">模式</th>
-                                <th class="py-3 px-3 text-center">AT 过期时间</th>
-                                <th class="py-3 px-3 text-center">点数余额</th>
-                                <th class="py-3 px-4">当前画板项目 ID</th>
-                                <th class="py-3 px-3 text-center">生成统计</th>
-                                <th class="py-3 px-4 text-right">操作</th>
-                            </tr>
-                        </thead>
-                        <tbody class="divide-y divide-slate-100 text-slate-700" id="tokenTableBody">
-                            <tr><td colspan="8" class="py-6 text-center text-slate-400">正在加载账号...</td></tr>
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-
-            <!-- 下方：【生成时间轴】(粗柱体 + 24小时分布 + 7天/30天切换) -->
-            <div class="rounded-xl border border-slate-200 bg-white shadow-sm p-4 sm:p-5 space-y-4">
-                <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-                    <div>
-                        <h4 class="text-sm font-bold text-slate-900">生成时间轴 / 模型请求分布</h4>
-                        <p class="text-xs text-slate-400 mt-0.5">统计 24 小时各时段的真实出图与视频调用柱状分布</p>
-                    </div>
-
-                    <div class="flex items-center justify-between w-full sm:w-auto gap-3 flex-wrap">
-                        <div class="flex items-center gap-2 text-xs text-slate-600">
-                            <span class="w-3 h-3 rounded-sm bg-[#2e9e6b] shrink-0"></span>
-                            <span class="font-mono text-[11px]" id="chart-legend-label">Nano Banana 2.1</span>
+                                    <!-- 实时任务徽章 -->
+                                    <div id="live-img-task" class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-slate-100 text-slate-500 text-[10px] border border-slate-200">
+                                        <span>● 当前空闲</span>
+                                    </div>
+                                </div>
+                                <div class="flex items-center gap-2 text-xs text-slate-500 font-medium">
+                                    <span>1K: <strong class="text-slate-800" id="statImg1k">0</strong></span>
+                                    <span>2K: <strong class="text-blue-600" id="statImg2k">0</strong></span>
+                                    <span>4K: <strong class="text-purple-600" id="statImg4k">0</strong></span>
+                                </div>
+                            </div>
                         </div>
-                        <div class="inline-flex rounded-lg border border-slate-200 p-0.5 bg-slate-50 text-xs font-medium text-slate-600 shrink-0">
-                            <button onclick="switchTimelineView('today', this)" id="btn-chart-today" class="px-2.5 py-1 rounded-md bg-white text-slate-900 shadow-sm transition-all">今日</button>
-                            <button onclick="switchTimelineView('7d', this)" id="btn-chart-7d" class="px-2.5 py-1 rounded-md hover:text-slate-900 transition-all">7天</button>
-                            <button onclick="switchTimelineView('30d', this)" id="btn-chart-30d" class="px-2.5 py-1 rounded-md hover:text-slate-900 transition-all">30天</button>
-                        </div>
-                    </div>
-                </div>
 
-                <!-- 柱状图主区域 -->
-                <div class="relative pt-6 pb-2 overflow-x-auto custom-scrollbar">
-                    <!-- Tooltip 气泡 -->
-                    <div id="chart-tooltip" class="absolute pointer-events-none hidden z-20 bg-white border border-slate-200 rounded-xl px-3.5 py-2 shadow-xl transition-all -top-12">
-                        <span class="font-bold text-slate-900 block text-xs" id="tooltip-time">-</span>
-                        <div class="flex items-center gap-2 mt-1 text-xs text-slate-600">
-                            <span class="w-2.5 h-2.5 rounded-full bg-[#2e9e6b]"></span>
-                            <span id="tooltip-val" class="font-medium">-</span>
+                        <!-- 视频卡片 -->
+                        <div class="bg-white rounded-xl p-4 border border-slate-200/80 shadow-sm">
+                            <div class="flex items-center justify-between border-b border-slate-100 pb-2.5">
+                                <span class="font-semibold text-xs sm:text-sm text-slate-800 flex items-center gap-1.5 sm:gap-2">
+                                    <svg class="w-4 h-4 text-purple-600 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><rect x="2" y="4" width="20" height="16" rx="2.18"/><path d="M7 2v20M17 2v20M2 12h20M2 7h5M2 17h5M17 17h5M17 7h5"/></svg>
+                                    <span>视频生成</span>
+                                    <span class="text-[10px] px-1.5 py-0.2 rounded bg-purple-50 text-purple-700 font-normal">Omni 1.1 Flash</span>
+                                </span>
+                                <span class="text-xs text-slate-400">累计产出：<span class="font-mono font-bold text-slate-700" id="statTotalVideos">-</span></span>
+                            </div>
+                            <div class="mt-2.5 flex flex-wrap items-center justify-between gap-2">
+                                <div class="flex items-center gap-2.5 flex-wrap">
+                                    <div>
+                                        <span class="text-2xl sm:text-3xl font-extrabold text-slate-900" id="statTodayVideos">-</span>
+                                        <span class="text-xs text-slate-500 ml-1">今日生成 (支)</span>
+                                    </div>
+                                    <!-- 实时任务徽章 -->
+                                    <div id="live-vid-task" class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-slate-100 text-slate-500 text-[10px] border border-slate-200">
+                                        <span>● 当前空闲</span>
+                                    </div>
+                                </div>
+                                <div class="flex items-center gap-2 text-xs text-slate-500 font-medium">
+                                    <span>文生: <strong class="text-slate-800" id="statVidT2v">0</strong></span>
+                                    <span>图生: <strong class="text-slate-800" id="statVidI2v">0</strong></span>
+                                    <span>消耗: <strong class="text-amber-600" id="statVidPoints">0点</strong></span>
+                                </div>
+                            </div>
                         </div>
                     </div>
 
-                    <div class="min-w-[700px]">
-                        <div class="relative h-44 w-full flex items-end justify-between gap-2 border-b border-slate-200 px-3" id="chart-bars-container">
-                            <!-- 刻度参考虚线 -->
-                            <div class="absolute inset-x-0 top-0 border-b border-dashed border-slate-100 flex justify-between text-[10px] text-slate-300 pointer-events-none -translate-y-2.5"><span id="chart-scale-max">25</span></div>
-                            <div class="absolute inset-x-0 top-1/4 border-b border-dashed border-slate-100 flex justify-between text-[10px] text-slate-300 pointer-events-none -translate-y-2.5"><span id="chart-scale-75">20</span></div>
-                            <div class="absolute inset-x-0 top-2/4 border-b border-dashed border-slate-100 flex justify-between text-[10px] text-slate-300 pointer-events-none -translate-y-2.5"><span id="chart-scale-50">15</span></div>
-                            <div class="absolute inset-x-0 top-3/4 border-b border-dashed border-slate-100 flex justify-between text-[10px] text-slate-300 pointer-events-none -translate-y-2.5"><span id="chart-scale-25">10</span></div>
-
-                            <!-- 动态生成的粗壮柱子 -->
-                        </div>
-                        <div class="w-full flex justify-between text-[10px] text-slate-400 px-3 pt-2 select-none" id="chart-axis-labels">
-                            <!-- 轴刻度文字 -->
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- ==================== TAB 2: 图片生成 (对话式工作台) ==================== -->
-        <div id="panel-chat-paint" class="hidden flex-1 flex flex-col md:flex-row rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden" style="min-height: 640px;">
-            <!-- 左侧任务历史 -->
-            <div class="w-full md:w-64 bg-slate-50/60 border-b md:border-b-0 md:border-r border-slate-200 flex flex-col shrink-0">
-                <div class="p-3 border-b border-slate-100 flex items-center justify-between">
-                    <span class="font-bold text-xs text-slate-700">生图任务历史</span>
-                    <button onclick="newChatSession()" class="flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded bg-slate-900 text-white hover:bg-slate-800 transition-colors shadow-sm">
-                        <span>+ 新任务</span>
-                    </button>
-                </div>
-                <div class="flex-1 overflow-y-auto p-2 space-y-1.5 custom-scrollbar" id="chatSessionList">
-                    <!-- 动态生成历史会话 -->
-                </div>
-            </div>
-
-            <!-- 右侧生图聊天工作区 -->
-            <div class="flex-1 flex flex-col bg-[#fafafa]">
-                <div class="h-11 bg-white border-b border-slate-200/80 px-4 sm:px-6 flex items-center justify-between shrink-0">
-                    <div class="flex items-center gap-2">
-                        <span class="font-bold text-xs text-slate-800 truncate" id="currentChatTitle">新画图任务</span>
-                    </div>
-                    <button onclick="clearCurrentChatMessages()" class="text-xs text-slate-400 hover:text-slate-600">清空对话</button>
-                </div>
-
-                <!-- 消息气泡瀑布流 -->
-                <div class="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 custom-scrollbar" id="chatMessagesContainer">
-                    <div class="text-center py-16 text-slate-400 text-xs">
-                        <p>请在下方输入画面提示词，选择模型并开始生成</p>
-                    </div>
-                </div>
-
-                <!-- 底部交互工作栏 -->
-                <div class="p-3 sm:p-4 bg-white border-t border-slate-200">
-                    <div class="bg-slate-50 rounded-xl border border-slate-200 p-2.5 sm:p-3 focus-within:bg-white focus-within:border-slate-400 transition-all">
-                        <!-- 垫图缩略预览 -->
-                        <div id="chatRefPreview" class="hidden mb-2 flex items-center gap-2 bg-slate-100 p-1.5 rounded-lg">
-                            <img id="chatRefThumb" src="" class="w-8 h-8 rounded object-cover border border-slate-300">
-                            <span class="text-xs text-slate-600 flex-1 truncate">已挂载参考垫图</span>
-                            <button onclick="removeChatRefImage()" class="text-slate-400 hover:text-red-500 text-xs px-1">✕</button>
-                        </div>
-
-                        <textarea id="chatPromptInput" rows="2" placeholder="输入你想生成的画面提示词，支持粘贴截图或选择参考图..." class="w-full bg-transparent resize-none focus:outline-none text-xs text-slate-900 placeholder-slate-400 leading-relaxed"></textarea>
-
-                        <div class="flex items-center justify-between pt-2 border-t border-slate-200/60 mt-1 select-none flex-wrap gap-2">
-                            <div class="flex items-center gap-1.5 sm:gap-2 flex-wrap">
-                                <label class="cursor-pointer px-2.5 py-1 rounded bg-white border border-slate-200 hover:bg-slate-50 text-xs text-slate-700 transition-colors inline-flex items-center gap-1 shrink-0">
-                                    <svg class="w-3.5 h-3.5 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/></svg>
-                                    <span>参考图</span>
-                                    <input type="file" accept="image/*" class="hidden" onchange="handleChatFileInput(event)">
+                    <!-- 中间：【账号 Token 列表】(移动端自适应竖向卡片 + 桌面端标准表格，集成小眼睛脱敏保护) -->
+                    <div class="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+                        <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2.5 p-3.5 sm:p-4 border-b border-slate-100">
+                            <div>
+                                <h3 class="text-sm sm:text-base font-bold text-slate-900">账号 Token 列表</h3>
+                                <p class="text-xs text-slate-400 mt-0.5">管理 Google Flow 账号凭据与画板项目绑定状态</p>
+                            </div>
+                            <div class="flex items-center gap-2 w-full sm:w-auto justify-between sm:justify-end flex-wrap pt-1 sm:pt-0">
+                                <label class="flex items-center gap-1.5 text-xs text-slate-500 cursor-pointer select-none">
+                                    <input type="checkbox" id="atAutoRefreshToggle" onchange="toggleATAutoRefresh()" class="w-4 h-4 text-slate-900 rounded border-slate-300 focus:ring-0 cursor-pointer">
+                                    <span>自动刷新AT</span>
                                 </label>
+                                <!-- 小眼睛脱敏切换按钮 -->
+                                <button onclick="toggleEmailMask()" id="btnToggleEmailMask" class="inline-flex items-center justify-center rounded-lg border border-slate-200 text-slate-600 hover:text-slate-900 hover:bg-slate-50 h-8 w-8 transition-colors shrink-0" title="脱敏显示账号（方便截图）">
+                                    <svg class="h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>
+                                    </svg>
+                                </button>
+                                <div class="flex items-center gap-1.5">
+                                    <button onclick="refreshAllCredits()" class="px-2.5 py-1.5 rounded-lg border border-slate-200 text-xs font-medium text-slate-700 hover:bg-slate-50 transition-colors">
+                                        刷新余额
+                                    </button>
+                                    <button onclick="openAddModal()" class="px-3 py-1.5 rounded-lg bg-slate-900 text-white text-xs font-medium hover:bg-slate-800 transition-colors shadow-sm">
+                                        + 添加 Token
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
 
-                                <select id="chatSelectModel" onchange="onChatModelChange()" class="bg-white border border-slate-200 rounded px-2.5 py-1 text-xs font-semibold text-slate-900 focus:outline-none cursor-pointer">
-                                    <option value="Nano Banana 2.1">🍌 Nano Banana 2.1 (BELUGA)</option>
-                                    <option value="Nano Banana 2 Lite">🍌 Nano Banana 2 Lite</option>
-                                    <option value="Nano Banana Pro">🍌 Nano Banana Pro</option>
-                                    <option value="Omni 1.1 Flash">🎬 Omni 1.1 Flash (视频)</option>
-                                </select>
+                        <!-- 移动端卡片视图 -->
+                        <div class="block md:hidden divide-y divide-slate-100" id="tokenMobileCards">
+                            <div class="p-4 text-center text-xs text-slate-400">正在加载账号...</div>
+                        </div>
 
-                                <select id="chatSelectAspect" class="bg-white border border-slate-200 rounded px-2.5 py-1 text-xs text-slate-700 focus:outline-none cursor-pointer">
-                                    <option value="9:16">9:16 竖屏</option>
-                                    <option value="16:9">16:9 横屏</option>
-                                    <option value="1:1">1:1 正方</option>
-                                    <option value="4:3">4:3</option>
-                                    <option value="3:4">3:4</option>
-                                </select>
+                        <!-- 桌面端标准表格 -->
+                        <div class="hidden md:block overflow-x-auto">
+                            <table class="w-full text-xs text-left">
+                                <thead class="bg-slate-50/80 text-slate-500 font-medium border-b border-slate-100">
+                                    <tr>
+                                        <th class="py-3 px-4">
+                                            <div class="flex items-center gap-1.5 cursor-pointer select-none" onclick="toggleEmailMask()" title="点击切换账号脱敏">
+                                                <span>账号邮箱</span>
+                                                <span id="thEmailMaskIcon" class="text-slate-400 hover:text-slate-700"></span>
+                                            </div>
+                                        </th>
+                                        <th class="py-3 px-3 text-center">状态</th>
+                                        <th class="py-3 px-3 text-center">模式</th>
+                                        <th class="py-3 px-3 text-center">AT 过期时间</th>
+                                        <th class="py-3 px-3 text-center">点数余额</th>
+                                        <th class="py-3 px-4">当前画板项目 ID</th>
+                                        <th class="py-3 px-3 text-center">生成统计</th>
+                                        <th class="py-3 px-4 text-right">操作</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="divide-y divide-slate-100 text-slate-700" id="tokenTableBody">
+                                    <tr><td colspan="8" class="py-8 text-center text-slate-400">正在加载账号...</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
 
-                                <div id="chatBoxResolution">
-                                    <select id="chatSelectSize" class="bg-white border border-slate-200 rounded px-2.5 py-1 text-xs text-slate-700 focus:outline-none cursor-pointer">
-                                        <option value="2k">2K 原生重塑</option>
-                                        <option value="4k">4K 超分 (Lanczos3)</option>
-                                        <option value="1k">1K 标清</option>
+                    <!-- 下方：【生成时间轴】(粗柱体 + 24小时分布 + 7天/30天切换) -->
+                    <div class="rounded-xl border border-slate-200 bg-white shadow-sm p-4 sm:p-5 space-y-4">
+                        <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                            <div>
+                                <h4 class="text-sm font-bold text-slate-900">生成时间轴 / 模型请求分布</h4>
+                                <p class="text-xs text-slate-400 mt-0.5">统计 24 小时各时段的真实出图与视频调用柱状分布</p>
+                            </div>
+
+                            <div class="flex items-center justify-between w-full sm:w-auto gap-3 flex-wrap">
+                                <div class="flex items-center gap-2 text-xs text-slate-600">
+                                    <span class="w-3 h-3 rounded-sm bg-[#2e9e6b] shrink-0"></span>
+                                    <span class="font-mono text-[11px]" id="chart-legend-label">Nano Banana 2.1</span>
+                                </div>
+                                <div class="inline-flex rounded-lg border border-slate-200 p-0.5 bg-slate-50 text-xs font-medium text-slate-600 shrink-0">
+                                    <button onclick="switchTimelineView('today', this)" id="btn-chart-today" class="px-2.5 py-1 rounded-md bg-white text-slate-900 shadow-sm transition-all">今日</button>
+                                    <button onclick="switchTimelineView('7d', this)" id="btn-chart-7d" class="px-2.5 py-1 rounded-md hover:text-slate-900 transition-all">7天</button>
+                                    <button onclick="switchTimelineView('30d', this)" id="btn-chart-30d" class="px-2.5 py-1 rounded-md hover:text-slate-900 transition-all">30天</button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- 柱状图主区域 -->
+                        <div class="relative pt-6 pb-2 overflow-x-auto custom-scrollbar">
+                            <div id="chart-tooltip" class="absolute pointer-events-none hidden z-20 bg-white border border-slate-200 rounded-xl px-3.5 py-2 shadow-xl transition-all -top-12">
+                                <span class="font-bold text-slate-900 block text-xs" id="tooltip-time">-</span>
+                                <div class="flex items-center gap-2 mt-1 text-xs text-slate-600">
+                                    <span class="w-2.5 h-2.5 rounded-full bg-[#2e9e6b]"></span>
+                                    <span id="tooltip-val" class="font-medium">-</span>
+                                </div>
+                            </div>
+
+                            <div class="min-w-[700px]">
+                                <div class="relative h-44 w-full flex items-end justify-between gap-2 border-b border-slate-200 px-3" id="chart-bars-container">
+                                    <!-- 刻度虚线 -->
+                                    <div class="absolute inset-x-0 top-0 border-b border-dashed border-slate-100 flex justify-between text-[10px] text-slate-300 pointer-events-none -translate-y-2.5"><span id="chart-scale-max">25</span></div>
+                                    <div class="absolute inset-x-0 top-1/4 border-b border-dashed border-slate-100 flex justify-between text-[10px] text-slate-300 pointer-events-none -translate-y-2.5"><span id="chart-scale-75">20</span></div>
+                                    <div class="absolute inset-x-0 top-2/4 border-b border-dashed border-slate-100 flex justify-between text-[10px] text-slate-300 pointer-events-none -translate-y-2.5"><span id="chart-scale-50">15</span></div>
+                                    <div class="absolute inset-x-0 top-3/4 border-b border-dashed border-slate-100 flex justify-between text-[10px] text-slate-300 pointer-events-none -translate-y-2.5"><span id="chart-scale-25">10</span></div>
+                                </div>
+                                <div class="w-full flex justify-between text-[10px] text-slate-400 px-3 pt-2 select-none" id="chart-axis-labels"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ==================== TAB 2: 图片生成 (对话式生图工作台) ==================== -->
+                <div id="panel-chat-paint" class="hidden rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden flex flex-col md:flex-row relative" style="min-height: calc(100vh - 120px);">
+                    <!-- 移动端生图历史抽屉遮罩 -->
+                    <div id="chatHistoryBackdrop" onclick="toggleChatHistory(false)" class="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-40 hidden md:hidden transition-opacity"></div>
+
+                    <!-- 历史任务侧栏：桌面端常驻，移动端抽屉 -->
+                    <div id="chatHistoryDrawer" class="fixed inset-y-0 left-0 z-50 w-72 bg-white md:bg-slate-50/60 border-r border-slate-200 flex flex-col shrink-0 -translate-x-full md:translate-x-0 md:static md:w-64 transition-transform duration-200 ease-in-out shadow-2xl md:shadow-none">
+                        <div class="p-3 border-b border-slate-100 flex items-center justify-between">
+                            <span class="font-bold text-xs text-slate-700">生图任务历史</span>
+                            <div class="flex items-center gap-1.5">
+                                <button onclick="newChatSession()" class="flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded bg-slate-900 text-white hover:bg-slate-800 transition-colors shadow-sm">
+                                    <span>+ 新任务</span>
+                                </button>
+                                <button onclick="toggleChatHistory(false)" class="md:hidden p-1 text-slate-400 hover:text-slate-600 rounded">
+                                    <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="flex-1 overflow-y-auto p-2 space-y-1.5 custom-scrollbar" id="chatSessionList"></div>
+                    </div>
+
+                    <!-- 右侧生图聊天工作区 (移动端占满全宽) -->
+                    <div class="flex-1 flex flex-col bg-[#fafafa] min-w-0">
+                        <div class="h-11 bg-white border-b border-slate-200/80 px-3 sm:px-6 flex items-center justify-between shrink-0">
+                            <div class="flex items-center gap-2 min-w-0">
+                                <button onclick="toggleChatHistory(true)" class="md:hidden flex items-center gap-1 text-[11px] font-medium text-slate-700 bg-slate-100 hover:bg-slate-200 px-2 py-1 rounded-lg transition-colors shrink-0">
+                                    <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h7"/></svg>
+                                    <span>任务历史</span>
+                                </button>
+                                <span class="font-bold text-xs text-slate-800 truncate" id="currentChatTitle">新画图任务</span>
+                            </div>
+                            <button onclick="clearCurrentChatMessages()" class="text-xs text-slate-400 hover:text-slate-600 shrink-0">清空对话</button>
+                        </div>
+
+                        <!-- 消息瀑布区 -->
+                        <div class="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 custom-scrollbar" id="chatMessagesContainer">
+                            <div class="text-center py-16 text-slate-400 text-xs">
+                                <p>请在下方输入画面提示词，选择模型并开始生成</p>
+                            </div>
+                        </div>
+
+                        <!-- 底部输入栏 -->
+                        <div class="p-3 sm:p-4 bg-white border-t border-slate-200">
+                            <div class="bg-slate-50 rounded-xl border border-slate-200 p-2.5 sm:p-3 focus-within:bg-white focus-within:border-slate-400 transition-all">
+                                <div id="chatRefPreview" class="hidden mb-2 flex items-center gap-2 bg-slate-100 p-1.5 rounded-lg">
+                                    <img id="chatRefThumb" src="" class="w-8 h-8 rounded object-cover border border-slate-300">
+                                    <span class="text-xs text-slate-600 flex-1 truncate">已挂载参考垫图</span>
+                                    <button onclick="removeChatRefImage()" class="text-slate-400 hover:text-red-500 text-xs px-1">✕</button>
+                                </div>
+
+                                <textarea id="chatPromptInput" rows="2" placeholder="输入你想生成的画面提示词，支持粘贴截图或选择参考图..." class="w-full bg-transparent resize-none focus:outline-none text-xs text-slate-900 placeholder-slate-400 leading-relaxed"></textarea>
+
+                                <div class="flex items-center justify-between pt-2 border-t border-slate-200/60 mt-1 select-none flex-wrap gap-2">
+                                    <div class="flex items-center gap-1.5 sm:gap-2 flex-wrap">
+                                        <label class="cursor-pointer px-2.5 py-1 rounded bg-white border border-slate-200 hover:bg-slate-50 text-xs text-slate-700 transition-colors inline-flex items-center gap-1 shrink-0">
+                                            <svg class="w-3.5 h-3.5 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/></svg>
+                                            <span>参考图</span>
+                                            <input type="file" accept="image/*" class="hidden" onchange="handleChatFileInput(event)">
+                                        </label>
+
+                                        <select id="chatSelectModel" onchange="onChatModelChange()" class="bg-white border border-slate-200 rounded px-2.5 py-1 text-xs font-semibold text-slate-900 focus:outline-none cursor-pointer">
+                                            <option value="Nano Banana 2.1">🍌 Nano Banana 2.1 (BELUGA)</option>
+                                            <option value="Nano Banana 2 Lite">🍌 Nano Banana 2 Lite</option>
+                                            <option value="Nano Banana Pro">🍌 Nano Banana Pro</option>
+                                            <option value="Omni 1.1 Flash">🎬 Omni 1.1 Flash (视频)</option>
+                                        </select>
+
+                                        <select id="chatSelectAspect" class="bg-white border border-slate-200 rounded px-2.5 py-1 text-xs text-slate-700 focus:outline-none cursor-pointer">
+                                            <option value="9:16">9:16 竖屏</option>
+                                            <option value="16:9">16:9 横屏</option>
+                                            <option value="1:1">1:1 正方</option>
+                                            <option value="4:3">4:3</option>
+                                            <option value="3:4">3:4</option>
+                                        </select>
+
+                                        <div id="chatBoxResolution">
+                                            <select id="chatSelectSize" class="bg-white border border-slate-200 rounded px-2.5 py-1 text-xs text-slate-700 focus:outline-none cursor-pointer">
+                                                <option value="2k">2K 原生重塑</option>
+                                                <option value="4k">4K 超分 (Lanczos3)</option>
+                                                <option value="1k">1K 标清</option>
+                                            </select>
+                                        </div>
+
+                                        <div id="chatBoxDuration" class="hidden">
+                                            <select id="chatSelectDuration" class="bg-purple-50 border border-purple-200 text-purple-700 rounded px-2.5 py-1 text-xs font-semibold focus:outline-none cursor-pointer">
+                                                <option value="6">时长: 6 秒</option>
+                                                <option value="4">时长: 4 秒</option>
+                                                <option value="8">时长: 8 秒</option>
+                                                <option value="10">时长: 10 秒</option>
+                                            </select>
+                                        </div>
+                                    </div>
+
+                                    <button onclick="handleChatSend()" id="btnChatSend" class="px-4 py-1.5 rounded-lg bg-slate-900 text-white text-xs font-medium hover:bg-slate-800 transition-colors shrink-0 ml-auto">
+                                        生成画面
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ==================== TAB 3: 本地媒体管理 ==================== -->
+                <div id="panel-media-mgr" class="hidden space-y-4">
+                    <div class="bg-white rounded-xl p-4 border border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-sm">
+                        <div>
+                            <h3 class="font-bold text-slate-900 text-sm">本地媒体缓存空间监控</h3>
+                            <p class="text-xs text-slate-400 mt-0.5" id="mediaStatsSummary">正在统计 tmp/ 目录存储...</p>
+                        </div>
+                        <div class="flex items-center gap-2 flex-wrap">
+                            <button onclick="triggerCleanup('7d')" class="text-xs px-3 py-1.5 rounded border border-slate-200 hover:bg-slate-50 transition-colors">清理 7 天前</button>
+                            <button onclick="triggerCleanup('3d')" class="text-xs px-3 py-1.5 rounded border border-slate-200 hover:bg-slate-50 transition-colors">清理 3 天前</button>
+                            <button onclick="triggerCleanup('all')" class="text-xs px-3 py-1.5 rounded bg-red-50 text-red-600 border border-red-200 hover:bg-red-100 transition-colors">清空全部缓存</button>
+                        </div>
+                    </div>
+
+                    <div class="flex items-center justify-between text-xs text-slate-500 px-1">
+                        <div class="flex items-center gap-2">
+                            <span>筛选类型:</span>
+                            <button onclick="filterMediaFiles('all')" id="btnMediaFilterAll" class="px-2 py-0.5 rounded bg-slate-900 text-white font-medium">全部</button>
+                            <button onclick="filterMediaFiles('image')" id="btnMediaFilterImg" class="px-2 py-0.5 rounded bg-slate-100 hover:bg-slate-200">仅图片</button>
+                            <button onclick="filterMediaFiles('video')" id="btnMediaFilterVid" class="px-2 py-0.5 rounded bg-slate-100 hover:bg-slate-200">仅视频</button>
+                        </div>
+                        <span id="mediaTotalCountText">共 0 个文件</span>
+                    </div>
+
+                    <!-- 媒体列表视图 (正方形轻量缩略图 + 详细信息) -->
+                    <div class="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+                        <div class="block md:hidden divide-y divide-slate-100" id="mediaMobileList">
+                            <div class="p-6 text-center text-xs text-slate-400">正在加载媒体...</div>
+                        </div>
+
+                        <div class="hidden md:block overflow-x-auto">
+                            <table class="w-full text-xs text-left">
+                                <thead class="bg-slate-50/80 text-slate-500 font-medium border-b border-slate-100">
+                                    <tr>
+                                        <th class="py-3 px-4 w-24">缩略图</th>
+                                        <th class="py-3 px-4">文件名</th>
+                                        <th class="py-3 px-3 text-center">类型</th>
+                                        <th class="py-3 px-3 text-center">分辨率 / 尺寸</th>
+                                        <th class="py-3 px-3 text-center">文件大小</th>
+                                        <th class="py-3 px-3 text-center">生成时间</th>
+                                        <th class="py-3 px-4 text-right">操作</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="divide-y divide-slate-100 text-slate-700" id="mediaTableBody">
+                                    <tr><td colspan="7" class="py-8 text-center text-slate-400">正在加载媒体列表...</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ==================== TAB 4: 系统配置 ==================== -->
+                <div id="panel-settings" class="hidden space-y-5">
+                    <div class="grid gap-5 grid-cols-1 lg:grid-cols-2">
+
+                        <!-- 核心：图片放大 / 4K 分级超分策略 -->
+                        <div class="bg-white rounded-xl p-5 border border-slate-200/80 shadow-sm flex flex-col justify-between lg:col-span-2">
+                            <div class="space-y-4">
+                                <div class="flex items-center justify-between border-b border-slate-100 pb-3 flex-wrap gap-2">
+                                    <div>
+                                        <h3 class="font-bold text-slate-900 text-sm flex items-center gap-2">
+                                            <span>图片放大 / 4K 分级超分策略</span>
+                                            <span class="text-[10px] px-2 py-0.5 rounded bg-blue-50 text-blue-700 font-semibold border border-blue-100">核心配置</span>
+                                        </h3>
+                                        <p class="text-xs text-slate-400 mt-0.5">智能适配各类账号等级：优先利用官方原生能力，缺失时由本地超分算法无缝补齐</p>
+                                    </div>
+                                    <span class="text-xs text-emerald-600 font-medium">● 引擎就绪</span>
+                                </div>
+
+                                <div class="flex items-center gap-3 p-3 rounded-lg bg-slate-50 border border-slate-200">
+                                    <input type="checkbox" id="cfgAutoUpscale" checked class="w-4 h-4 text-slate-900 rounded border-slate-300 focus:ring-0 cursor-pointer">
+                                    <label for="cfgAutoUpscale" class="text-xs font-semibold text-slate-800 cursor-pointer flex-1">
+                                        图片尺寸不足时自动放大 (默认开启)
+                                    </label>
+                                    <span class="text-[11px] text-slate-500">检测到客户端请求 2K/4K 且账号不足时自动触发</span>
+                                </div>
+
+                                <div class="space-y-1.5">
+                                    <label class="block text-xs font-semibold text-slate-700">超分放大引擎</label>
+                                    <select id="cfgUpscaleEngine" class="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs font-medium text-slate-800 focus:outline-none">
+                                        <option value="lanczos3">Sharp / Lanczos3 (推荐 · 高清锐化重采样 · 速度极快)</option>
+                                        <option value="bicubic">Bicubic 三次样条插值 (平滑过渡)</option>
                                     </select>
                                 </div>
 
-                                <div id="chatBoxDuration" class="hidden">
-                                    <select id="chatSelectDuration" class="bg-purple-50 border border-purple-200 text-purple-700 rounded px-2.5 py-1 text-xs font-semibold focus:outline-none cursor-pointer">
-                                        <option value="6">时长: 6 秒</option>
-                                        <option value="4">时长: 4 秒</option>
-                                        <option value="8">时长: 8 秒</option>
-                                        <option value="10">时长: 10 秒</option>
-                                    </select>
+                                <div class="bg-slate-50/80 rounded-xl p-3.5 border border-slate-200/60 space-y-2 text-xs text-slate-600">
+                                    <span class="font-bold text-slate-800 block text-[11px] uppercase tracking-wider text-blue-600">4K / 2K 超分分级执行机制：</span>
+                                    <ul class="space-y-1.5 pl-4 list-disc text-[11px] leading-relaxed text-slate-600">
+                                        <li><strong class="text-slate-900">👑 Ultra 顶级账号 (有官方4K权限)</strong>：直接调用 Google Flow 原生 4K 模型放大，完全不走本地超分，100% 原汁原味交付。</li>
+                                        <li><strong class="text-slate-900">💎 Pro 付费账号 (有原生2K、无4K)</strong>：先调用 Google 官方原生模型放大到 2K 底图，接着由本地 Sharp / Lanczos3 算法无损超分到 4K 补齐分辨率交付。</li>
+                                        <li><strong class="text-slate-900">⚪ Free 普通账号 (仅有1K权限)</strong>：直接以 1K 底图通过 Lanczos3 算法超分至 4K 交付；请求 2K 则超分至 2K 交付。</li>
+                                    </ul>
                                 </div>
                             </div>
 
-                            <button onclick="handleChatSend()" id="btnChatSend" class="px-4 py-1.5 rounded-lg bg-slate-900 text-white text-xs font-medium hover:bg-slate-800 transition-colors shrink-0 ml-auto">
-                                生成画面
-                            </button>
+                            <div class="pt-4 border-t border-slate-100 flex justify-end mt-2">
+                                <button onclick="saveAllGenerationConfig()" class="px-4 py-1.5 rounded-lg bg-slate-900 text-white text-xs font-medium hover:bg-slate-800 shadow-sm transition-colors">
+                                    保存超分配置
+                                </button>
+                            </div>
                         </div>
-                    </div>
-                </div>
-            </div>
-        </div>
 
-        <!-- ==================== TAB 3: 本地媒体管理 ==================== -->
-        <div id="panel-media-mgr" class="hidden space-y-4">
-            <div class="bg-white rounded-xl p-4 border border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-sm">
-                <div>
-                    <h3 class="font-bold text-slate-900 text-sm">本地媒体缓存空间监控</h3>
-                    <p class="text-xs text-slate-400 mt-0.5" id="mediaStatsSummary">正在统计 tmp/ 目录存储...</p>
-                </div>
-                <div class="flex items-center gap-2 flex-wrap">
-                    <button onclick="triggerCleanup('7d')" class="text-xs px-3 py-1.5 rounded border border-slate-200 hover:bg-slate-50 transition-colors">清理 7 天前</button>
-                    <button onclick="triggerCleanup('3d')" class="text-xs px-3 py-1.5 rounded border border-slate-200 hover:bg-slate-50 transition-colors">清理 3 天前</button>
-                    <button onclick="triggerCleanup('all')" class="text-xs px-3 py-1.5 rounded bg-red-50 text-red-600 border border-red-200 hover:bg-red-100 transition-colors">清空全部缓存</button>
-                </div>
-            </div>
-
-            <!-- 筛选工具条 -->
-            <div class="flex items-center justify-between text-xs text-slate-500 px-1">
-                <div class="flex items-center gap-2">
-                    <span>筛选类型:</span>
-                    <button onclick="filterMediaFiles('all')" id="btnMediaFilterAll" class="px-2 py-0.5 rounded bg-slate-900 text-white font-medium">全部</button>
-                    <button onclick="filterMediaFiles('image')" id="btnMediaFilterImg" class="px-2 py-0.5 rounded bg-slate-100 hover:bg-slate-200">仅图片</button>
-                    <button onclick="filterMediaFiles('video')" id="btnMediaFilterVid" class="px-2 py-0.5 rounded bg-slate-100 hover:bg-slate-200">仅视频</button>
-                </div>
-                <span id="mediaTotalCountText">共 0 个文件</span>
-            </div>
-
-            <!-- 媒体列表视图 (正方形轻量缩略图 + 详细信息 + 操作) -->
-            <div class="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
-                <!-- 移动端自适应列表 -->
-                <div class="block md:hidden divide-y divide-slate-100" id="mediaMobileList">
-                    <div class="p-6 text-center text-xs text-slate-400">正在加载媒体...</div>
-                </div>
-
-                <!-- 桌面端紧凑列表 -->
-                <div class="hidden md:block overflow-x-auto">
-                    <table class="w-full text-xs text-left">
-                        <thead class="bg-slate-50/80 text-slate-500 font-medium border-b border-slate-100">
-                            <tr>
-                                <th class="py-3 px-4 w-24">缩略图</th>
-                                <th class="py-3 px-4">文件名</th>
-                                <th class="py-3 px-3 text-center">类型</th>
-                                <th class="py-3 px-3 text-center">分辨率 / 尺寸</th>
-                                <th class="py-3 px-3 text-center">文件大小</th>
-                                <th class="py-3 px-3 text-center">生成时间</th>
-                                <th class="py-3 px-4 text-right">操作</th>
-                            </tr>
-                        </thead>
-                        <tbody class="divide-y divide-slate-100 text-slate-700" id="mediaTableBody">
-                            <tr><td colspan="7" class="py-8 text-center text-slate-400">正在加载媒体列表...</td></tr>
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-        </div>
-
-        <!-- ==================== TAB 4: 系统配置 ==================== -->
-        <div id="panel-settings" class="hidden space-y-5">
-            <div class="grid gap-5 grid-cols-1 lg:grid-cols-2">
-
-                <!-- 核心：图片放大 / 4K 分级超分策略 -->
-                <div class="bg-white rounded-xl p-5 border border-slate-200/80 shadow-sm flex flex-col justify-between lg:col-span-2">
-                    <div class="space-y-4">
-                        <div class="flex items-center justify-between border-b border-slate-100 pb-3 flex-wrap gap-2">
+                        <!-- 安全配置 -->
+                        <div class="bg-white rounded-xl p-5 border border-slate-200/80 shadow-sm flex flex-col justify-between">
                             <div>
-                                <h3 class="font-bold text-slate-900 text-sm flex items-center gap-2">
-                                    <span>图片放大 / 4K 分级超分策略</span>
-                                    <span class="text-[10px] px-2 py-0.5 rounded bg-blue-50 text-blue-700 font-semibold border border-blue-100">核心配置</span>
-                                </h3>
-                                <p class="text-xs text-slate-400 mt-0.5">智能适配各类账号等级：优先利用官方原生能力，缺失时由本地超分算法无缝补齐</p>
+                                <h3 class="text-sm font-bold text-slate-900 mb-3">安全配置 (管理员密码)</h3>
+                                <div class="space-y-3">
+                                    <div>
+                                        <label class="text-xs text-slate-500 mb-1 block">管理员用户名</label>
+                                        <input id="cfgAdminUsername" type="text" class="flex h-8 w-full rounded-lg border border-slate-200 bg-slate-50 px-2.5 text-xs text-slate-800 focus:outline-none">
+                                    </div>
+                                    <div>
+                                        <label class="text-xs text-slate-500 mb-1 block">旧密码</label>
+                                        <input id="cfgOldPassword" type="password" placeholder="输入旧密码" class="flex h-8 w-full rounded-lg border border-slate-200 bg-white px-2.5 text-xs text-slate-800 focus:outline-none">
+                                    </div>
+                                    <div>
+                                        <label class="text-xs text-slate-500 mb-1 block">新密码</label>
+                                        <input id="cfgNewPassword" type="password" placeholder="输入新密码" class="flex h-8 w-full rounded-lg border border-slate-200 bg-white px-2.5 text-xs text-slate-800 focus:outline-none">
+                                    </div>
+                                </div>
                             </div>
-                            <span class="text-xs text-emerald-600 font-medium">● 引擎就绪</span>
+                            <button onclick="updateAdminPassword()" class="mt-4 w-full py-1.5 rounded-lg bg-slate-900 text-white text-xs font-medium hover:bg-slate-800">修改密码</button>
                         </div>
 
-                        <div class="flex items-center gap-3 p-3 rounded-lg bg-slate-50 border border-slate-200">
-                            <input type="checkbox" id="cfgAutoUpscale" checked class="w-4 h-4 text-slate-900 rounded border-slate-300 focus:ring-0 cursor-pointer">
-                            <label for="cfgAutoUpscale" class="text-xs font-semibold text-slate-800 cursor-pointer flex-1">
-                                图片尺寸不足时自动放大 (默认开启)
-                            </label>
-                            <span class="text-[11px] text-slate-500">检测到客户端请求 2K/4K 且账号不足时自动触发</span>
-                        </div>
-
-                        <div class="space-y-1.5">
-                            <label class="block text-xs font-semibold text-slate-700">超分放大引擎</label>
-                            <select id="cfgUpscaleEngine" class="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs font-medium text-slate-800 focus:outline-none">
-                                <option value="lanczos3">Sharp / Lanczos3 (推荐 · 高清锐化重采样 · 速度极快)</option>
-                                <option value="bicubic">Bicubic 三次样条插值 (平滑过渡)</option>
-                            </select>
-                        </div>
-
-                        <div class="bg-slate-50/80 rounded-xl p-3.5 border border-slate-200/60 space-y-2 text-xs text-slate-600">
-                            <span class="font-bold text-slate-800 block text-[11px] uppercase tracking-wider text-blue-600">4K / 2K 超分分级执行机制：</span>
-                            <ul class="space-y-1.5 pl-4 list-disc text-[11px] leading-relaxed text-slate-600">
-                                <li>
-                                    <strong class="text-slate-900">👑 Ultra 顶级账号 (有官方4K权限)</strong>：
-                                    请求 4K 时，<span class="text-emerald-700 font-medium">直接调用 Google Flow 原生 4K 模型放大，完全不走本地超分</span>，100% 原汁原味交付。
-                                </li>
-                                <li>
-                                    <strong class="text-slate-900">💎 Pro 付费账号 (有原生2K、无4K)</strong>：
-                                    请求 4K 时，系统<span class="text-blue-700 font-medium">先调用 Google 官方原生模型放大到 2K 底图</span>，接着<span class="text-blue-700 font-medium">由本地 Sharp / Lanczos3 算法无损超分到 4K 补齐分辨率交付</span>。
-                                </li>
-                                <li>
-                                    <strong class="text-slate-900">⚪ Free 普通账号 (仅有1K权限)</strong>：
-                                    请求 4K 时，由于账号只能拿到 1K 初始图，系统<span class="text-purple-700 font-medium">直接以 1K 底图通过 Lanczos3 算法超分至 4K 交付</span>；请求 2K 则超分至 2K 交付。
-                                </li>
-                            </ul>
-                        </div>
-                    </div>
-
-                    <div class="pt-4 border-t border-slate-100 flex justify-end mt-2">
-                        <button onclick="saveAllGenerationConfig()" class="px-4 py-1.5 rounded-lg bg-slate-900 text-white text-xs font-medium hover:bg-slate-800 shadow-sm transition-colors">
-                            保存超分配置
-                        </button>
-                    </div>
-                </div>
-
-                <!-- 安全配置 -->
-                <div class="bg-white rounded-xl p-5 border border-slate-200/80 shadow-sm flex flex-col justify-between">
-                    <div>
-                        <h3 class="text-sm font-bold text-slate-900 mb-3">安全配置 (管理员密码)</h3>
-                        <div class="space-y-3">
+                        <!-- API 密钥配置 -->
+                        <div class="bg-white rounded-xl p-5 border border-slate-200/80 shadow-sm flex flex-col justify-between">
                             <div>
-                                <label class="text-xs text-slate-500 mb-1 block">管理员用户名</label>
-                                <input id="cfgAdminUsername" type="text" class="flex h-8 w-full rounded-lg border border-slate-200 bg-slate-50 px-2.5 text-xs text-slate-800 focus:outline-none">
+                                <h3 class="text-sm font-bold text-slate-900 mb-3">API 密钥配置</h3>
+                                <div class="space-y-3">
+                                    <div>
+                                        <label class="text-xs text-slate-500 mb-1 block">当前 API Key</label>
+                                        <input id="cfgCurrentAPIKey" type="text" disabled readonly class="flex h-8 w-full rounded-lg border border-slate-200 bg-slate-50 px-2.5 text-xs font-mono text-slate-500">
+                                    </div>
+                                    <div>
+                                        <label class="text-xs text-slate-500 mb-1 block">设置新 API Key</label>
+                                        <input id="cfgNewAPIKey" type="text" placeholder="输入新的 API Key" class="flex h-8 w-full rounded-lg border border-slate-200 bg-white px-2.5 text-xs text-slate-800 focus:outline-none">
+                                        <p class="text-[11px] text-slate-400 mt-1">用于客户端调用的 Bearer 认证密钥</p>
+                                    </div>
+                                </div>
                             </div>
-                            <div>
-                                <label class="text-xs text-slate-500 mb-1 block">旧密码</label>
-                                <input id="cfgOldPassword" type="password" placeholder="输入旧密码" class="flex h-8 w-full rounded-lg border border-slate-200 bg-white px-2.5 text-xs text-slate-800 focus:outline-none">
-                            </div>
-                            <div>
-                                <label class="text-xs text-slate-500 mb-1 block">新密码</label>
-                                <input id="cfgNewPassword" type="password" placeholder="输入新密码" class="flex h-8 w-full rounded-lg border border-slate-200 bg-white px-2.5 text-xs text-slate-800 focus:outline-none">
-                            </div>
+                            <button onclick="updateAPIKey()" class="mt-4 w-full py-1.5 rounded-lg bg-slate-900 text-white text-xs font-medium hover:bg-slate-800">更新 API Key</button>
                         </div>
-                    </div>
-                    <button onclick="updateAdminPassword()" class="mt-4 w-full py-1.5 rounded-lg bg-slate-900 text-white text-xs font-medium hover:bg-slate-800">修改密码</button>
-                </div>
 
-                <!-- API 密钥配置 -->
-                <div class="bg-white rounded-xl p-5 border border-slate-200/80 shadow-sm flex flex-col justify-between">
-                    <div>
-                        <h3 class="text-sm font-bold text-slate-900 mb-3">API 密钥配置</h3>
-                        <div class="space-y-3">
+                        <!-- 代理配置 -->
+                        <div class="bg-white rounded-xl p-5 border border-slate-200/80 shadow-sm flex flex-col justify-between">
                             <div>
-                                <label class="text-xs text-slate-500 mb-1 block">当前 API Key</label>
-                                <input id="cfgCurrentAPIKey" type="text" disabled readonly class="flex h-8 w-full rounded-lg border border-slate-200 bg-slate-50 px-2.5 text-xs font-mono text-slate-500">
-                            </div>
-                            <div>
-                                <label class="text-xs text-slate-500 mb-1 block">设置新 API Key</label>
-                                <input id="cfgNewAPIKey" type="text" placeholder="输入新的 API Key" class="flex h-8 w-full rounded-lg border border-slate-200 bg-white px-2.5 text-xs text-slate-800 focus:outline-none">
-                                <p class="text-[11px] text-slate-400 mt-1">用于客户端调用的 Bearer 认证密钥</p>
-                            </div>
-                        </div>
-                    </div>
-                    <button onclick="updateAPIKey()" class="mt-4 w-full py-1.5 rounded-lg bg-slate-900 text-white text-xs font-medium hover:bg-slate-800">更新 API Key</button>
-                </div>
-
-                <!-- 代理配置 -->
-                <div class="bg-white rounded-xl p-5 border border-slate-200/80 shadow-sm flex flex-col justify-between">
-                    <div>
-                        <h3 class="text-sm font-bold text-slate-900 mb-3">代理配置</h3>
-                        <div class="space-y-3">
-                            <label class="inline-flex items-center gap-2 cursor-pointer">
-                                <input type="checkbox" id="cfgProxyEnabled" class="w-4 h-4 text-slate-900 rounded border-slate-300">
-                                <span class="text-xs font-medium text-slate-700">启用请求代理 (透明网关建议关闭)</span>
-                            </label>
-                            <div>
-                                <label class="text-xs text-slate-500 mb-1 block">请求代理地址</label>
-                                <input id="cfgProxyUrl" type="text" class="flex h-8 w-full rounded-lg border border-slate-200 bg-white px-2.5 text-xs text-slate-800 focus:outline-none">
-                            </div>
-                            <div class="pt-2 border-t border-slate-100">
-                                <label class="inline-flex items-center gap-2 cursor-pointer">
-                                    <input type="checkbox" id="cfgMediaProxyEnabled" class="w-4 h-4 text-slate-900 rounded border-slate-300" onchange="toggleMediaProxyInput()">
-                                    <span class="text-xs font-medium text-slate-700">媒体上传下载独立代理</span>
-                                </label>
-                                <div id="mediaProxyUrlInput" class="hidden mt-2">
-                                    <input id="cfgMediaProxyUrl" class="flex h-8 w-full rounded-lg border border-slate-200 bg-white px-2.5 text-xs text-slate-800 focus:outline-none" placeholder="http://127.0.0.1:7897">
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="grid grid-cols-2 gap-2 mt-4">
-                        <button onclick="testProxyConfig()" id="btnTestProxy" class="py-1.5 rounded-lg border border-slate-200 text-xs text-slate-700 hover:bg-slate-50">测试连通</button>
-                        <button onclick="saveProxyConfig()" class="py-1.5 rounded-lg bg-slate-900 text-white text-xs font-medium hover:bg-slate-800">保存代理</button>
-                    </div>
-                </div>
-
-                <!-- 生成与超时配置 -->
-                <div class="bg-white rounded-xl p-5 border border-slate-200/80 shadow-sm flex flex-col justify-between">
-                    <div>
-                        <h3 class="text-sm font-bold text-slate-900 mb-3">生成与超时配置</h3>
-                        <div class="space-y-3">
-                            <div class="grid grid-cols-2 gap-2.5">
-                                <div>
-                                    <label class="text-xs text-slate-500 mb-1 block">图片超时 (秒)</label>
-                                    <input id="cfgImageTimeout" type="number" class="flex h-8 w-full rounded-lg border border-slate-200 bg-white px-2.5 text-xs text-slate-800 focus:outline-none">
-                                </div>
-                                <div>
-                                    <label class="text-xs text-slate-500 mb-1 block">视频超时 (秒)</label>
-                                    <input id="cfgVideoTimeout" type="number" class="flex h-8 w-full rounded-lg border border-slate-200 bg-white px-2.5 text-xs text-slate-800 focus:outline-none">
-                                </div>
-                            </div>
-                            <div class="grid grid-cols-2 gap-2.5">
-                                <div>
-                                    <label class="text-xs text-slate-500 mb-1 block">兜底换号 (次)</label>
-                                    <input id="cfgImageFallbackAttempts" type="number" class="flex h-8 w-full rounded-lg border border-slate-200 bg-white px-2.5 text-xs text-slate-800 focus:outline-none">
-                                </div>
-                                <div>
-                                    <label class="text-xs text-slate-500 mb-1 block">最大重试次数</label>
-                                    <input id="cfgMaxRetries" type="number" class="flex h-8 w-full rounded-lg border border-slate-200 bg-white px-2.5 text-xs text-slate-800 focus:outline-none">
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                    <button onclick="saveAllGenerationConfig()" class="mt-4 w-full py-1.5 rounded-lg bg-slate-900 text-white text-xs font-medium hover:bg-slate-800">保存生成配置</button>
-                </div>
-
-                <!-- 缓存配置 -->
-                <div class="bg-white rounded-xl p-5 border border-slate-200/80 shadow-sm flex flex-col justify-between">
-                    <div>
-                        <h3 class="text-sm font-bold text-slate-900 mb-3">本地缓存配置</h3>
-                        <div class="space-y-3">
-                            <label class="inline-flex items-center gap-2 cursor-pointer">
-                                <input type="checkbox" id="cfgCacheEnabled" onchange="toggleCacheOptions()" class="w-4 h-4 text-slate-900 rounded border-slate-300">
-                                <span class="text-xs font-medium text-slate-700">启用本地媒体缓存 (tmp/)</span>
-                            </label>
-                            <div id="cacheOptions">
-                                <div>
-                                    <label class="text-xs text-slate-500 mb-1 block">缓存过期 (秒，0为不自动删)</label>
-                                    <input id="cfgCacheTimeout" type="number" class="flex h-8 w-full rounded-lg border border-slate-200 bg-white px-2.5 text-xs text-slate-800 focus:outline-none">
-                                </div>
-                                <div class="mt-2">
-                                    <label class="text-xs text-slate-500 mb-1 block">对外访问域名 (留空为本机 IP)</label>
-                                    <input id="cfgCacheBaseUrl" type="text" class="flex h-8 w-full rounded-lg border border-slate-200 bg-white px-2.5 text-xs text-slate-800 focus:outline-none">
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                    <button onclick="saveCacheConfig()" class="mt-4 w-full py-1.5 rounded-lg bg-slate-900 text-white text-xs font-medium hover:bg-slate-800">保存缓存配置</button>
-                </div>
-
-                <!-- 企业微信通知配置 -->
-                <div class="bg-white rounded-xl p-5 border border-slate-200/80 shadow-sm flex flex-col justify-between">
-                    <div>
-                        <h3 class="text-sm font-bold text-slate-900 mb-3">企业微信通知配置</h3>
-                        <div class="space-y-3">
-                            <label class="inline-flex items-center gap-2 cursor-pointer">
-                                <input type="checkbox" id="cfgWebhookEnabled" onchange="toggleWebhookOptions()" class="w-4 h-4 text-slate-900 rounded border-slate-300">
-                                <span class="text-xs font-medium text-slate-700">启用企微群机器人告警汇报</span>
-                            </label>
-                            <div id="webhookOptions">
-                                <div>
-                                    <label class="text-xs text-slate-500 mb-1 block">Webhook 机器人地址</label>
-                                    <input id="cfgWecomWebhookUrl" type="text" class="flex h-8 w-full rounded-lg border border-slate-200 bg-white px-2.5 text-xs text-slate-800 focus:outline-none">
-                                </div>
-                                <div class="grid grid-cols-2 gap-2 text-xs text-slate-600 mt-2">
-                                    <label class="inline-flex items-center gap-1.5">
-                                        <input type="checkbox" id="cfgNotifyOnExpired" class="w-3.5 h-3.5 text-slate-900 rounded">
-                                        <span>失效即时告警</span>
+                                <h3 class="text-sm font-bold text-slate-900 mb-3">代理配置</h3>
+                                <div class="space-y-3">
+                                    <label class="inline-flex items-center gap-2 cursor-pointer">
+                                        <input type="checkbox" id="cfgProxyEnabled" class="w-4 h-4 text-slate-900 rounded border-slate-300">
+                                        <span class="text-xs font-medium text-slate-700">启用请求代理 (透明网关建议关闭)</span>
                                     </label>
-                                    <label class="inline-flex items-center gap-1.5">
-                                        <input type="checkbox" id="cfgDailyReportEnabled" class="w-3.5 h-3.5 text-slate-900 rounded">
-                                        <span>每日定时汇报</span>
-                                    </label>
+                                    <div>
+                                        <label class="text-xs text-slate-500 mb-1 block">请求代理地址</label>
+                                        <input id="cfgProxyUrl" type="text" class="flex h-8 w-full rounded-lg border border-slate-200 bg-white px-2.5 text-xs text-slate-800 focus:outline-none">
+                                    </div>
+                                    <div class="pt-2 border-t border-slate-100">
+                                        <label class="inline-flex items-center gap-2 cursor-pointer">
+                                            <input type="checkbox" id="cfgMediaProxyEnabled" class="w-4 h-4 text-slate-900 rounded border-slate-300" onchange="toggleMediaProxyInput()">
+                                            <span class="text-xs font-medium text-slate-700">媒体上传下载独立代理</span>
+                                        </label>
+                                        <div id="mediaProxyUrlInput" class="hidden mt-2">
+                                            <input id="cfgMediaProxyUrl" class="flex h-8 w-full rounded-lg border border-slate-200 bg-white px-2.5 text-xs text-slate-800 focus:outline-none" placeholder="http://127.0.0.1:7897">
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
-                        </div>
-                    </div>
-                    <div class="flex gap-2 mt-4">
-                        <button onclick="saveWebhookConfig()" class="flex-1 py-1.5 rounded-lg bg-slate-900 text-white text-xs font-medium hover:bg-slate-800">保存通知</button>
-                        <button onclick="testWebhook()" class="px-3 py-1.5 rounded-lg border border-slate-200 text-xs text-slate-700 hover:bg-slate-50">测试</button>
-                    </div>
-                </div>
-
-                <!-- 验证码服务配置 -->
-                <div class="bg-white rounded-xl p-5 border border-slate-200/80 shadow-sm flex flex-col justify-between lg:col-span-2">
-                    <div>
-                        <h3 class="text-sm font-bold text-slate-900 mb-3">验证码服务配置 (当前: 免费浏览器扩展)</h3>
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div>
-                                <label class="text-xs text-slate-500 mb-1 block">打码获取方式</label>
-                                <select id="cfgCaptchaMethod" onchange="toggleCaptchaOptions()" class="w-full bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-slate-800 focus:outline-none">
-                                    <option value="extension">浏览器扩展插件打码 (当前使用 · 100% 免费稳定)</option>
-                                    <option value="yescaptcha">YesCaptcha 第三方云端打码</option>
-                                    <option value="capsolver">CapSolver 第三方云端打码</option>
-                                    <option value="capmonster">CapMonster 第三方云端打码</option>
-                                </select>
-                                <p class="text-[11px] text-slate-400 mt-1">扩展运行于本机 Chrome，通过原生 Hook 拦截官方 grecaptcha 获得 0.9 满分 Token</p>
-                            </div>
-                            <div>
-                                <label class="text-xs text-slate-500 mb-1 block">第三方平台 API Key</label>
-                                <input id="cfgYescaptchaApiKey" type="text" placeholder="使用扩展打码时留空即可" class="flex h-8 w-full rounded-lg border border-slate-200 bg-white px-2.5 text-xs text-slate-800 focus:outline-none">
+                            <div class="grid grid-cols-2 gap-2 mt-4">
+                                <button onclick="testProxyConfig()" id="btnTestProxy" class="py-1.5 rounded-lg border border-slate-200 text-xs text-slate-700 hover:bg-slate-50">测试连通</button>
+                                <button onclick="saveProxyConfig()" class="py-1.5 rounded-lg bg-slate-900 text-white text-xs font-medium hover:bg-slate-800">保存代理</button>
                             </div>
                         </div>
+
+                        <!-- 生成与超时配置 -->
+                        <div class="bg-white rounded-xl p-5 border border-slate-200/80 shadow-sm flex flex-col justify-between">
+                            <div>
+                                <h3 class="text-sm font-bold text-slate-900 mb-3">生成与超时配置</h3>
+                                <div class="space-y-3">
+                                    <div class="grid grid-cols-2 gap-2.5">
+                                        <div>
+                                            <label class="text-xs text-slate-500 mb-1 block">图片超时 (秒)</label>
+                                            <input id="cfgImageTimeout" type="number" class="flex h-8 w-full rounded-lg border border-slate-200 bg-white px-2.5 text-xs text-slate-800 focus:outline-none">
+                                        </div>
+                                        <div>
+                                            <label class="text-xs text-slate-500 mb-1 block">视频超时 (秒)</label>
+                                            <input id="cfgVideoTimeout" type="number" class="flex h-8 w-full rounded-lg border border-slate-200 bg-white px-2.5 text-xs text-slate-800 focus:outline-none">
+                                        </div>
+                                    </div>
+                                    <div class="grid grid-cols-2 gap-2.5">
+                                        <div>
+                                            <label class="text-xs text-slate-500 mb-1 block">兜底换号 (次)</label>
+                                            <input id="cfgImageFallbackAttempts" type="number" class="flex h-8 w-full rounded-lg border border-slate-200 bg-white px-2.5 text-xs text-slate-800 focus:outline-none">
+                                        </div>
+                                        <div>
+                                            <label class="text-xs text-slate-500 mb-1 block">最大重试次数</label>
+                                            <input id="cfgMaxRetries" type="number" class="flex h-8 w-full rounded-lg border border-slate-200 bg-white px-2.5 text-xs text-slate-800 focus:outline-none">
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <button onclick="saveAllGenerationConfig()" class="mt-4 w-full py-1.5 rounded-lg bg-slate-900 text-white text-xs font-medium hover:bg-slate-800">保存生成配置</button>
+                        </div>
+
+                        <!-- 缓存配置 -->
+                        <div class="bg-white rounded-xl p-5 border border-slate-200/80 shadow-sm flex flex-col justify-between">
+                            <div>
+                                <h3 class="text-sm font-bold text-slate-900 mb-3">本地缓存配置</h3>
+                                <div class="space-y-3">
+                                    <label class="inline-flex items-center gap-2 cursor-pointer">
+                                        <input type="checkbox" id="cfgCacheEnabled" onchange="toggleCacheOptions()" class="w-4 h-4 text-slate-900 rounded border-slate-300">
+                                        <span class="text-xs font-medium text-slate-700">启用本地媒体缓存 (tmp/)</span>
+                                    </label>
+                                    <div id="cacheOptions">
+                                        <div>
+                                            <label class="text-xs text-slate-500 mb-1 block">缓存过期 (秒，0为不自动删)</label>
+                                            <input id="cfgCacheTimeout" type="number" class="flex h-8 w-full rounded-lg border border-slate-200 bg-white px-2.5 text-xs text-slate-800 focus:outline-none">
+                                        </div>
+                                        <div class="mt-2">
+                                            <label class="text-xs text-slate-500 mb-1 block">对外访问域名 (留空为本机 IP)</label>
+                                            <input id="cfgCacheBaseUrl" type="text" class="flex h-8 w-full rounded-lg border border-slate-200 bg-white px-2.5 text-xs text-slate-800 focus:outline-none">
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <button onclick="saveCacheConfig()" class="mt-4 w-full py-1.5 rounded-lg bg-slate-900 text-white text-xs font-medium hover:bg-slate-800">保存缓存配置</button>
+                        </div>
+
+                        <!-- 企业微信通知配置 -->
+                        <div class="bg-white rounded-xl p-5 border border-slate-200/80 shadow-sm flex flex-col justify-between">
+                            <div>
+                                <h3 class="text-sm font-bold text-slate-900 mb-3">企业微信通知配置</h3>
+                                <div class="space-y-3">
+                                    <label class="inline-flex items-center gap-2 cursor-pointer">
+                                        <input type="checkbox" id="cfgWebhookEnabled" onchange="toggleWebhookOptions()" class="w-4 h-4 text-slate-900 rounded border-slate-300">
+                                        <span class="text-xs font-medium text-slate-700">启用企微群机器人告警汇报</span>
+                                    </label>
+                                    <div id="webhookOptions">
+                                        <div>
+                                            <label class="text-xs text-slate-500 mb-1 block">Webhook 机器人地址</label>
+                                            <input id="cfgWecomWebhookUrl" type="text" class="flex h-8 w-full rounded-lg border border-slate-200 bg-white px-2.5 text-xs text-slate-800 focus:outline-none">
+                                        </div>
+                                        <div class="grid grid-cols-2 gap-2 text-xs text-slate-600 mt-2">
+                                            <label class="inline-flex items-center gap-1.5">
+                                                <input type="checkbox" id="cfgNotifyOnExpired" class="w-3.5 h-3.5 text-slate-900 rounded">
+                                                <span>失效即时告警</span>
+                                            </label>
+                                            <label class="inline-flex items-center gap-1.5">
+                                                <input type="checkbox" id="cfgDailyReportEnabled" class="w-3.5 h-3.5 text-slate-900 rounded">
+                                                <span>每日定时汇报</span>
+                                            </label>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="flex gap-2 mt-4">
+                                <button onclick="saveWebhookConfig()" class="flex-1 py-1.5 rounded-lg bg-slate-900 text-white text-xs font-medium hover:bg-slate-800">保存通知</button>
+                                <button onclick="testWebhook()" class="px-3 py-1.5 rounded-lg border border-slate-200 text-xs text-slate-700 hover:bg-slate-50">测试</button>
+                            </div>
+                        </div>
+
+                        <!-- 验证码服务配置 -->
+                        <div class="bg-white rounded-xl p-5 border border-slate-200/80 shadow-sm flex flex-col justify-between lg:col-span-2">
+                            <div>
+                                <h3 class="text-sm font-bold text-slate-900 mb-3">验证码服务配置 (当前: 免费浏览器扩展)</h3>
+                                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div>
+                                        <label class="text-xs text-slate-500 mb-1 block">打码获取方式</label>
+                                        <select id="cfgCaptchaMethod" onchange="toggleCaptchaOptions()" class="w-full bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-slate-800 focus:outline-none">
+                                            <option value="extension">浏览器扩展插件打码 (当前使用 · 100% 免费稳定)</option>
+                                            <option value="yescaptcha">YesCaptcha 第三方云端打码</option>
+                                            <option value="capsolver">CapSolver 第三方云端打码</option>
+                                            <option value="capmonster">CapMonster 第三方云端打码</option>
+                                        </select>
+                                        <p class="text-[11px] text-slate-400 mt-1">扩展运行于本机 Chrome，通过原生 Hook 拦截官方 grecaptcha 获得 0.9 满分 Token</p>
+                                    </div>
+                                    <div>
+                                        <label class="text-xs text-slate-500 mb-1 block">第三方平台 API Key</label>
+                                        <input id="cfgYescaptchaApiKey" type="text" placeholder="使用扩展打码时留空即可" class="flex h-8 w-full rounded-lg border border-slate-200 bg-white px-2.5 text-xs text-slate-800 focus:outline-none">
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="flex justify-end mt-4">
+                                <button onclick="saveCaptchaConfig()" class="px-4 py-1.5 rounded-lg bg-slate-900 text-white text-xs font-medium hover:bg-slate-800">保存打码配置</button>
+                            </div>
+                        </div>
                     </div>
-                    <div class="flex justify-end mt-4">
-                        <button onclick="saveCaptchaConfig()" class="px-4 py-1.5 rounded-lg bg-slate-900 text-white text-xs font-medium hover:bg-slate-800">保存打码配置</button>
+                </div>
+
+                <!-- ==================== TAB 5: 请求日志 ==================== -->
+                <div id="panel-logs" class="hidden space-y-4">
+                    <div class="bg-white rounded-xl p-4 border border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-sm">
+                        <div>
+                            <h3 class="font-bold text-slate-900 text-sm">生成请求审计日志</h3>
+                            <p class="text-xs text-slate-400 mt-0.5">记录每笔图片与视频生成的耗时、状态码与执行过程</p>
+                        </div>
+                        <div class="flex items-center gap-2 flex-wrap">
+                            <span id="logsAutoRefreshBadge" class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs bg-emerald-50 text-emerald-700 font-medium border border-emerald-100 shadow-sm">
+                                <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                                <span>自动实时刷新 (2.5s)</span>
+                            </span>
+                            <button onclick="refreshLogs()" class="text-xs px-3 py-1.5 rounded border border-slate-200 hover:bg-slate-50 transition-colors">手动刷新</button>
+                            <button onclick="clearAllLogs()" class="text-xs px-3 py-1.5 rounded bg-red-50 text-red-600 border border-red-200 hover:bg-red-100 transition-colors">清空日志</button>
+                        </div>
+                    </div>
+
+                    <div class="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-xs text-left">
+                                <thead class="bg-slate-50/80 text-slate-500 font-medium border-b border-slate-100">
+                                    <tr>
+                                        <th class="py-2.5 px-3">操作</th>
+                                        <th class="py-2.5 px-3">Token 邮箱</th>
+                                        <th class="py-2.5 px-3 text-center">状态</th>
+                                        <th class="py-2.5 px-3 text-center">进度</th>
+                                        <th class="py-2.5 px-3 text-center">状态码</th>
+                                        <th class="py-2.5 px-3">结果摘要</th>
+                                        <th class="py-2.5 px-3">耗时(s)</th>
+                                        <th class="py-2.5 px-3">时间</th>
+                                        <th class="py-2.5 px-3 text-center">详情</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="divide-y divide-slate-100" id="logsTableBody">
+                                    <tr><td colspan="9" class="py-8 text-center text-slate-400">正在加载日志...</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
                     </div>
                 </div>
 
             </div>
-        </div>
-
-        <!-- ==================== TAB 5: 请求日志 ==================== -->
-        <div id="panel-logs" class="hidden space-y-4">
-            <div class="bg-white rounded-xl p-4 border border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-sm">
-                <div>
-                    <h3 class="font-bold text-slate-900 text-sm">生成请求审计日志</h3>
-                    <p class="text-xs text-slate-400 mt-0.5">记录每笔图片与视频生成的耗时、状态码与执行过程</p>
-                </div>
-                <div class="flex items-center gap-2 flex-wrap">
-                    <span id="logsAutoRefreshBadge" class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs bg-emerald-50 text-emerald-700 font-medium border border-emerald-100 shadow-sm">
-                        <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-                        <span>自动实时刷新 (2.5s)</span>
-                    </span>
-                    <button onclick="refreshLogs()" class="text-xs px-3 py-1.5 rounded border border-slate-200 hover:bg-slate-50 transition-colors">手动刷新</button>
-                    <button onclick="clearAllLogs()" class="text-xs px-3 py-1.5 rounded bg-red-50 text-red-600 border border-red-200 hover:bg-red-100 transition-colors">清空日志</button>
-                </div>
-            </div>
-
-            <div class="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
-                <div class="overflow-x-auto">
-                    <table class="w-full text-xs text-left">
-                        <thead class="bg-slate-50/80 text-slate-500 font-medium border-b border-slate-100">
-                            <tr>
-                                <th class="py-2.5 px-3">操作</th>
-                                <th class="py-2.5 px-3">Token 邮箱</th>
-                                <th class="py-2.5 px-3 text-center">状态</th>
-                                <th class="py-2.5 px-3 text-center">进度</th>
-                                <th class="py-2.5 px-3 text-center">状态码</th>
-                                <th class="py-2.5 px-3">结果摘要</th>
-                                <th class="py-2.5 px-3">耗时(s)</th>
-                                <th class="py-2.5 px-3">时间</th>
-                                <th class="py-2.5 px-3 text-center">详情</th>
-                            </tr>
-                        </thead>
-                        <tbody class="divide-y divide-slate-100" id="logsTableBody">
-                            <tr><td colspan="9" class="py-8 text-center text-slate-400">正在加载日志...</td></tr>
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-        </div>
-
-    </main>
+        </main>
+    </div>
 
     <!-- ==================== 模态框组 ==================== -->
     <!-- 添加 Token Modal -->
@@ -838,7 +882,7 @@
         </div>
     </div>
 
-    <!-- 媒体大图 / 视频预览 Lightbox (点击遮罩关闭，内部阻止冒泡) -->
+    <!-- 媒体大图 / 视频预览 Lightbox -->
     <div id="media-modal" class="fixed inset-0 z-50 bg-black/85 backdrop-blur-sm hidden flex items-center justify-center p-4" onclick="closeMediaModal()">
         <div class="relative max-w-5xl max-h-[92vh] flex flex-col items-center" onclick="event.stopPropagation()">
             <div id="media-modal-body" class="w-full flex items-center justify-center"></div>
@@ -867,6 +911,22 @@
         let chartDataCache = null;
         let liveTaskPollTimer = null;
         let adminApiKey = '';
+
+        // 侧边栏抽屉折叠交互 (移动端)
+        function toggleSidebar(show) {
+            const sidebar = $('main-sidebar');
+            const backdrop = $('mobile-sidebar-backdrop');
+            const isCurrentlyOpen = !sidebar.classList.contains('-translate-x-full');
+            const shouldOpen = show !== undefined ? show : !isCurrentlyOpen;
+
+            if (shouldOpen) {
+                sidebar.classList.remove('-translate-x-full');
+                backdrop.classList.remove('hidden');
+            } else {
+                sidebar.classList.add('-translate-x-full');
+                backdrop.classList.add('hidden');
+            }
+        }
 
         // API 统一封装
         async function apiRequest(url, options = {}) {
@@ -903,25 +963,42 @@
             }, duration);
         }
 
-        // Tab 切换逻辑
+        // 统一 Tab / 侧栏菜单切换
         function switchTab(tabId) {
             activeTab = tabId;
             const tabs = ['overview', 'chat-paint', 'media-mgr', 'settings', 'logs'];
+
+            // 移动端切换后自动收回抽屉侧栏
+            if (window.innerWidth < 768) {
+                toggleSidebar(false);
+            }
+
+            // 更新侧边栏导航高亮
             tabs.forEach(t => {
                 const panel = $('panel-' + t);
-                const btn = $('tab-' + t);
+                const navBtn = $('nav-' + t);
                 if (panel) panel.classList.add('hidden');
-                if (btn) {
-                    btn.className = "tab-btn border-b-2 border-transparent text-slate-500 hover:text-slate-800 text-sm font-medium py-2.5 px-1 flex items-center gap-1.5";
+                if (navBtn) {
+                    navBtn.className = "nav-item w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all text-slate-600 hover:bg-slate-100 hover:text-slate-900";
                 }
             });
 
             const activePanel = $('panel-' + tabId);
-            const activeBtn = $('tab-' + tabId);
+            const activeNavBtn = $('nav-' + tabId);
             if (activePanel) activePanel.classList.remove('hidden');
-            if (activeBtn) {
-                activeBtn.className = "tab-btn border-b-2 border-slate-900 text-slate-900 text-sm font-bold py-2.5 px-1 flex items-center gap-1.5";
+            if (activeNavBtn) {
+                activeNavBtn.className = "nav-item w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold transition-all bg-slate-900 text-white shadow-sm";
             }
+
+            // 更新 Header 标题文字
+            const titles = {
+                'overview': '概览中心',
+                'chat-paint': '图片生成',
+                'media-mgr': '媒体管理',
+                'settings': '系统配置',
+                'logs': '请求日志'
+            };
+            $('header-page-title').innerHTML = `<span>${titles[tabId] || '控制台'}</span>`;
 
             if (tabId === 'overview') {
                 stopLogsAutoRefresh();
@@ -1033,7 +1110,6 @@
             const labelsContainer = $('chart-axis-labels');
             if (!chartDataCache) return;
 
-            // 保持刻度虚线
             container.innerHTML = `
                 <div class="absolute inset-x-0 top-0 border-b border-dashed border-slate-100 flex justify-between text-[10px] text-slate-300 pointer-events-none -translate-y-2.5"><span id="chart-scale-max">25</span></div>
                 <div class="absolute inset-x-0 top-1/4 border-b border-dashed border-slate-100 flex justify-between text-[10px] text-slate-300 pointer-events-none -translate-y-2.5"><span id="chart-scale-75">20</span></div>
@@ -1113,7 +1189,7 @@
         }
 
         // 4. Token 账号管理逻辑
-        window.isEmailMasked = localStorage.getItem('flow2api_mask_emails') !== '0'; // 默认开启脱敏
+        window.isEmailMasked = localStorage.getItem('flow2api_mask_emails') !== '0';
 
         function formatTokenEmail(email) {
             if (!email) return '-';
@@ -1439,7 +1515,6 @@
                 return;
             }
 
-            // 桌面端表格渲染 (正方形轻量缩略图 + 详细信息)
             if (tbody) {
                 tbody.innerHTML = files.map(f => {
                     const isVid = f.type === 'video';
@@ -1482,7 +1557,6 @@
                 }).join('');
             }
 
-            // 移动端列表渲染 (左侧正方形缩略图 + 右侧信息)
             if (mobileList) {
                 mobileList.innerHTML = files.map(f => {
                     const isVid = f.type === 'video';
@@ -1553,7 +1627,6 @@
 
         // 6. 系统设置配置加载与保存
         async function loadAllSettings() {
-            // 生成与超时配置
             const rGen = await apiRequest('/api/generation/timeout');
             if (rGen) {
                 const d = await rGen.json();
@@ -1567,7 +1640,6 @@
                 }
             }
 
-            // 安全与当前 API Key
             const rAdmin = await apiRequest('/api/admin/config');
             if (rAdmin) {
                 const d = await rAdmin.json();
@@ -1576,7 +1648,6 @@
                 adminApiKey = d.api_key || '';
             }
 
-            // 代理配置
             const rProxy = await apiRequest('/api/proxy/config');
             if (rProxy) {
                 const d = await rProxy.json();
@@ -1587,7 +1658,6 @@
                 toggleMediaProxyInput();
             }
 
-            // 缓存配置
             const rCache = await apiRequest('/api/cache/config');
             if (rCache) {
                 const d = await rCache.json();
@@ -1599,7 +1669,6 @@
                 }
             }
 
-            // 企微配置
             const rWebhook = await apiRequest('/api/webhook/config');
             if (rWebhook) {
                 const d = await rWebhook.json();
@@ -1612,7 +1681,6 @@
                 }
             }
 
-            // 验证码配置
             const rCap = await apiRequest('/api/captcha/config');
             if (rCap) {
                 const d = await rCap.json();
@@ -1876,8 +1944,24 @@
             }).join('');
         }
 
+        function toggleChatHistory(show) {
+            const drawer = $('chatHistoryDrawer');
+            const backdrop = $('chatHistoryBackdrop');
+            if (!drawer) return;
+            const isCurrentlyOpen = !drawer.classList.contains('-translate-x-full');
+            const shouldOpen = show !== undefined ? show : !isCurrentlyOpen;
+            if (shouldOpen) {
+                drawer.classList.remove('-translate-x-full');
+                if (backdrop) backdrop.classList.remove('hidden');
+            } else {
+                drawer.classList.add('-translate-x-full');
+                if (backdrop) backdrop.classList.add('hidden');
+            }
+        }
+
         function selectChatSession(id) {
             activeChatSessionId = id;
+            if (window.innerWidth < 768) toggleChatHistory(false);
             renderChatSessionList();
             renderCurrentChatMessages();
         }
@@ -1956,7 +2040,6 @@
             input.value = '';
             renderCurrentChatMessages();
 
-            // AI loading bubble
             const container = $('chatMessagesContainer');
             const loadingBubble = document.createElement('div');
             loadingBubble.className = "flex items-start gap-2.5 chat-bubble-enter";
@@ -1975,7 +2058,6 @@
 
             const startTime = Date.now();
             try {
-                // 构建调用 payload
                 let targetModel = model;
                 const requestBody = {
                     model: targetModel,
@@ -1990,7 +2072,6 @@
                     ];
                 }
 
-                // 优先使用 adminApiKey
                 const headers = { 'Content-Type': 'application/json' };
                 if (adminApiKey) {
                     headers['Authorization'] = `Bearer ${adminApiKey}`;
@@ -2092,6 +2173,7 @@
                 messages: []
             });
             activeChatSessionId = newId;
+            if (window.innerWidth < 768) toggleChatHistory(false);
             saveChatSessions();
             renderChatSessionList();
             renderCurrentChatMessages();
@@ -2107,27 +2189,7 @@
             }
         }
 
-        // 辅助通用
-        function roundMb(b) { return (Number(b || 0) / (1024 * 1024)).toFixed(1); }
-        function roundGb(b) { return (Number(b || 0) / (1024 * 1024 * 1024)).toFixed(1); }
-        function formatJson(str) {
-            if (!str) return '';
-            try { return JSON.stringify(JSON.parse(str), null, 2); } catch (_) { return str; }
-        }
-        function formatTime(val) {
-            if (!val) return '-';
-            let s = String(val).trim();
-            if (!s.endsWith('Z') && !/[+-]\d{2}:?\d{2}$/.test(s)) s = s.replace(' ', 'T') + 'Z';
-            const d = new Date(s);
-            if (isNaN(d.getTime())) return val;
-            return d.toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai', hour12: false });
-        }
-        function quotePrompt(t) { $('chatPromptInput').value = t; $('chatPromptInput').focus(); }
-        function copyToClipboard(t) { navigator.clipboard.writeText(t).then(() => showToast('链接已复制到剪贴板', 'success')); }
-        function previewImageModal(url) {
-            openMediaPreview(url, 'image');
-        }
-
+        // 媒体大图/点播预览弹窗
         function openMediaPreview(url, type) {
             const modal = $('media-modal');
             const body = $('media-modal-body');
@@ -2149,9 +2211,26 @@
             modal.classList.add('hidden');
         }
 
-        function closeImageModal() {
-            closeMediaModal();
+        function previewImageModal(url) { openMediaPreview(url, 'image'); }
+        function closeImageModal() { closeMediaModal(); }
+
+        // 辅助通用
+        function roundMb(b) { return (Number(b || 0) / (1024 * 1024)).toFixed(1); }
+        function roundGb(b) { return (Number(b || 0) / (1024 * 1024 * 1024)).toFixed(1); }
+        function formatJson(str) {
+            if (!str) return '';
+            try { return JSON.stringify(JSON.parse(str), null, 2); } catch (_) { return str; }
         }
+        function formatTime(val) {
+            if (!val) return '-';
+            let s = String(val).trim();
+            if (!s.endsWith('Z') && !/[+-]\d{2}:?\d{2}$/.test(s)) s = s.replace(' ', 'T') + 'Z';
+            const d = new Date(s);
+            if (isNaN(d.getTime())) return val;
+            return d.toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai', hour12: false });
+        }
+        function quotePrompt(t) { $('chatPromptInput').value = t; $('chatPromptInput').focus(); }
+        function copyToClipboard(t) { navigator.clipboard.writeText(t).then(() => showToast('链接已复制到剪贴板', 'success')); }
         function escapeHtml(s) { return String(s || '').replace(/[&<>"']/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[m]); }
 
         async function logout() {

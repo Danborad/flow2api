@@ -2,8 +2,8 @@
 <html lang="zh-CN" class="h-full">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>图片生成测试台 - Flow2API</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>测试工作台 - Flow2API</title>
     <!-- 纯净矢量 Favicon: 白底黑色 F 字符，极简大气 -->
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%23ffffff' stroke='%23cbd5e1' stroke-width='1.5'/%3E%3Ctext x='16' y='24' font-family='-apple-system, BlinkMacSystemFont, Roboto, sans-serif' font-size='22' font-weight='800' fill='%230f172a' text-anchor='middle'%3EF%3C/text%3E%3C/svg%3E">
     <script src="https://cdn.tailwindcss.com"></script>
@@ -25,7 +25,7 @@
     </script>
     <style>
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; -webkit-tap-highlight-color: transparent; }
-        .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
+        .custom-scrollbar::-webkit-scrollbar { width: 5px; height: 5px; }
         .custom-scrollbar::-webkit-scrollbar-thumb { background: #e2e8f0; border-radius: 9999px; }
         .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
         .chat-bubble-enter { animation: bubbleIn 0.2s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
@@ -34,136 +34,186 @@
         .animate-slide-up { animation: slide-up .25s ease-out; }
     </style>
 </head>
-<body class="min-h-screen bg-[#fafafa] text-slate-900 antialiased flex flex-col">
+<body class="h-screen bg-[#fafafa] text-slate-900 antialiased flex overflow-hidden">
 
-    <!-- 顶部导航栏 (黄金居中对齐) -->
-    <header class="sticky top-0 z-40 w-full border-b border-slate-200/80 bg-white/95 backdrop-blur shadow-sm/30">
-        <div class="mx-auto flex h-14 max-w-7xl items-center justify-between px-4 sm:px-6">
-            <div class="flex items-center gap-3">
-                <div class="w-7 h-7 rounded-lg bg-white border border-slate-300 shadow-sm flex items-center justify-center font-extrabold text-sm text-slate-900 font-mono shrink-0">
-                    F
-                </div>
-                <span class="font-bold text-lg tracking-tight text-slate-900">Flow2API</span>
-                <span class="text-slate-300">/</span>
-                <span class="text-xs font-semibold text-slate-700 bg-slate-100 px-2 py-0.5 rounded">图片生成测试台</span>
-            </div>
+    <!-- ==================== 移动端侧边栏遮罩 (Backdrop) ==================== -->
+    <div id="mobile-sidebar-backdrop" onclick="toggleSidebar(false)" class="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-40 hidden md:hidden transition-opacity duration-200"></div>
 
-            <div class="flex items-center gap-3">
-                <a href="/manage" class="text-xs font-medium text-slate-600 hover:text-slate-900 transition-colors">
-                    返回控制台
+    <!-- ==================== 侧边栏：历史任务与控制台导航 (桌面端常驻260px，移动端抽屉) ==================== -->
+    <aside id="main-sidebar" class="fixed inset-y-0 left-0 z-50 w-72 md:w-64 bg-white border-r border-slate-200/80 flex flex-col justify-between shrink-0 select-none shadow-xl md:shadow-none -translate-x-full md:translate-x-0 md:static transition-transform duration-200 ease-in-out">
+        <div class="flex-1 flex flex-col min-h-0">
+            <!-- 品牌栏 (白底黑字 F 徽标 + Flow2API + 返回后台) -->
+            <div class="h-14 flex items-center justify-between px-4 border-b border-slate-100 shrink-0">
+                <a href="/manage" class="flex items-center gap-2.5 group" title="返回管理控制台">
+                    <div class="w-7 h-7 rounded-lg bg-white border border-slate-300 shadow-sm flex items-center justify-center font-extrabold text-sm text-slate-900 font-mono shrink-0 group-hover:border-slate-500 transition-colors">
+                        F
+                    </div>
+                    <div>
+                        <span class="font-bold text-sm tracking-tight text-slate-900 block leading-none">Flow2API</span>
+                        <span class="text-[10px] text-slate-400 leading-none mt-0.5 block">测试工作台</span>
+                    </div>
                 </a>
-                <span class="text-slate-200">|</span>
-                <span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-xs bg-emerald-50 text-emerald-700 font-medium border border-emerald-100">
-                    <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-                    <span>服务就绪</span>
-                </span>
-            </div>
-        </div>
-    </header>
 
-    <!-- 对话生图工作台主体 -->
-    <main class="mx-auto w-full max-w-7xl px-4 sm:px-6 py-5 sm:py-6 flex-1 flex flex-col">
-        <div class="flex-1 flex flex-col md:flex-row rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden" style="min-height: calc(100vh - 120px);">
-            <!-- 左侧对话任务列表 -->
-            <div class="w-full md:w-64 bg-slate-50/60 border-b md:border-b-0 md:border-r border-slate-200 flex flex-col shrink-0">
-                <div class="p-3 border-b border-slate-100 flex items-center justify-between">
-                    <span class="font-bold text-xs text-slate-700">生图任务历史</span>
-                    <button onclick="newChatSession()" class="flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded bg-slate-900 text-white hover:bg-slate-800 transition-colors shadow-sm">
-                        <span>+ 新对话</span>
+                <div class="flex items-center gap-1">
+                    <a href="/manage" class="px-2 py-1 text-xs text-slate-500 hover:text-slate-900 rounded hover:bg-slate-100 transition-colors">
+                        后台
+                    </a>
+                    <!-- 移动端关闭侧栏按钮 -->
+                    <button onclick="toggleSidebar(false)" class="md:hidden p-1.5 text-slate-400 hover:text-slate-600 rounded-lg focus:outline-none">
+                        <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
                     </button>
                 </div>
-                <div class="flex-1 overflow-y-auto p-2 space-y-1.5 custom-scrollbar" id="chatSessionList">
-                    <!-- 动态生成历史会话 -->
-                </div>
             </div>
 
-            <!-- 右侧生图聊天工作区 -->
-            <div class="flex-1 flex flex-col bg-[#fafafa]">
-                <!-- 顶栏标题 -->
-                <div class="h-11 bg-white border-b border-slate-200/80 px-4 sm:px-6 flex items-center justify-between shrink-0">
-                    <div class="flex items-center gap-2">
-                        <span class="font-bold text-xs text-slate-800 truncate" id="currentChatTitle">新画图任务</span>
-                    </div>
-                    <button onclick="clearCurrentChatMessages()" class="text-xs text-slate-400 hover:text-slate-600">清空对话</button>
-                </div>
+            <!-- 新建任务按钮 -->
+            <div class="p-3 border-b border-slate-100 shrink-0">
+                <button onclick="newChatSession()" class="w-full flex items-center justify-center gap-2 px-3 py-2 text-xs font-semibold rounded-xl bg-slate-900 text-white hover:bg-slate-800 transition-colors shadow-sm">
+                    <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/></svg>
+                    <span>新建生图 / 视频任务</span>
+                </button>
+            </div>
 
-                <!-- 消息气泡瀑布流 -->
-                <div class="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 custom-scrollbar" id="chatMessagesContainer">
-                    <div class="text-center py-16 text-slate-400 text-xs">
-                        <p>请在下方输入画面提示词，选择模型并开始生成</p>
-                    </div>
-                </div>
-
-                <!-- 底部交互工作栏 -->
-                <div class="p-3 sm:p-4 bg-white border-t border-slate-200">
-                    <div class="bg-slate-50 rounded-xl border border-slate-200 p-2.5 sm:p-3 focus-within:bg-white focus-within:border-slate-400 transition-all">
-                        <!-- 垫图缩略预览 -->
-                        <div id="chatRefPreview" class="hidden mb-2 flex items-center gap-2 bg-slate-100 p-1.5 rounded-lg">
-                            <img id="chatRefThumb" src="" class="w-8 h-8 rounded object-cover border border-slate-300">
-                            <span class="text-xs text-slate-600 flex-1 truncate">已挂载参考垫图</span>
-                            <button onclick="removeChatRefImage()" class="text-slate-400 hover:text-red-500 text-xs px-1">✕</button>
-                        </div>
-
-                        <textarea id="chatPromptInput" rows="2" placeholder="输入你想生成的画面提示词，支持粘贴截图或选择参考图..." class="w-full bg-transparent resize-none focus:outline-none text-xs text-slate-900 placeholder-slate-400 leading-relaxed"></textarea>
-
-                        <div class="flex items-center justify-between pt-2 border-t border-slate-200/60 mt-1 select-none flex-wrap gap-2">
-                            <div class="flex items-center gap-1.5 sm:gap-2 flex-wrap">
-                                <label class="cursor-pointer px-2.5 py-1 rounded bg-white border border-slate-200 hover:bg-slate-50 text-xs text-slate-700 transition-colors inline-flex items-center gap-1 shrink-0">
-                                    <svg class="w-3.5 h-3.5 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/></svg>
-                                    <span>参考图</span>
-                                    <input type="file" accept="image/*" class="hidden" onchange="handleChatFileInput(event)">
-                                </label>
-
-                                <select id="chatSelectModel" onchange="onChatModelChange()" class="bg-white border border-slate-200 rounded px-2.5 py-1 text-xs font-semibold text-slate-900 focus:outline-none cursor-pointer">
-                                    <option value="Nano Banana 2.1">🍌 Nano Banana 2.1 (BELUGA)</option>
-                                    <option value="Nano Banana 2 Lite">🍌 Nano Banana 2 Lite</option>
-                                    <option value="Nano Banana Pro">🍌 Nano Banana Pro</option>
-                                    <option value="Omni 1.1 Flash">🎬 Omni 1.1 Flash (视频)</option>
-                                </select>
-
-                                <select id="chatSelectAspect" class="bg-white border border-slate-200 rounded px-2.5 py-1 text-xs text-slate-700 focus:outline-none cursor-pointer">
-                                    <option value="9:16">9:16 竖屏</option>
-                                    <option value="16:9">16:9 横屏</option>
-                                    <option value="1:1">1:1 正方</option>
-                                    <option value="4:3">4:3</option>
-                                    <option value="3:4">3:4</option>
-                                </select>
-
-                                <div id="chatBoxResolution">
-                                    <select id="chatSelectSize" class="bg-white border border-slate-200 rounded px-2.5 py-1 text-xs text-slate-700 focus:outline-none cursor-pointer">
-                                        <option value="2k">2K 原生重塑</option>
-                                        <option value="4k">4K 超分 (Lanczos3)</option>
-                                        <option value="1k">1K 标清</option>
-                                    </select>
-                                </div>
-
-                                <div id="chatBoxDuration" class="hidden">
-                                    <select id="chatSelectDuration" class="bg-purple-50 border border-purple-200 text-purple-700 rounded px-2.5 py-1 text-xs font-semibold focus:outline-none cursor-pointer">
-                                        <option value="6">时长: 6 秒</option>
-                                        <option value="4">时长: 4 秒</option>
-                                        <option value="8">时长: 8 秒</option>
-                                        <option value="10">时长: 10 秒</option>
-                                    </select>
-                                </div>
-                            </div>
-
-                            <button onclick="handleChatSend()" id="btnChatSend" class="px-4 py-1.5 rounded-lg bg-slate-900 text-white text-xs font-medium hover:bg-slate-800 transition-colors shrink-0 ml-auto">
-                                生成画面
-                            </button>
-                        </div>
-                    </div>
-                </div>
+            <!-- 历史任务列表 -->
+            <div class="flex-1 overflow-y-auto p-2 space-y-1.5 custom-scrollbar" id="chatSessionList">
+                <!-- 动态填充 -->
             </div>
         </div>
 
-        <!-- 大图灯箱 -->
-        <div id="image-modal" class="fixed inset-0 z-50 bg-black/80 hidden flex items-center justify-center p-4" onclick="closeImageModal()">
-            <img id="modal-img" src="" class="max-w-full max-h-[85vh] rounded-lg shadow-2xl object-contain">
+        <!-- 侧栏底部：快速清空与系统状态 -->
+        <div class="p-3 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500 shrink-0">
+            <span class="inline-flex items-center gap-1.5 text-[11px] text-emerald-600 font-medium">
+                <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                <span>服务就绪</span>
+            </span>
+            <button onclick="clearAllChatSessions()" class="text-[11px] text-slate-400 hover:text-red-500 transition-colors px-1 py-0.5">
+                清空历史
+            </button>
         </div>
+    </aside>
 
-        <!-- 全局 Toast -->
-        <div id="toast-container" class="fixed bottom-4 right-4 z-50 space-y-2 pointer-events-none"></div>
-    </main>
+    <!-- ==================== 右侧主工作区 (Header + 聊天瀑布 + 底部输入框) ==================== -->
+    <div class="flex-1 flex flex-col min-w-0 h-screen overflow-hidden bg-[#fafafa]">
+
+        <!-- 顶部状态栏 Header (移动端汉堡按钮 + 任务标题 + 操作) -->
+        <header class="h-14 bg-white border-b border-slate-200/80 px-4 sm:px-6 flex items-center justify-between shrink-0 z-30 shadow-sm/30">
+            <div class="flex items-center gap-3 min-w-0">
+                <!-- 移动端汉堡按钮 (唤出侧边栏) -->
+                <button onclick="toggleSidebar(true)" class="md:hidden p-1.5 -ml-1 text-slate-700 hover:bg-slate-100 rounded-lg focus:outline-none shrink-0" aria-label="打开侧边栏菜单">
+                    <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg>
+                </button>
+                <div class="flex items-center gap-2 min-w-0">
+                    <span class="font-bold text-sm text-slate-900 truncate" id="currentChatTitle">新画图任务</span>
+                    <span id="currentChatBadge" class="hidden sm:inline-block text-[10px] px-1.5 py-0.2 rounded bg-slate-100 text-slate-600 font-medium shrink-0">Nano Banana 2.1</span>
+                </div>
+            </div>
+
+            <!-- 右侧操作项 -->
+            <div class="flex items-center gap-2 sm:gap-3 shrink-0">
+                <button onclick="newChatSession()" class="md:hidden inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-lg bg-slate-900 text-white hover:bg-slate-800 transition-colors shadow-sm">
+                    <span>+ 新建</span>
+                </button>
+                <button onclick="clearCurrentChatMessages()" class="text-xs text-slate-400 hover:text-slate-600 transition-colors px-1.5 py-1">
+                    清空对话
+                </button>
+                <span class="hidden sm:inline text-slate-200">|</span>
+                <a href="/manage" class="hidden sm:inline-flex items-center gap-1 text-xs font-medium text-slate-600 hover:text-slate-900 transition-colors">
+                    返回管理控制台
+                </a>
+            </div>
+        </header>
+
+        <!-- 聊天消息瀑布流 (滚动区) -->
+        <main class="flex-1 overflow-y-auto p-3 sm:p-6 space-y-4 custom-scrollbar" id="chatMessagesContainer">
+            <div class="text-center py-20 text-slate-400 text-xs">
+                <p>请在下方输入画面提示词，选择模型并开始生成</p>
+            </div>
+        </main>
+
+        <!-- 底部输入栏 (固定底栏，自适应手机视口) -->
+        <footer class="p-2.5 sm:p-4 bg-white border-t border-slate-200/90 shrink-0 pb-[max(0.625rem,env(safe-area-inset-bottom))]">
+            <div class="max-w-4xl mx-auto bg-slate-50 rounded-xl border border-slate-200 p-2 sm:p-3 focus-within:bg-white focus-within:border-slate-400 transition-all shadow-sm">
+                <!-- 垫图预览卡片 -->
+                <div id="chatRefPreview" class="hidden mb-2 flex items-center gap-2 bg-slate-100 p-1.5 rounded-lg">
+                    <img id="chatRefThumb" src="" class="w-8 h-8 rounded object-cover border border-slate-300">
+                    <span class="text-xs text-slate-600 flex-1 truncate">已挂载参考垫图</span>
+                    <button onclick="removeChatRefImage()" class="text-slate-400 hover:text-red-500 text-xs px-1">✕</button>
+                </div>
+
+                <textarea id="chatPromptInput" rows="2" placeholder="输入你想生成的画面提示词，支持粘贴截图或选择参考图..." class="w-full bg-transparent resize-none focus:outline-none text-xs text-slate-900 placeholder-slate-400 leading-relaxed"></textarea>
+
+                <!-- 参数配置与发送按钮行 (自适应换行，单手易操作) -->
+                <div class="flex items-center justify-between pt-2 border-t border-slate-200/60 mt-1 select-none flex-wrap gap-2">
+                    <div class="flex items-center gap-1.5 sm:gap-2 flex-wrap">
+                        <!-- 参考图选择 -->
+                        <label class="cursor-pointer px-2 py-1 rounded bg-white border border-slate-200 hover:bg-slate-50 text-xs text-slate-700 transition-colors inline-flex items-center gap-1 shrink-0">
+                            <svg class="w-3.5 h-3.5 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/></svg>
+                            <span>参考图</span>
+                            <input type="file" accept="image/*" class="hidden" onchange="handleChatFileInput(event)">
+                        </label>
+
+                        <!-- 模型选择 -->
+                        <select id="chatSelectModel" onchange="onChatModelChange()" class="bg-white border border-slate-200 rounded px-2 py-1 text-xs font-semibold text-slate-900 focus:outline-none cursor-pointer">
+                            <option value="Nano Banana 2.1">🍌 Nano Banana 2.1 (BELUGA)</option>
+                            <option value="Nano Banana 2 Lite">🍌 Nano Banana 2 Lite</option>
+                            <option value="Nano Banana Pro">🍌 Nano Banana Pro</option>
+                            <option value="Omni 1.1 Flash">🎬 Omni 1.1 Flash (视频)</option>
+                        </select>
+
+                        <!-- 画幅比例 -->
+                        <select id="chatSelectAspect" class="bg-white border border-slate-200 rounded px-2 py-1 text-xs text-slate-700 focus:outline-none cursor-pointer">
+                            <option value="9:16">9:16 竖屏</option>
+                            <option value="16:9">16:9 横屏</option>
+                            <option value="1:1">1:1 正方</option>
+                            <option value="4:3">4:3</option>
+                            <option value="3:4">3:4</option>
+                        </select>
+
+                        <!-- 分辨率 (图片模型展示) -->
+                        <div id="chatBoxResolution">
+                            <select id="chatSelectSize" class="bg-white border border-slate-200 rounded px-2 py-1 text-xs text-slate-700 focus:outline-none cursor-pointer">
+                                <option value="2k">2K 原生重塑</option>
+                                <option value="4k">4K 超分 (Lanczos3)</option>
+                                <option value="1k">1K 标清</option>
+                            </select>
+                        </div>
+
+                        <!-- 视频时长 (视频模型展示) -->
+                        <div id="chatBoxDuration" class="hidden">
+                            <select id="chatSelectDuration" class="bg-purple-50 border border-purple-200 text-purple-700 rounded px-2 py-1 text-xs font-semibold focus:outline-none cursor-pointer">
+                                <option value="6">时长: 6 秒</option>
+                                <option value="4">时长: 4 秒</option>
+                                <option value="8">时长: 8 秒</option>
+                                <option value="10">时长: 10 秒</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <button onclick="handleChatSend()" id="btnChatSend" class="px-4 py-1.5 rounded-lg bg-slate-900 text-white text-xs font-medium hover:bg-slate-800 transition-colors shrink-0 ml-auto shadow-sm">
+                        生成画面
+                    </button>
+                </div>
+            </div>
+        </footer>
+    </div>
+
+    <!-- 媒体大图 / 视频预览 Lightbox -->
+    <div id="media-modal" class="fixed inset-0 z-50 bg-black/85 backdrop-blur-sm hidden flex items-center justify-center p-4" onclick="closeMediaModal()">
+        <div class="relative max-w-5xl max-h-[92vh] flex flex-col items-center" onclick="event.stopPropagation()">
+            <div id="media-modal-body" class="w-full flex items-center justify-center"></div>
+            <div class="mt-3 flex items-center gap-3 text-white text-xs">
+                <a id="media-modal-download" href="" download class="px-3.5 py-1.5 bg-white/20 hover:bg-white/30 rounded-lg transition-colors flex items-center gap-1.5">
+                    <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+                    <span>下载原文件</span>
+                </a>
+                <button onclick="closeMediaModal()" class="px-3.5 py-1.5 bg-white/20 hover:bg-white/30 rounded-lg transition-colors">
+                    关闭预览
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 全局 Toast -->
+    <div id="toast-container" class="fixed bottom-4 right-4 z-50 space-y-2 pointer-events-none"></div>
 
     <script>
         const $ = id => document.getElementById(id);
@@ -171,6 +221,22 @@
         let activeChatSessionId = 1;
         let attachedImageBase64 = null;
         let adminApiKey = '';
+
+        // 侧边栏抽屉折叠交互 (移动端)
+        function toggleSidebar(show) {
+            const sidebar = $('main-sidebar');
+            const backdrop = $('mobile-sidebar-backdrop');
+            const isCurrentlyOpen = !sidebar.classList.contains('-translate-x-full');
+            const shouldOpen = show !== undefined ? show : !isCurrentlyOpen;
+
+            if (shouldOpen) {
+                sidebar.classList.remove('-translate-x-full');
+                backdrop.classList.remove('hidden');
+            } else {
+                sidebar.classList.add('-translate-x-full');
+                backdrop.classList.add('hidden');
+            }
+        }
 
         function showToast(msg, type = 'info', duration = 2500) {
             const container = $('toast-container');
@@ -208,9 +274,9 @@
                 const isActive = s.id === activeChatSessionId;
                 const isVid = s.model && s.model.includes('Omni');
                 return `
-                    <div onclick="selectChatSession(${s.id})" class="p-2.5 rounded-lg cursor-pointer transition-colors ${isActive ? 'bg-white border border-slate-200/90 shadow-sm' : 'hover:bg-white/80 border border-transparent text-slate-600'}">
+                    <div onclick="selectChatSession(${s.id})" class="p-2.5 rounded-xl cursor-pointer transition-colors ${isActive ? 'bg-slate-100 border border-slate-200/90 shadow-sm text-slate-900' : 'hover:bg-slate-50 border border-transparent text-slate-600'}">
                         <div class="flex items-center justify-between">
-                            <p class="text-xs font-bold text-slate-800 truncate">${escapeHtml(s.title || '新对话')}</p>
+                            <p class="text-xs font-bold text-slate-800 truncate">${escapeHtml(s.title || '新任务')}</p>
                             <span class="text-[10px] px-1.5 py-0.2 rounded font-medium ${isVid ? 'bg-purple-50 text-purple-700' : 'bg-blue-50 text-blue-700'}">${isVid ? '视频' : '图片'}</span>
                         </div>
                         <p class="text-[11px] text-slate-400 mt-1 flex justify-between">
@@ -224,6 +290,9 @@
 
         function selectChatSession(id) {
             activeChatSessionId = id;
+            if (window.innerWidth < 768) {
+                toggleSidebar(false);
+            }
             renderChatSessionList();
             renderCurrentChatMessages();
         }
@@ -231,10 +300,13 @@
         function renderCurrentChatMessages() {
             const s = chatSessions.find(x => x.id === activeChatSessionId) || chatSessions[0];
             $('currentChatTitle').textContent = s.title || '新画图任务';
+            if ($('currentChatBadge')) {
+                $('currentChatBadge').textContent = s.model || 'Nano Banana 2.1';
+            }
             const container = $('chatMessagesContainer');
             if (!s.messages || !s.messages.length) {
                 container.innerHTML = `
-                    <div class="text-center py-16 text-slate-400 text-xs">
+                    <div class="text-center py-20 text-slate-400 text-xs">
                         <p>请在下方输入画面提示词，选择模型并开始生成</p>
                     </div>
                 `;
@@ -245,7 +317,7 @@
                 if (m.role === 'user') {
                     return `
                         <div class="flex items-start gap-2.5 justify-end chat-bubble-enter">
-                            <div class="max-w-[85%] sm:max-w-xl bg-slate-900 text-white rounded-xl px-4 py-2.5 shadow-sm text-xs leading-relaxed">
+                            <div class="max-w-[88%] sm:max-w-xl bg-slate-900 text-white rounded-2xl px-4 py-2.5 shadow-sm text-xs leading-relaxed">
                                 <p>${escapeHtml(m.content)}</p>
                                 <div class="mt-1 text-[10px] text-slate-400 text-right">${escapeHtml(m.meta || '')}</div>
                             </div>
@@ -255,12 +327,12 @@
                     const isVid = m.mediaType === 'video';
                     return `
                         <div class="flex items-start gap-2.5 chat-bubble-enter">
-                            <div class="max-w-[92%] sm:max-w-xl bg-white border border-slate-200 rounded-xl p-3 shadow-sm space-y-2.5">
-                                <div class="relative rounded-lg overflow-hidden bg-black">
+                            <div class="max-w-[95%] sm:max-w-xl bg-white border border-slate-200/90 rounded-2xl p-3 shadow-sm space-y-2.5">
+                                <div class="relative rounded-xl overflow-hidden bg-black">
                                     ${isVid ? `
                                         <video src="${m.url}" controls class="w-full max-h-[380px] object-cover"></video>
                                     ` : `
-                                        <img src="${m.url}" class="w-full max-h-[380px] object-cover cursor-pointer hover:opacity-95" onclick="previewImageModal('${m.url}')">
+                                        <img src="${m.url}" class="w-full max-h-[380px] object-cover cursor-pointer hover:opacity-95" onclick="openMediaPreview('${m.url}', 'image')">
                                     `}
                                 </div>
                                 <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs pt-1">
@@ -430,11 +502,14 @@
             const newId = Date.now();
             chatSessions.unshift({
                 id: newId,
-                title: '新画图任务',
+                title: '新任务',
                 model: $('chatSelectModel').value,
                 messages: []
             });
             activeChatSessionId = newId;
+            if (window.innerWidth < 768) {
+                toggleSidebar(false);
+            }
             saveChatSessions();
             renderChatSessionList();
             renderCurrentChatMessages();
@@ -450,13 +525,49 @@
             }
         }
 
+        function clearAllChatSessions() {
+            if (!confirm('确定清空所有历史对话记录吗？')) return;
+            chatSessions = [{
+                id: Date.now(),
+                title: '新画图任务',
+                model: $('chatSelectModel').value,
+                messages: []
+            }];
+            activeChatSessionId = chatSessions[0].id;
+            saveChatSessions();
+            renderChatSessionList();
+            renderCurrentChatMessages();
+            if (window.innerWidth < 768) toggleSidebar(false);
+            showToast('历史记录已清空', 'info');
+        }
+
+        function openMediaPreview(url, type) {
+            const modal = $('media-modal');
+            const body = $('media-modal-body');
+            const dl = $('media-modal-download');
+            if (dl) dl.href = url;
+            const isVid = type === 'video' || url.endsWith('.mp4') || url.endsWith('.webm');
+            if (isVid) {
+                body.innerHTML = `<video src="${url}" controls autoplay class="max-w-full max-h-[80vh] rounded-xl shadow-2xl bg-black"></video>`;
+            } else {
+                body.innerHTML = `<img src="${url}" class="max-w-full max-h-[82vh] rounded-xl shadow-2xl object-contain">`;
+            }
+            modal.classList.remove('hidden');
+        }
+
+        function closeMediaModal() {
+            const modal = $('media-modal');
+            const body = $('media-modal-body');
+            if (body) body.innerHTML = '';
+            modal.classList.add('hidden');
+        }
+
         function quotePrompt(t) { $('chatPromptInput').value = t; $('chatPromptInput').focus(); }
         function copyToClipboard(t) { navigator.clipboard.writeText(t).then(() => showToast('链接已复制到剪贴板', 'success')); }
-        function previewImageModal(url) { $('modal-img').src = url; $('image-modal').classList.remove('hidden'); }
-        function closeImageModal() { $('image-modal').classList.add('hidden'); }
         function escapeHtml(s) { return String(s || '').replace(/[&<>"']/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[m]); }
 
         window.addEventListener('DOMContentLoaded', async () => {
+            initChatWorkbench();
             try {
                 const res = await fetch('/api/admin/config', { credentials: 'include' });
                 if (res.ok) {
@@ -464,7 +575,6 @@
                     adminApiKey = d.api_key || '';
                 }
             } catch (e) {}
-            initChatWorkbench();
         });
     </script>
 </body>
