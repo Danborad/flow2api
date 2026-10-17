@@ -535,6 +535,11 @@ class Database:
                         print(f"  ✗ Failed to add column 'msg_type': {e}")
 
             # ========== Step 2: Add missing columns to existing tables ==========
+            if await self._table_exists(db, "generation_config"):
+                for col_name, col_type in (("auto_upscale_enabled", "BOOLEAN DEFAULT 1"), ("upscale_engine", "TEXT DEFAULT 'lanczos3'")):
+                    if not await self._column_exists(db, "generation_config", col_name):
+                        await db.execute(f"ALTER TABLE generation_config ADD COLUMN {col_name} {col_type}")
+
             if await self._table_exists(db, "tasks"):
                 for column, col_type in (("project_id", "TEXT"), ("media_name", "TEXT"), ("request_log_id", "INTEGER")):
                     if not await self._column_exists(db, "tasks", column):
@@ -863,6 +868,8 @@ class Database:
                     max_retries INTEGER DEFAULT 3,
                     image_fallback_attempts INTEGER DEFAULT 1,
                     video_fallback_attempts INTEGER DEFAULT 1,
+                    auto_upscale_enabled BOOLEAN DEFAULT 1,
+                    upscale_engine TEXT DEFAULT 'lanczos3',
                     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
             """)
@@ -1147,7 +1154,7 @@ class Database:
             rows = await cursor.fetchall()
             return [dict(row) for row in rows]
 
-    async def get_dashboard_stats(self) -> Dict[str, int]:
+    async def get_dashboard_stats(self) -> Dict[str, Any]:
         """Get dashboard counters with aggregated SQL queries"""
         async with self._connect() as db:
             db.row_factory = aiosqlite.Row
@@ -1191,6 +1198,118 @@ class Database:
                 if created_at.startswith(today):
                     today_video_credits += cost
 
+            # 统计今日明细、成功率、平均耗时
+            today_req_cursor = await db.execute("""
+                SELECT operation, status_code, duration, request_body
+                FROM request_logs
+                WHERE date(created_at, 'localtime') = date('now', 'localtime')
+            """)
+            today_rows = await today_req_cursor.fetchall()
+            today_total_calls = len(today_rows)
+            today_success_calls = 0
+            today_images_1k = 0
+            today_images_2k = 0
+            today_images_4k = 0
+            today_videos_t2v = 0
+            today_videos_i2v = 0
+            durations = []
+
+            for r in today_rows:
+                sc = r["status_code"]
+                op = str(r["operation"] or "")
+                dur = float(r["duration"] or 0)
+                if sc == 200:
+                    today_success_calls += 1
+                    if dur > 0:
+                        durations.append(dur)
+                    try:
+                        req_data = json.loads(r["request_body"]) if r["request_body"] else {}
+                    except Exception:
+                        req_data = {}
+                    model = str(req_data.get("model", "")).lower()
+                    if "image" in op or "图片" in op:
+                        if "-4k" in model:
+                            today_images_4k += 1
+                        elif "-2k" in model:
+                            today_images_2k += 1
+                        else:
+                            today_images_1k += 1
+                    elif "video" in op or "视频" in op:
+                        if req_data.get("has_images") or "i2v" in model or "r2v" in model:
+                            today_videos_i2v += 1
+                        else:
+                            today_videos_t2v += 1
+
+            today_success_rate = (
+                round((today_success_calls / today_total_calls) * 100, 1)
+                if today_total_calls > 0
+                else 100.0
+            )
+            today_avg_duration = (
+                round(sum(durations) / len(durations), 1)
+                if durations
+                else 0.0
+            )
+
+            # 24小时柱状分布
+            c24 = await db.execute("""
+                SELECT strftime('%H', datetime(created_at, 'localtime')) as hr, count(*)
+                FROM request_logs
+                WHERE date(created_at, 'localtime') = date('now', 'localtime')
+                GROUP BY hr
+            """)
+            hr_map = dict(await c24.fetchall())
+            timeline_24h = [hr_map.get(f"{i:02d}", 0) for i in range(24)]
+
+            # 7天分布
+            c7 = await db.execute("""
+                SELECT strftime('%m/%d', datetime(created_at, 'localtime')) as dy, count(*)
+                FROM request_logs
+                WHERE date(created_at, 'localtime') >= date('now', 'localtime', '-6 days')
+                GROUP BY date(created_at, 'localtime')
+                ORDER BY date(created_at, 'localtime') ASC
+            """)
+            timeline_7d = [{"day": r[0], "count": r[1]} for r in await c7.fetchall()]
+
+            # 30天分布
+            c30 = await db.execute("""
+                SELECT strftime('%m/%d', datetime(created_at, 'localtime')) as dy, count(*)
+                FROM request_logs
+                WHERE date(created_at, 'localtime') >= date('now', 'localtime', '-29 days')
+                GROUP BY date(created_at, 'localtime')
+                ORDER BY date(created_at, 'localtime') ASC
+            """)
+            timeline_30d = [{"day": r[0], "count": r[1]} for r in await c30.fetchall()]
+
+            # 实时进行中的任务 (过去5分钟内 status_code=102)
+            live_cursor = await db.execute("""
+                SELECT rl.id, rl.operation, rl.request_body, rl.status_text, rl.progress, rl.duration,
+                       t.email as token_email
+                FROM request_logs rl
+                LEFT JOIN tokens t ON rl.token_id = t.id
+                WHERE rl.status_code = 102
+                  AND datetime(COALESCE(rl.updated_at, rl.created_at), '+5 minutes') >= datetime('now')
+                ORDER BY rl.id DESC LIMIT 5
+            """)
+            live_tasks = []
+            for r in await live_cursor.fetchall():
+                try:
+                    req_data = json.loads(r["request_body"]) if r["request_body"] else {}
+                except Exception:
+                    req_data = {}
+                op = str(r["operation"] or "")
+                task_type = "video" if "video" in op or "视频" in op else "image"
+                live_tasks.append({
+                    "id": r["id"],
+                    "type": task_type,
+                    "model": req_data.get("model", "Unknown"),
+                    "token_email": r["token_email"] or "未知",
+                    "status_text": r["status_text"] or "处理中",
+                    "progress": r["progress"] or 0,
+                    "prompt": req_data.get("prompt", "")[:60],
+                    "duration": round(float(r["duration"] or 0), 1),
+                })
+
             return {
                 "total_tokens": int(token_data.get("total_tokens") or 0),
                 "active_tokens": int(token_data.get("active_tokens") or 0),
@@ -1202,7 +1321,20 @@ class Database:
                 "today_images": int(stats_data.get("today_images") or 0),
                 "today_videos": int(stats_data.get("today_videos") or 0),
                 "today_video_credits": int(today_video_credits),
-                "today_errors": int(stats_data.get("today_errors") or 0)
+                "today_errors": int(stats_data.get("today_errors") or 0),
+                "today_total_calls": today_total_calls,
+                "today_success_calls": today_success_calls,
+                "today_success_rate": today_success_rate,
+                "today_avg_duration": today_avg_duration,
+                "today_images_1k": today_images_1k,
+                "today_images_2k": today_images_2k,
+                "today_images_4k": today_images_4k,
+                "today_videos_t2v": today_videos_t2v,
+                "today_videos_i2v": today_videos_i2v,
+                "timeline_24h": timeline_24h,
+                "timeline_7d": timeline_7d,
+                "timeline_30d": timeline_30d,
+                "live_tasks": live_tasks,
             }
 
     async def get_system_info_stats(self) -> Dict[str, int]:
@@ -1576,6 +1708,8 @@ class Database:
         max_retries: Optional[int] = None,
         image_fallback_attempts: Optional[int] = None,
         video_fallback_attempts: Optional[int] = None,
+        auto_upscale_enabled: Optional[bool] = None,
+        upscale_engine: Optional[str] = None,
     ):
         """Update generation configuration"""
         async with self._connect(write=True) as db:
@@ -1619,17 +1753,28 @@ class Database:
             except Exception:
                 normalized_video_fallback_attempts = 1
 
+            normalized_auto_upscale = (
+                bool(auto_upscale_enabled)
+                if auto_upscale_enabled is not None
+                else bool(current.get("auto_upscale_enabled", 1))
+            )
+            normalized_engine = (
+                str(upscale_engine).strip().lower()
+                if upscale_engine is not None and str(upscale_engine).strip()
+                else str(current.get("upscale_engine", "lanczos3"))
+            )
+
             if row:
                 await db.execute("""
                     UPDATE generation_config
-                    SET image_timeout = ?, video_timeout = ?, max_retries = ?, image_fallback_attempts = ?, video_fallback_attempts = ?, updated_at = CURRENT_TIMESTAMP
+                    SET image_timeout = ?, video_timeout = ?, max_retries = ?, image_fallback_attempts = ?, video_fallback_attempts = ?, auto_upscale_enabled = ?, upscale_engine = ?, updated_at = CURRENT_TIMESTAMP
                     WHERE id = 1
-                """, (normalized_image_timeout, normalized_video_timeout, normalized_max_retries, normalized_image_fallback_attempts, normalized_video_fallback_attempts))
+                """, (normalized_image_timeout, normalized_video_timeout, normalized_max_retries, normalized_image_fallback_attempts, normalized_video_fallback_attempts, 1 if normalized_auto_upscale else 0, normalized_engine))
             else:
                 await db.execute("""
-                    INSERT INTO generation_config (id, image_timeout, video_timeout, max_retries, image_fallback_attempts, video_fallback_attempts)
-                    VALUES (1, ?, ?, ?, ?, ?)
-                """, (normalized_image_timeout, normalized_video_timeout, normalized_max_retries, normalized_image_fallback_attempts, normalized_video_fallback_attempts))
+                    INSERT INTO generation_config (id, image_timeout, video_timeout, max_retries, image_fallback_attempts, video_fallback_attempts, auto_upscale_enabled, upscale_engine)
+                    VALUES (1, ?, ?, ?, ?, ?, ?, ?)
+                """, (normalized_image_timeout, normalized_video_timeout, normalized_max_retries, normalized_image_fallback_attempts, normalized_video_fallback_attempts, 1 if normalized_auto_upscale else 0, normalized_engine))
             await db.commit()
 
     async def get_call_logic_config(self) -> CallLogicConfig:

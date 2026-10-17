@@ -12,12 +12,15 @@ from ..core.monitoring import record_generation_result
 from ..core.models import Task, RequestLog
 from ..core.account_tiers import (
     PAYGATE_TIER_NOT_PAID,
+    PAYGATE_TIER_ONE,
+    PAYGATE_TIER_TWO,
     get_paygate_tier_label,
     get_required_paygate_tier_for_model,
     normalize_user_paygate_tier,
     supports_model_for_tier,
 )
 from .file_cache import FileCache
+from .image_upscaler import ImageUpscaler
 
 
 # Model configuration
@@ -2570,113 +2573,177 @@ class GenerationHandler:
                 upsample_started_at = time.time()
                 resolution_name = "4K" if "4K" in upsample_resolution else "2K"
                 await self._update_request_log_progress(request_log_state, token_id=token.id, status_text=f"upsampling_{resolution_name.lower()}", progress=82)
-                if stream:
-                    yield self._create_stream_chunk(f"正在放大图片到 {resolution_name}...\n")
 
-                # 4K/2K 图片重试逻辑 - 使用配置的最大重试次数
-                max_retries = config.flow_max_retries
-                for retry_attempt in range(max_retries):
+                # 读取超分配置
+                gen_cfg = await self.db.get_generation_config() if self.db else None
+                auto_upscale = getattr(gen_cfg, "auto_upscale_enabled", True) if gen_cfg else True
+                engine = getattr(gen_cfg, "upscale_engine", "lanczos3") if gen_cfg else "lanczos3"
+
+                is_4k = "4K" in upsample_resolution
+                is_ultra = (normalized_tier == PAYGATE_TIER_TWO)
+                is_pro = (normalized_tier == PAYGATE_TIER_ONE)
+
+                # 4K/2K 分级执行策略：
+                # 1. 4K 请求:
+                #    - Ultra 账号 -> 调用原生 4K (不软超分)
+                #    - Pro 账号   -> 调用原生 2K 底图 -> 本地 Lanczos3 软超分 2x 至 4K
+                #    - Free 账号  -> 无法调用官方原生放大，直接下载 1K 原图 -> 本地 Lanczos3 软超分 4x 至 4K
+                # 2. 2K 请求:
+                #    - Ultra/Pro 账号 -> 调用原生 2K (不软超分)
+                #    - Free 账号      -> 直接下载 1K 原图 -> 本地 Lanczos3 软超分 2x 至 2K
+
+                upstream_target_resolution = None
+                need_local_super_res = False
+                super_res_scale = 2.0
+
+                if is_4k:
+                    if is_ultra:
+                        upstream_target_resolution = "UPSAMPLE_IMAGE_RESOLUTION_4K"
+                        need_local_super_res = False
+                    elif is_pro:
+                        upstream_target_resolution = "UPSAMPLE_IMAGE_RESOLUTION_2K"
+                        need_local_super_res = True
+                        super_res_scale = 2.0
+                    else:
+                        upstream_target_resolution = None
+                        need_local_super_res = True
+                        super_res_scale = 4.0
+                else:
+                    if is_ultra or is_pro:
+                        upstream_target_resolution = "UPSAMPLE_IMAGE_RESOLUTION_2K"
+                        need_local_super_res = False
+                    else:
+                        upstream_target_resolution = None
+                        need_local_super_res = True
+                        super_res_scale = 2.0
+
+                encoded_image = None
+
+                if upstream_target_resolution:
+                    action_label = "4K 原生放大" if upstream_target_resolution == "UPSAMPLE_IMAGE_RESOLUTION_4K" else "2K 原生放大"
+                    if stream:
+                        yield self._create_stream_chunk(f"正在进行 Google Flow {action_label}...\n")
+
+                    max_retries = config.flow_max_retries
+                    for retry_attempt in range(max_retries):
+                        try:
+                            encoded_image = await self.flow_client.upsample_image(
+                                at=token.at,
+                                project_id=project_id,
+                                media_id=media_id,
+                                target_resolution=upstream_target_resolution,
+                                user_paygate_tier=normalized_tier,
+                                session_id=generation_session_id,
+                                token_id=token.id
+                            )
+                            if encoded_image:
+                                break
+                        except Exception as e:
+                            error_str = str(e)
+                            debug_logger.log_error(f"[UPSAMPLE] 上游放大失败 (尝试 {retry_attempt + 1}/{max_retries}): {error_str}")
+                            retry_reason = self.flow_client._get_retry_reason(error_str)
+                            if retry_reason and retry_attempt < max_retries - 1:
+                                if stream:
+                                    yield self._create_stream_chunk(f"⚠️ 放大遇到{retry_reason}，正在重试 ({retry_attempt + 2}/{max_retries})...\n")
+                                await asyncio.sleep(1)
+                                continue
+                            else:
+                                break
+
+                    if encoded_image and need_local_super_res and auto_upscale:
+                        if stream:
+                            yield self._create_stream_chunk(f"✅ 2K 原生底图就绪，正在进行本地 4K 高清超分 ({engine})...\n")
+                        try:
+                            encoded_image = ImageUpscaler.upscale_base64(encoded_image, scale=super_res_scale, engine=engine)
+                            debug_logger.log_info(f"[UPSAMPLE] 2K 原生底图已通过 {engine} 超分至 4K")
+                        except Exception as up_err:
+                            debug_logger.log_error(f"[UPSAMPLE] 2K -> 4K 超分失败: {up_err}")
+
+                # 如果无需上游或上游失败，由本地软超分补齐
+                if not encoded_image and need_local_super_res and auto_upscale:
+                    fallback_label = "4K" if is_4k else "2K"
+                    debug_logger.log_info(f"[UPSAMPLE] 启用本地 1K -> {fallback_label} 超分补齐 ({engine})")
+                    if stream:
+                        yield self._create_stream_chunk(f"正在下载 1K 底图并进行本地 {fallback_label} 超分补齐 ({engine})...\n")
                     try:
-                        # 调用 upsample API
-                        encoded_image = await self.flow_client.upsample_image(
-                            at=token.at,
-                            project_id=project_id,
-                            media_id=media_id,
-                            target_resolution=upsample_resolution,
-                            user_paygate_tier=normalized_tier,
-                            session_id=generation_session_id,
-                            token_id=token.id
-                        )
-
-                        if encoded_image:
-                            debug_logger.log_info(f"[UPSAMPLE] 图片已放大到 {resolution_name}")
-
-                            if stream:
-                                yield self._create_stream_chunk(f"✅ 图片已放大到 {resolution_name}\n")
-
-                            # 2K/4K 图片统一落盘为真实文件，日志里只保留链接。
-                            response_state["generated_assets"] = {
-                                "type": "image",
-                                "origin_image_url": image_url,
-                                "upscaled_image": {
-                                    "resolution": resolution_name
-                                }
-                            }
-
-                            try:
-                                await self._update_request_log_progress(
-                                    request_log_state,
-                                    token_id=token.id,
-                                    status_text="caching_image",
-                                    progress=90,
-                                )
-                                if stream:
-                                    yield self._create_stream_chunk(f"缓存 {resolution_name} 图片中...\n")
-                                cached_filename = await self.file_cache.cache_base64_image(encoded_image, resolution_name)
-                                local_url = f"{self._get_base_url(response_state)}/tmp/{cached_filename}"
-                                response_state["url"] = local_url
-                                response_state["generated_assets"]["upscaled_image"]["local_url"] = local_url
-                                response_state["generated_assets"]["upscaled_image"]["url"] = local_url
-                                self._mark_generation_succeeded(generation_result)
-                                if stream:
-                                    yield self._create_stream_chunk(f"✅ {resolution_name} 图片缓存成功\n")
-                                    yield self._create_stream_chunk(
-                                        f"![Generated Image]({local_url})",
-                                        finish_reason="stop"
-                                    )
-                                else:
-                                    yield self._create_completion_response(
-                                        local_url,
-                                        media_type="image"
-                                    )
-                                if image_trace is not None:
-                                    image_trace["upsample_ms"] = int((time.time() - upsample_started_at) * 1000)
-                                return
-                            except Exception as e:
-                                debug_logger.log_error(f"Failed to cache {resolution_name} image: {str(e)}")
-                                response_state["url"] = image_url
-                                response_state["generated_assets"]["upscaled_image"]["local_url"] = None
-                                response_state["generated_assets"]["upscaled_image"]["url"] = image_url
-                                response_state["generated_assets"]["upscaled_image"]["delivery_mode"] = "inline_base64_fallback"
-                                self._mark_generation_succeeded(generation_result)
-                                base64_url = f"data:image/jpeg;base64,{encoded_image}"
-                                if stream:
-                                    cache_error = self._normalize_error_message(e, max_length=120)
-                                    yield self._create_stream_chunk(f"⚠️ 缓存失败: {cache_error}，返回内联图片...\n")
-                                    yield self._create_stream_chunk(
-                                        f"![Generated Image]({base64_url})",
-                                        finish_reason="stop"
-                                    )
-                                else:
-                                    yield self._create_completion_response(
-                                        base64_url,
-                                        media_type="image"
-                                    )
-                                if image_trace is not None:
-                                    image_trace["upsample_ms"] = int((time.time() - upsample_started_at) * 1000)
-                                return
-                        else:
-                            debug_logger.log_warning("[UPSAMPLE] 返回结果为空")
-                            if stream:
-                                yield self._create_stream_chunk(f"⚠️ 放大失败，返回原图...\n")
-                            break  # 空结果不重试
-
+                        cached_filename = await self.file_cache.download_and_cache(image_url, "image")
+                        origin_bytes = (self.file_cache.cache_dir / cached_filename).read_bytes()
+                        upscaled_bytes = ImageUpscaler.upscale_bytes(origin_bytes, scale=super_res_scale, engine=engine)
+                        encoded_image = base64.b64encode(upscaled_bytes).decode("ascii")
                     except Exception as e:
-                        error_str = str(e)
-                        debug_logger.log_error(f"[UPSAMPLE] 放大失败 (尝试 {retry_attempt + 1}/{max_retries}): {error_str}")
-                        
-                        # 检查是否是可重试错误（403、reCAPTCHA、超时等）
-                        retry_reason = self.flow_client._get_retry_reason(error_str)
-                        if retry_reason and retry_attempt < max_retries - 1:
-                            if stream:
-                                yield self._create_stream_chunk(f"⚠️ 放大遇到{retry_reason}，正在重试 ({retry_attempt + 2}/{max_retries})...\n")
-                            # 等待一小段时间后重试
-                            await asyncio.sleep(1)
-                            continue
+                        debug_logger.log_error(f"[UPSAMPLE] 1K 底图软超分失败: {e}")
+
+                if encoded_image:
+                    debug_logger.log_info(f"[UPSAMPLE] 图片已放大到 {resolution_name}")
+                    if stream:
+                        yield self._create_stream_chunk(f"✅ 图片已完成 {resolution_name} 交付\n")
+
+                    # 2K/4K 图片统一落盘为真实文件，日志里只保留链接。
+                    response_state["generated_assets"] = {
+                        "type": "image",
+                        "origin_image_url": image_url,
+                        "upscaled_image": {
+                            "resolution": resolution_name
+                        }
+                    }
+
+                    try:
+                        await self._update_request_log_progress(
+                            request_log_state,
+                            token_id=token.id,
+                            status_text="caching_image",
+                            progress=90,
+                        )
+                        if stream:
+                            yield self._create_stream_chunk(f"缓存 {resolution_name} 图片中...\n")
+                        cached_filename = await self.file_cache.cache_base64_image(encoded_image, resolution_name)
+                        local_url = f"{self._get_base_url(response_state)}/tmp/{cached_filename}"
+                        response_state["url"] = local_url
+                        response_state["generated_assets"]["upscaled_image"]["local_url"] = local_url
+                        response_state["generated_assets"]["upscaled_image"]["url"] = local_url
+                        self._mark_generation_succeeded(generation_result)
+                        if stream:
+                            yield self._create_stream_chunk(f"✅ {resolution_name} 图片缓存成功\n")
+                            yield self._create_stream_chunk(
+                                f"![Generated Image]({local_url})",
+                                finish_reason="stop"
+                            )
                         else:
-                            if stream:
-                                yield self._create_stream_chunk(f"⚠️ 放大失败: {error_str}，返回原图...\n")
-                            break
+                            yield self._create_completion_response(
+                                local_url,
+                                media_type="image"
+                            )
+                        if image_trace is not None:
+                            image_trace["upsample_ms"] = int((time.time() - upsample_started_at) * 1000)
+                        return
+                    except Exception as e:
+                        debug_logger.log_error(f"Failed to cache {resolution_name} image: {str(e)}")
+                        response_state["url"] = image_url
+                        response_state["generated_assets"]["upscaled_image"]["local_url"] = None
+                        response_state["generated_assets"]["upscaled_image"]["url"] = image_url
+                        response_state["generated_assets"]["upscaled_image"]["delivery_mode"] = "inline_base64_fallback"
+                        self._mark_generation_succeeded(generation_result)
+                        base64_url = f"data:image/jpeg;base64,{encoded_image}"
+                        if stream:
+                            cache_error = self._normalize_error_message(e, max_length=120)
+                            yield self._create_stream_chunk(f"⚠️ 缓存失败: {cache_error}，返回内联图片...\n")
+                            yield self._create_stream_chunk(
+                                f"![Generated Image]({base64_url})",
+                                finish_reason="stop"
+                            )
+                        else:
+                            yield self._create_completion_response(
+                                base64_url,
+                                media_type="image"
+                            )
+                        if image_trace is not None:
+                            image_trace["upsample_ms"] = int((time.time() - upsample_started_at) * 1000)
+                        return
+                else:
+                    debug_logger.log_warning("[UPSAMPLE] 放大失败，未能获取放大图像，回退到原图")
+                    if stream:
+                        yield self._create_stream_chunk("⚠️ 放大失败，准备交付原图...\n")
+
                 if image_trace is not None:
                     image_trace["upsample_ms"] = int((time.time() - upsample_started_at) * 1000)
 

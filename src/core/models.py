@@ -156,6 +156,8 @@ class GenerationConfig(BaseModel):
     max_retries: int = 3  # 请求最大重试次数
     image_fallback_attempts: int = 1  # 图片失败后切换其他 Token 的兜底次数
     video_fallback_attempts: int = 1  # 视频失败后切换其他 Token 的兜底次数
+    auto_upscale_enabled: bool = True  # 图片尺寸不足时自动软超分
+    upscale_engine: str = "lanczos3"  # 超分引擎: lanczos3 / bicubic
 
 
 class CallLogicConfig(BaseModel):

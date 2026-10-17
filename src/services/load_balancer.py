@@ -6,6 +6,7 @@ from ..core.models import Token
 from ..core.config import config
 from ..core.account_tiers import (
     get_paygate_tier_label,
+    get_paygate_tier_rank,
     get_required_paygate_tier_for_model,
     normalize_user_paygate_tier,
     supports_model_for_tier,
@@ -249,6 +250,9 @@ class LoadBalancer:
             return None
 
         # 最低 in-flight 优先；有并发上限时，剩余槽位更多的 token 优先；最后随机打散
+        # 若为 2K/4K 高清出图，优先选用账号等级更高（Ultra > Pro > Free）的 Token 以发挥最大原生能力
+        is_high_res_image = bool(for_image_generation and model and (model.endswith("-4k") or model.endswith("-2k")))
+
         call_mode = config.call_logic_mode
         if call_mode == "polling":
             scenario = "default"
@@ -270,6 +274,7 @@ class LoadBalancer:
             available_tokens.sort(
                 key=lambda item: (
                     1 if item["needs_refresh"] else 0,
+                    -get_paygate_tier_rank(item["token"].user_paygate_tier) if is_high_res_image else 0,
                     item["inflight"],
                     0 if item["remaining"] is None else 1,
                     -(item["remaining"] or 0),

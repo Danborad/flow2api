@@ -36,22 +36,41 @@ def get_paygate_tier_label(user_paygate_tier: Optional[str]) -> str:
     return "Free"
 
 
-def get_required_paygate_tier_for_model(model_name: Optional[str]) -> str:
+def get_required_paygate_tier_for_model(model_name: Optional[str], allow_image_upscale_fallback: bool = True) -> str:
     """Infer the minimum required account tier from a model name."""
     normalized = (model_name or "").strip().lower()
     if not normalized:
         return PAYGATE_TIER_NOT_PAID
 
-    if normalized.endswith("-4k") or normalized.endswith("_4k") or "_ultra" in normalized:
+    # 视频模型硬性依赖上游等级，无法本地软超分
+    if normalized.endswith("_4k") or "_ultra" in normalized:
         return PAYGATE_TIER_TWO
 
-    if normalized.endswith("-2k") or normalized.endswith("_1080p"):
+    if normalized.endswith("_1080p"):
+        return PAYGATE_TIER_ONE
+
+    # 图片模型支持分级软超分兜底：
+    # 若允许软超分（默认允许），普通/Pro 账号均可承接 4K/2K 请求
+    if normalized.endswith("-4k"):
+        if allow_image_upscale_fallback:
+            return PAYGATE_TIER_NOT_PAID
+        return PAYGATE_TIER_TWO
+
+    if normalized.endswith("-2k"):
+        if allow_image_upscale_fallback:
+            return PAYGATE_TIER_NOT_PAID
         return PAYGATE_TIER_ONE
 
     return PAYGATE_TIER_NOT_PAID
 
 
-def supports_model_for_tier(model_name: Optional[str], user_paygate_tier: Optional[str]) -> bool:
+def supports_model_for_tier(
+    model_name: Optional[str],
+    user_paygate_tier: Optional[str],
+    allow_image_upscale_fallback: bool = True
+) -> bool:
     """Check whether the current account tier can use the given model."""
-    required_tier = get_required_paygate_tier_for_model(model_name)
+    required_tier = get_required_paygate_tier_for_model(
+        model_name, allow_image_upscale_fallback=allow_image_upscale_fallback
+    )
     return get_paygate_tier_rank(user_paygate_tier) >= get_paygate_tier_rank(required_tier)

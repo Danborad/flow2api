@@ -2,6 +2,8 @@
 import asyncio
 import importlib
 import json
+import shutil
+from pathlib import Path
 from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, Header, Request, Response
 from fastapi.responses import JSONResponse
@@ -641,6 +643,8 @@ class GenerationConfigRequest(BaseModel):
     max_retries: Optional[int] = None
     image_fallback_attempts: Optional[int] = None
     video_fallback_attempts: Optional[int] = None
+    auto_upscale_enabled: Optional[bool] = None
+    upscale_engine: Optional[str] = None
 
 
 class CallLogicConfigRequest(BaseModel):
@@ -1388,6 +1392,8 @@ async def get_generation_config(token: str = Depends(verify_admin_token)):
             "max_retries": config.max_retries,
             "image_fallback_attempts": config.image_fallback_attempts,
             "video_fallback_attempts": getattr(config, "video_fallback_attempts", 1),
+            "auto_upscale_enabled": getattr(config, "auto_upscale_enabled", True),
+            "upscale_engine": getattr(config, "upscale_engine", "lanczos3"),
         }
     }
 
@@ -1404,6 +1410,8 @@ async def update_generation_config(
         max_retries=request.max_retries,
         image_fallback_attempts=request.image_fallback_attempts,
         video_fallback_attempts=request.video_fallback_attempts,
+        auto_upscale_enabled=request.auto_upscale_enabled,
+        upscale_engine=request.upscale_engine,
     )
 
     # 🔥 Hot reload: sync database config to memory
@@ -1655,6 +1663,8 @@ async def update_generation_timeout(
         max_retries=request.max_retries,
         image_fallback_attempts=request.image_fallback_attempts,
         video_fallback_attempts=request.video_fallback_attempts,
+        auto_upscale_enabled=request.auto_upscale_enabled,
+        upscale_engine=request.upscale_engine,
     )
 
     # 🔥 Hot reload: sync database config to memory
@@ -2612,4 +2622,168 @@ async def send_webhook_daily_report_now(
     return {
         "success": success,
         "message": msg
+    }
+
+
+# ========== Media Storage Management & Live Tasks ==========
+
+class MediaCleanupRequest(BaseModel):
+    cleanup_type: str = "all"  # 'all', '7d', '3d', '1d', 'all-image', 'all-video'
+
+
+@router.get("/api/media/stats")
+async def get_media_stats(token: str = Depends(verify_admin_token)):
+    """Get media storage stats (tmp directory usage and free disk space)."""
+    tmp_path = Path(__file__).resolve().parents[2] / "tmp"
+    tmp_path.mkdir(exist_ok=True)
+
+    img_count = 0
+    img_bytes = 0
+    vid_count = 0
+    vid_bytes = 0
+
+    for item in tmp_path.iterdir():
+        if item.is_file():
+            size = item.stat().st_size
+            ext = item.suffix.lower()
+            if ext in (".jpg", ".jpeg", ".png", ".webp"):
+                img_count += 1
+                img_bytes += size
+            elif ext in (".mp4", ".webm", ".mov"):
+                vid_count += 1
+                vid_bytes += size
+
+    total_bytes = img_bytes + vid_bytes
+    total_disk, used_disk, free_disk = shutil.disk_usage(str(tmp_path))
+
+    return {
+        "success": True,
+        "image_count": img_count,
+        "image_bytes": img_bytes,
+        "video_count": vid_count,
+        "video_bytes": vid_bytes,
+        "total_bytes": total_bytes,
+        "total_disk_bytes": total_disk,
+        "free_disk_bytes": free_disk,
+    }
+
+
+@router.get("/api/media/files")
+async def list_media_files(
+    media_type: str = "all",
+    limit: int = 50,
+    offset: int = 0,
+    token: str = Depends(verify_admin_token)
+):
+    """List media files in tmp/ sorted by mtime desc."""
+    tmp_path = Path(__file__).resolve().parents[2] / "tmp"
+    tmp_path.mkdir(exist_ok=True)
+
+    files = []
+    for item in tmp_path.iterdir():
+        if item.is_file() and not item.name.startswith("."):
+            ext = item.suffix.lower()
+            if ext in (".jpg", ".jpeg", ".png", ".webp"):
+                file_type = "image"
+            elif ext in (".mp4", ".webm", ".mov"):
+                file_type = "video"
+            else:
+                continue
+
+            if media_type != "all" and file_type != media_type:
+                continue
+
+            st = item.stat()
+            files.append({
+                "filename": item.name,
+                "type": file_type,
+                "size_bytes": st.st_size,
+                "mtime": st.st_mtime,
+                "created_at": datetime.fromtimestamp(st.st_mtime, tz=timezone.utc).isoformat(),
+                "url": f"/tmp/{item.name}",
+            })
+
+    files.sort(key=lambda x: x["mtime"], reverse=True)
+    total_count = len(files)
+    paginated = files[offset: offset + limit]
+
+    return {
+        "success": True,
+        "total": total_count,
+        "files": paginated
+    }
+
+
+@router.delete("/api/media/files/{filename}")
+async def delete_media_file(filename: str, token: str = Depends(verify_admin_token)):
+    """Delete a single cached file in tmp/."""
+    safe_name = Path(filename).name
+    tmp_path = Path(__file__).resolve().parents[2] / "tmp" / safe_name
+    if not tmp_path.is_file():
+        raise HTTPException(status_code=404, detail="文件不存在")
+    try:
+        tmp_path.unlink()
+        return {"success": True, "message": f"文件 {safe_name} 已删除"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/api/media/cleanup")
+async def cleanup_media_files(
+    request: MediaCleanupRequest,
+    token: str = Depends(verify_admin_token)
+):
+    """Clean up media files older than N days (or all)."""
+    tmp_path = Path(__file__).resolve().parents[2] / "tmp"
+    tmp_path.mkdir(exist_ok=True)
+
+    now = time.time()
+    cutoff_seconds = {
+        "1d": 86400,
+        "3d": 86400 * 3,
+        "7d": 86400 * 7,
+        "all": 0,
+        "all-video": 0,
+        "all-image": 0,
+    }.get(request.cleanup_type, 0)
+
+    deleted_count = 0
+    freed_bytes = 0
+
+    for item in tmp_path.iterdir():
+        if item.is_file() and not item.name.startswith("."):
+            ext = item.suffix.lower()
+            is_vid = ext in (".mp4", ".webm", ".mov")
+            is_img = ext in (".jpg", ".jpeg", ".png", ".webp")
+
+            if request.cleanup_type == "all-video" and not is_vid:
+                continue
+            if request.cleanup_type == "all-image" and not is_img:
+                continue
+
+            st = item.stat()
+            file_age = now - st.st_mtime
+            if cutoff_seconds == 0 or file_age >= cutoff_seconds:
+                try:
+                    freed_bytes += st.st_size
+                    item.unlink()
+                    deleted_count += 1
+                except Exception:
+                    pass
+
+    return {
+        "success": True,
+        "deleted_count": deleted_count,
+        "freed_bytes": freed_bytes,
+        "message": f"已清理 {deleted_count} 个文件，释放 {round(freed_bytes / (1024 * 1024), 2)} MB 空间"
+    }
+
+
+@router.get("/api/live-tasks")
+async def get_live_tasks(token: str = Depends(verify_admin_token)):
+    """Get active live generating tasks."""
+    stats = await db.get_dashboard_stats()
+    return {
+        "success": True,
+        "live_tasks": stats.get("live_tasks", [])
     }
