@@ -171,7 +171,7 @@
                         <div class="bg-white rounded-xl p-3.5 border border-slate-200/80 shadow-sm">
                             <p class="text-xs text-slate-500 mb-0.5">今日总调用</p>
                             <div class="text-2xl font-bold text-slate-900" id="statTotalCalls">-</div>
-                            <p class="text-[11px] text-slate-400 mt-1 truncate">累计调用</p>
+                            <p class="text-[11px] text-slate-400 mt-1 truncate" id="statCallsSub">累计调用</p>
                         </div>
 
                         <div class="bg-white rounded-xl p-3.5 border border-slate-200/80 shadow-sm">
@@ -1016,39 +1016,43 @@
 
         // 1. 统计数据加载
         async function loadStats() {
-            const res = await apiRequest('/api/stats');
-            if (!res) return;
-            const d = await res.json();
-            chartDataCache = d;
+            try {
+                const res = await apiRequest('/api/stats');
+                if (!res) return;
+                const d = await res.json();
+                chartDataCache = d;
 
-            $('statTotal').textContent = d.total_tokens || 0;
-            $('statActiveSub').textContent = `${d.active_tokens || 0} 正常 · ${(d.total_tokens || 0) - (d.active_tokens || 0)} 异常`;
-            $('statCredits').innerHTML = `${(d.active_credits || 0).toLocaleString()} <span class="text-xs font-normal text-slate-400">点</span>`;
-            $('statCreditsSub').textContent = d.active_tokens ? `均分 ${Math.round(d.active_credits / d.active_tokens)} 点/号` : '-';
-            $('statTodayCredits').innerHTML = `${(d.today_video_credits || 0)} <span class="text-xs font-normal text-slate-400">点</span>`;
-            
-            const rate = d.today_success_rate !== undefined ? d.today_success_rate : 100.0;
-            $('statSuccessRate').textContent = rate + '%';
-            $('statSuccessSub').textContent = rate >= 95 ? '健康稳定' : '存在部分异常';
-            
-            $('statTotalCalls').innerHTML = `${d.today_total_calls || 0} <span class="text-xs font-normal text-slate-400">次</span>`;
-            $('statCallsSub').textContent = `总调用 ${(d.total_images || 0) + (d.total_videos || 0)} 次`;
-            
-            $('statAvgDuration').innerHTML = `${d.today_avg_duration || 0} <span class="text-xs font-normal text-slate-400">秒</span>`;
-            
-            $('statTotalImages').textContent = `${(d.total_images || 0)} 张`;
-            $('statTodayImages').textContent = d.today_images || 0;
-            $('statImg1k').textContent = d.today_images_1k || 0;
-            $('statImg2k').textContent = d.today_images_2k || 0;
-            $('statImg4k').textContent = d.today_images_4k || 0;
+                if ($('statTotal')) $('statTotal').textContent = d.total_tokens || 0;
+                if ($('statActiveSub')) $('statActiveSub').textContent = `${d.active_tokens || 0} 正常 · ${(d.total_tokens || 0) - (d.active_tokens || 0)} 异常`;
+                if ($('statCredits')) $('statCredits').innerHTML = `${(d.active_credits || 0).toLocaleString()} <span class="text-xs font-normal text-slate-400">点</span>`;
+                if ($('statCreditsSub')) $('statCreditsSub').textContent = d.active_tokens ? `均分 ${Math.round(d.active_credits / d.active_tokens)} 点/号` : '-';
+                if ($('statTodayCredits')) $('statTodayCredits').innerHTML = `${(d.today_video_credits || 0)} <span class="text-xs font-normal text-slate-400">点</span>`;
+                
+                const rate = d.today_success_rate !== undefined ? d.today_success_rate : 100.0;
+                if ($('statSuccessRate')) $('statSuccessRate').textContent = rate + '%';
+                if ($('statSuccessSub')) $('statSuccessSub').textContent = rate >= 95 ? '健康稳定' : '存在部分异常';
+                
+                if ($('statTotalCalls')) $('statTotalCalls').innerHTML = `${d.today_total_calls || 0} <span class="text-xs font-normal text-slate-400">次</span>`;
+                if ($('statCallsSub')) $('statCallsSub').textContent = `总调用 ${(d.total_images || 0) + (d.total_videos || 0)} 次`;
+                
+                if ($('statAvgDuration')) $('statAvgDuration').innerHTML = `${d.today_avg_duration || 0} <span class="text-xs font-normal text-slate-400">秒</span>`;
+                
+                if ($('statTotalImages')) $('statTotalImages').textContent = `${(d.total_images || 0)} 张`;
+                if ($('statTodayImages')) $('statTodayImages').textContent = d.today_images || 0;
+                if ($('statImg1k')) $('statImg1k').textContent = d.today_images_1k || 0;
+                if ($('statImg2k')) $('statImg2k').textContent = d.today_images_2k || 0;
+                if ($('statImg4k')) $('statImg4k').textContent = d.today_images_4k || 0;
 
-            $('statTotalVideos').textContent = `${(d.total_videos || 0)} 支`;
-            $('statTodayVideos').textContent = d.today_videos || 0;
-            $('statVidT2v').textContent = d.today_videos_t2v || 0;
-            $('statVidI2v').textContent = d.today_videos_i2v || 0;
-            $('statVidPoints').textContent = `${d.today_video_credits || 0}点`;
+                if ($('statTotalVideos')) $('statTotalVideos').textContent = `${(d.total_videos || 0)} 支`;
+                if ($('statTodayVideos')) $('statTodayVideos').textContent = d.today_videos || 0;
+                if ($('statVidT2v')) $('statVidT2v').textContent = d.today_videos_t2v || 0;
+                if ($('statVidI2v')) $('statVidI2v').textContent = d.today_videos_i2v || 0;
+                if ($('statVidPoints')) $('statVidPoints').textContent = `${d.today_video_credits || 0}点`;
 
-            renderTimelineChart(currentTimelineRange);
+                renderTimelineChart(currentTimelineRange);
+            } catch (err) {
+                console.error('加载统计数据失败:', err);
+            }
         }
 
         // 2. 实时任务轮询与徽章更新
@@ -1097,15 +1101,7 @@
             currentTimelineRange = range;
             const container = $('chart-bars-container');
             const labelsContainer = $('chart-axis-labels');
-            if (!chartDataCache) return;
-
-            container.innerHTML = `
-                <div class="absolute inset-x-0 top-0 border-b border-dashed border-slate-100 flex justify-between text-[10px] text-slate-300 pointer-events-none -translate-y-2.5"><span id="chart-scale-max">25</span></div>
-                <div class="absolute inset-x-0 top-1/4 border-b border-dashed border-slate-100 flex justify-between text-[10px] text-slate-300 pointer-events-none -translate-y-2.5"><span id="chart-scale-75">20</span></div>
-                <div class="absolute inset-x-0 top-2/4 border-b border-dashed border-slate-100 flex justify-between text-[10px] text-slate-300 pointer-events-none -translate-y-2.5"><span id="chart-scale-50">15</span></div>
-                <div class="absolute inset-x-0 top-3/4 border-b border-dashed border-slate-100 flex justify-between text-[10px] text-slate-300 pointer-events-none -translate-y-2.5"><span id="chart-scale-25">10</span></div>
-            `;
-            labelsContainer.innerHTML = '';
+            if (!container || !labelsContainer || !chartDataCache) return;
 
             let dataItems = [];
             if (range === 'today') {
@@ -1122,10 +1118,14 @@
             }
 
             const maxCount = Math.max(10, ...dataItems.map(d => d.count || 0));
-            $('chart-scale-max').textContent = maxCount;
-            $('chart-scale-75').textContent = Math.round(maxCount * 0.75);
-            $('chart-scale-50').textContent = Math.round(maxCount * 0.5);
-            $('chart-scale-25').textContent = Math.round(maxCount * 0.25);
+
+            container.innerHTML = `
+                <div class="absolute inset-x-0 top-0 border-b border-dashed border-slate-100 flex justify-between text-[10px] text-slate-300 pointer-events-none -translate-y-2.5"><span>${maxCount}</span></div>
+                <div class="absolute inset-x-0 top-1/4 border-b border-dashed border-slate-100 flex justify-between text-[10px] text-slate-300 pointer-events-none -translate-y-2.5"><span>${Math.round(maxCount * 0.75)}</span></div>
+                <div class="absolute inset-x-0 top-2/4 border-b border-dashed border-slate-100 flex justify-between text-[10px] text-slate-300 pointer-events-none -translate-y-2.5"><span>${Math.round(maxCount * 0.5)}</span></div>
+                <div class="absolute inset-x-0 top-3/4 border-b border-dashed border-slate-100 flex justify-between text-[10px] text-slate-300 pointer-events-none -translate-y-2.5"><span>${Math.round(maxCount * 0.25)}</span></div>
+            `;
+            labelsContainer.innerHTML = '';
 
             dataItems.forEach((item, idx) => {
                 const count = item.count || 0;
@@ -1133,13 +1133,18 @@
                 const pct = Math.min(100, Math.round((count / maxCount) * 100));
 
                 const barGroup = document.createElement('div');
-                barGroup.className = "flex-1 h-full flex items-end justify-center group cursor-pointer";
+                barGroup.className = "flex-1 h-full flex items-end justify-center group cursor-pointer relative z-10 py-1";
                 barGroup.onmouseenter = (e) => showTooltip(e, label, `${count} 次`);
                 barGroup.onmouseleave = hideTooltip;
 
                 const bar = document.createElement('div');
-                bar.className = "w-full max-w-[28px] bg-[#2e9e6b] rounded-t-sm transition-all group-hover:brightness-110";
-                bar.style.height = `${pct}%`;
+                if (count > 0) {
+                    bar.className = "w-full max-w-[28px] bg-emerald-500 rounded-t shadow-sm transition-all group-hover:bg-emerald-400";
+                    bar.style.height = `${Math.max(6, pct)}%`;
+                } else {
+                    bar.className = "w-full max-w-[28px] bg-slate-100 rounded-t transition-all group-hover:bg-slate-200";
+                    bar.style.height = "2px";
+                }
                 barGroup.appendChild(bar);
                 container.appendChild(barGroup);
 
