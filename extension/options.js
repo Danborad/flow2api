@@ -7,6 +7,7 @@ const DEFAULT_SETTINGS = {
   refreshIntervalMinutes: "120",
   autoImportEnabled: true,
   autoImportIntervalMinutes: "30",
+  targetLoginEmail: "",
   lastAutoImportAt: "",
   lastAutoImportStatus: "",
   lastAutoImportMessage: "",
@@ -46,7 +47,8 @@ function normalizeSettings(values) {
     clientLabel: (values.clientLabel || DEFAULT_SETTINGS.clientLabel).trim(),
     refreshIntervalMinutes: String(values.refreshIntervalMinutes || DEFAULT_SETTINGS.refreshIntervalMinutes).trim(),
     autoImportEnabled: values.autoImportEnabled !== false,
-    autoImportIntervalMinutes: String(values.autoImportIntervalMinutes || DEFAULT_SETTINGS.autoImportIntervalMinutes).trim()
+    autoImportIntervalMinutes: String(values.autoImportIntervalMinutes || DEFAULT_SETTINGS.autoImportIntervalMinutes).trim(),
+    targetLoginEmail: String(values.targetLoginEmail || "").trim()
   };
 }
 
@@ -160,6 +162,7 @@ function loadSettings() {
     $("refreshIntervalMinutes").value = settings.refreshIntervalMinutes;
     $("autoImportEnabled").checked = settings.autoImportEnabled;
     $("autoImportIntervalMinutes").value = settings.autoImportIntervalMinutes;
+    if ($("targetLoginEmail")) $("targetLoginEmail").value = stored.targetLoginEmail || stored.lastImportEmail || "";
     renderAutoImportStatus(stored);
     renderConnectionStatus(stored);
     renderExtensionLogs(stored);
@@ -168,15 +171,16 @@ function loadSettings() {
 
 async function saveSettings() {
   const stored = await new Promise((resolve) => chrome.storage.local.get(DEFAULT_SETTINGS, resolve));
-    const instanceSettings = ensureInstanceSettings(stored);
-    const settings = normalizeSettings({
-      ...instanceSettings,
-      serverUrl: $("serverUrl").value,
-      apiKey: $("apiKey").value,
-      refreshIntervalMinutes: $("refreshIntervalMinutes").value,
-      autoImportEnabled: $("autoImportEnabled").checked,
-      autoImportIntervalMinutes: $("autoImportIntervalMinutes").value
-    });
+  const instanceSettings = ensureInstanceSettings(stored);
+  const settings = normalizeSettings({
+    ...instanceSettings,
+    serverUrl: $("serverUrl").value,
+    apiKey: $("apiKey").value,
+    refreshIntervalMinutes: $("refreshIntervalMinutes").value,
+    autoImportEnabled: $("autoImportEnabled").checked,
+    autoImportIntervalMinutes: $("autoImportIntervalMinutes").value,
+    targetLoginEmail: $("targetLoginEmail") ? $("targetLoginEmail").value.trim() : ""
+  });
 
     if (!isValidWsUrl(settings.serverUrl)) {
       setStatus("WebSocket URL 必须以 ws:// 或 wss:// 开头。", true);

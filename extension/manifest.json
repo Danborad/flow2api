@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "Flow2API Captcha Worker",
-  "version": "1.1.37",
-  "description": "Generate Google Labs reCAPTCHA Enterprise tokens for Flow2API.",
+  "version": "1.1.38",
+  "description": "Generate Google Labs reCAPTCHA Enterprise tokens and auto-login for Flow2API.",
   "permissions": [
     "storage",
     "tabs",
@@ -28,7 +28,8 @@
     {
       "matches": [
         "https://labs.google/*",
-        "https://flow.google.com/*"
+        "https://flow.google.com/*",
+        "https://accounts.google.com/*"
       ],
       "js": [
         "content.js"

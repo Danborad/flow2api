@@ -91,6 +91,17 @@ class ExtensionCaptchaService:
                 )
                 return
 
+    async def broadcast_reload(self) -> int:
+        """Broadcast reload command to all connected browser extensions"""
+        count = 0
+        for conn in list(self.active_connections):
+            try:
+                await conn.websocket.send_text(json.dumps({"type": "reload"}))
+                count += 1
+            except Exception as e:
+                debug_logger.log_warning(f"[Extension Captcha] Broadcast reload error: {e}")
+        return count
+
     def _find_connection(self, websocket: WebSocket) -> Optional[ExtensionConnection]:
         for conn in self.active_connections:
             if conn.websocket is websocket:

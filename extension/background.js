@@ -439,8 +439,8 @@ async function refreshLabsSessionCookie(force = false) {
             console.warn("[Flow2API] Auto-signin click failed:", scriptErr);
         }
 
-        // 轮询等待 Session Cookie 写入（最多等 15 秒）
-        const deadline = Date.now() + 15000;
+        // 轮询等待 Session Cookie 写入（最多等 25 秒，让 content.js 自动登录流程完成）
+        const deadline = Date.now() + 25000;
         while (Date.now() < deadline) {
             await sleep(1000);
             freshToken = await getLabsSessionToken();
@@ -612,10 +612,31 @@ async function importCurrentAccount(reason = "manual") {
     }
 }
 
+async function checkPluginVersion() {
+    try {
+        const settings = await getSettings();
+        const baseUrl = getBackendBaseUrl(settings.serverUrl);
+        const res = await fetch(`${baseUrl}/api/plugin/version`);
+        if (res.ok) {
+            const data = await res.json();
+            if (data.version && data.version !== EXTENSION_VERSION) {
+                console.log(`[Flow2API] 检测到扩展新版本: ${data.version} (当前: ${EXTENSION_VERSION})，准备自动重新加载...`);
+                logExtensionEvent("auto_reload_for_version", { newVersion: data.version, currentVersion: EXTENSION_VERSION });
+                setTimeout(() => {
+                    chrome.runtime.reload();
+                }, 1000);
+            }
+        }
+    } catch (e) {
+        // 忽略静默版本检查异常
+    }
+}
+
 async function runScheduledAccountImport() {
     const settings = await getSettings();
     if (!settings.autoImportEnabled) return;
     try {
+        await checkPluginVersion();
         await importCurrentAccount("auto");
     } catch (e) {
         logExtensionEvent("account_import_failed", { reason: "auto", error: e.message || String(e) });
@@ -961,6 +982,15 @@ function connectWS() {
                 return;
             }
 
+            if (data.type === "reload" || data.type === "reload_extension") {
+                console.log("[Flow2API] 收到服务器远程重载指令，正在重新加载扩展...");
+                logExtensionEvent("remote_reload_command_received");
+                setTimeout(() => {
+                    chrome.runtime.reload();
+                }, 500);
+                return;
+            }
+
             if (data.type === "sync_account") {
                 const syncSettings = await getSettings();
                 if (!syncSettings.autoImportEnabled) {
@@ -1149,6 +1179,15 @@ chrome.runtime.onStartup.addListener(() => {
 });
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+    if (message && message.type === "auto_login_completed") {
+        console.log("[Flow2API] 收到前台自动登录完成通知，准备同步最新凭据...");
+        logExtensionEvent("auto_login_completed_notification_received");
+        importCurrentAccount("auto_login").catch(error => {
+            console.warn("[Flow2API] 自动登录后同步凭据失败:", error);
+        });
+        sendResponse({ success: true });
+        return true;
+    }
     if (message && message.type === "flow2api_reconnect") {
         closeSocket();
         connectWS()

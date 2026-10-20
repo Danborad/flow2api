@@ -5,9 +5,12 @@ from datetime import datetime, timezone
 import logging
 from typing import Any, Dict, List, Optional
 import base64
+import io
 import json
 import mimetypes
+from pathlib import Path
 import re
+import zipfile
 from urllib.parse import urlparse
 from types import SimpleNamespace
 
@@ -976,6 +979,60 @@ async def import_current_browser_account(
     except Exception as e:
         debug_logger.log_error(f"[PLUGIN_IMPORT] 导入当前浏览器账号失败: {e}")
         raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.get("/api/plugin/version")
+async def get_plugin_version():
+    """Get latest extension version information."""
+    manifest_path = Path(__file__).parent.parent.parent / "extension" / "manifest.json"
+    version = "1.1.38"
+    if manifest_path.exists():
+        try:
+            with open(manifest_path, "r", encoding="utf-8") as f:
+                manifest = json.load(f)
+                version = manifest.get("version", version)
+        except Exception:
+            pass
+    return {
+        "version": version,
+        "name": "Flow2API Captcha Worker"
+    }
+
+
+@router.get("/api/plugin/download")
+async def download_plugin_zip():
+    """Download zipped extension for remote machines."""
+    extension_dir = Path(__file__).parent.parent.parent / "extension"
+    if not extension_dir.exists():
+        raise HTTPException(status_code=404, detail="Extension directory not found")
+
+    zip_buffer = io.BytesIO()
+    with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zip_file:
+        for file_path in extension_dir.rglob("*"):
+            if file_path.is_file():
+                rel_path = file_path.relative_to(extension_dir)
+                if any(part.startswith(".") for part in rel_path.parts):
+                    continue
+                zip_file.write(file_path, arcname=str(rel_path))
+
+    zip_buffer.seek(0)
+    return StreamingResponse(
+        zip_buffer,
+        media_type="application/zip",
+        headers={"Content-Disposition": "attachment; filename=flow2api-worker.zip"}
+    )
+
+
+@router.post("/api/plugin/reload")
+async def reload_all_plugins(api_key: str = Depends(verify_api_key_flexible)):
+    """Broadcast hot reload command to all connected browser extensions."""
+    service = await ExtensionCaptchaService.get_instance()
+    reloaded_count = await service.broadcast_reload()
+    return {
+        "success": True,
+        "reloaded_clients": reloaded_count,
+        "message": f"已向 {reloaded_count} 个在线扩展发送热重载指令"
+    }
 
 
 @router.get("/v1/models")

@@ -713,7 +713,19 @@
                         <!-- 验证码服务配置 -->
                         <div class="bg-white rounded-xl p-5 border border-slate-200/80 shadow-sm flex flex-col justify-between lg:col-span-2">
                             <div>
-                                <h3 class="text-sm font-bold text-slate-900 mb-3">验证码服务配置 (当前: 免费浏览器扩展)</h3>
+                                <div class="flex items-center justify-between border-b border-slate-100 pb-3 mb-3">
+                                    <h3 class="text-sm font-bold text-slate-900">验证码与浏览器扩展配置 (当前版本: v1.1.38)</h3>
+                                    <div class="flex items-center gap-2">
+                                        <a href="/api/plugin/download" download class="px-2.5 py-1 text-xs border border-slate-200 rounded-lg text-slate-700 hover:bg-slate-50 transition-colors inline-flex items-center gap-1 font-medium">
+                                            <svg class="w-3.5 h-3.5 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+                                            <span>下载插件包 (.zip)</span>
+                                        </a>
+                                        <button onclick="triggerReloadAllPlugins()" type="button" class="px-2.5 py-1 text-xs bg-slate-100 text-slate-700 hover:bg-slate-200 rounded-lg transition-colors inline-flex items-center gap-1 font-medium">
+                                            <svg class="w-3.5 h-3.5 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+                                            <span>远程热重载所有插件</span>
+                                        </button>
+                                    </div>
+                                </div>
                                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                                     <div>
                                         <label class="text-xs text-slate-500 mb-1 block">打码获取方式</label>
@@ -723,7 +735,7 @@
                                             <option value="capsolver">CapSolver 第三方云端打码</option>
                                             <option value="capmonster">CapMonster 第三方云端打码</option>
                                         </select>
-                                        <p class="text-[11px] text-slate-400 mt-1">扩展运行于本机 Chrome，通过原生 Hook 拦截官方 grecaptcha 获得 0.9 满分 Token</p>
+                                        <p class="text-[11px] text-slate-400 mt-1">扩展支持无感自动登录、多账号记忆匹配选择及无感定时续期</p>
                                     </div>
                                     <div>
                                         <label class="text-xs text-slate-500 mb-1 block">第三方平台 API Key</label>
@@ -1757,6 +1769,18 @@
             };
             const res = await apiRequest('/api/captcha/config', { method: 'POST', body: JSON.stringify(body) });
             if (res) showToast('打码配置已保存', 'success');
+        }
+
+        async function triggerReloadAllPlugins() {
+            showToast('正在广播插件热重载指令...', 'info');
+            const res = await apiRequest('/api/plugin/reload', { method: 'POST' });
+            if (!res) return;
+            const d = await res.json();
+            if (d.success) {
+                showToast(d.message || '指令已下发', 'success');
+            } else {
+                showToast('重载指令发送失败: ' + (d.detail || d.message || '未知错误'), 'error');
+            }
         }
 
         async function updateAdminPassword() {

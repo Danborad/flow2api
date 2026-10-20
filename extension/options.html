@@ -148,6 +148,10 @@
         <button id="reconnectBtn" type="button" style="margin:0 0 0 auto;padding:6px 10px;font-size:12px;">立即重连</button>
       </div>
 
+      <label for="targetLoginEmail">自动登录首选 Google 账号（邮箱）</label>
+      <input id="targetLoginEmail" type="text" placeholder="留空时默认自动使用上次登录成功的账号">
+      <div class="hint" style="margin-top:4px;">当浏览器同时登录了多个 Google 账号时，插件会在选择账号列表页自动点击此邮箱。</div>
+
       <label for="refreshIntervalMinutes">自动刷新间隔（分钟）</label>
       <input id="refreshIntervalMinutes" type="number" min="5" max="1440" step="1" placeholder="120">
 
