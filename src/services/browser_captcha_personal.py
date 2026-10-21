@@ -532,6 +532,20 @@ def _resolve_browser_executable_path() -> tuple[Optional[str], str]:
     return None, "auto"
 
 
+def _resolve_captcha_extension_dir() -> Optional[str]:
+    """仓库根目录下的 extension/（Flow2API Captcha Worker）。
+
+    仅当目录里确实有 manifest.json 时返回，避免在精简部署里报错。
+    """
+    try:
+        candidate = Path(__file__).resolve().parents[2] / 'extension'
+        if (candidate / 'manifest.json').is_file():
+            return str(candidate)
+    except Exception:
+        pass
+    return None
+
+
 def _build_personal_browser_args(
     *,
     headless: bool,
@@ -580,9 +594,20 @@ def _build_personal_browser_args(
     if proxy_server_arg:
         browser_args.append(proxy_server_arg)
 
+    captcha_extension_dir = _resolve_captcha_extension_dir()
     if proxy_extension_dir:
         # 代理认证扩展在 bwsi/incognito 风格会话下容易失效，保持临时 profile 即可满足隔离需求。
-        browser_args.append(f'--load-extension={proxy_extension_dir}')
+        load_dirs = [proxy_extension_dir]
+        if captcha_extension_dir:
+            # Chrome 允许 --load-extension 用逗号分隔多个目录
+            load_dirs.append(captcha_extension_dir)
+            browser_args.append(f'--disable-extensions-except={",".join(load_dirs)}')
+        browser_args.append(f'--load-extension={",".join(load_dirs)}')
+    elif captcha_extension_dir:
+        # 需要运行仓库自带的注册机扩展：不能用 --disable-extensions，也不能用 --incognito
+        # （无痕窗口默认不加载扩展），所以这里只放行该扩展。
+        browser_args.append(f'--disable-extensions-except={captcha_extension_dir}')
+        browser_args.append(f'--load-extension={captcha_extension_dir}')
     else:
         browser_args.append('--bwsi')
         browser_args.append('--disable-extensions')

@@ -32,6 +32,18 @@ from .browser_cookie_utils import build_cookie_signature
 
 
 # ==================== Docker 环境检测 ====================
+def _resolve_bundle_extension_dir() -> Optional[str]:
+    """仓库根目录下的 extension/（Flow2API Captcha Worker），存在才返回。"""
+    try:
+        base = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        candidate = os.path.join(base, 'extension')
+        if os.path.isfile(os.path.join(candidate, 'manifest.json')):
+            return candidate
+    except Exception:
+        pass
+    return None
+
+
 def _is_running_in_docker() -> bool:
     """检测是否在 Docker 容器中运行"""
     # 方法1: 检查 /.dockerenv 文件
@@ -1299,13 +1311,23 @@ class TokenBrowser:
                 '--disable-infobars',
                 '--hide-scrollbars',
                 '--profile-directory=Default',
-                '--disable-extensions',
                 '--disable-background-networking',
                 '--disable-sync',
                 '--disable-translate',
                 '--disable-default-apps',
                 '--no-default-browser-check',
             ]
+
+            # 加载仓库自带的注册机扩展（Flow2API Captcha Worker）：
+            # --disable-extensions 会让扩展只留记录不运行，这里改为只放行该扩展。
+            _bundle_ext_dir = _resolve_bundle_extension_dir()
+            if _bundle_ext_dir:
+                browser_args.extend([
+                    f'--disable-extensions-except={_bundle_ext_dir}',
+                    f'--load-extension={_bundle_ext_dir}',
+                ])
+            else:
+                browser_args.append('--disable-extensions')
 
             if launch_in_background:
                 browser_args.extend([

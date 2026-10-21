@@ -6,9 +6,22 @@
     <title>管理控制台 - Flow2API</title>
     <!-- 纯净矢量 Favicon: 白底黑色 F 字符，极简大气 -->
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%23ffffff' stroke='%23cbd5e1' stroke-width='1.5'/%3E%3Ctext x='16' y='24' font-family='-apple-system, BlinkMacSystemFont, Roboto, sans-serif' font-size='22' font-weight='800' fill='%230f172a' text-anchor='middle'%3EF%3C/text%3E%3C/svg%3E">
+    <!-- 主题防闪烁初始化：自动跟随设备颜色模式或读取用户偏好 -->
+    <script>
+        (function() {
+            const pref = localStorage.getItem('flow2api_theme') || 'system';
+            const isDark = pref === 'dark' || (pref === 'system' && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
+            if (isDark) {
+                document.documentElement.classList.add('dark');
+            } else {
+                document.documentElement.classList.remove('dark');
+            }
+        })();
+    </script>
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
         tailwind.config = {
+            darkMode: 'class',
             theme: {
                 extend: {
                     colors: {
@@ -26,67 +39,103 @@
     <style>
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; -webkit-tap-highlight-color: transparent; }
         .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
-        .custom-scrollbar::-webkit-scrollbar-thumb { background: #e2e8f0; border-radius: 9999px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 9999px; }
+        .dark .custom-scrollbar::-webkit-scrollbar-thumb { background: #334155; }
         .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
         .chat-bubble-enter { animation: bubbleIn 0.2s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
         @keyframes bubbleIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
         @keyframes slide-up { from { transform: translateY(100%); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
         .animate-slide-up { animation: slide-up .25s ease-out; }
+        html.dark {
+            color-scheme: dark;
+        }
+        html.dark body {
+            background-color: #09090b;
+            color: #f4f4f5;
+        }
+        html.dark input, html.dark textarea, html.dark select {
+            color-scheme: dark;
+        }
+        /* 黑白灰深色模式：强化所有文本的高对比度白灰显示，彻底杜绝黑底黑字 */
+        html.dark .text-slate-900,
+        html.dark .text-slate-800 {
+            color: #ffffff !important;
+        }
+        html.dark .text-slate-700 {
+            color: #e4e4e7 !important;
+        }
+        html.dark .text-slate-600 {
+            color: #d4d4d8 !important;
+        }
+        html.dark .text-slate-500 {
+            color: #a1a1aa !important;
+        }
+        html.dark .bg-slate-50 {
+            background-color: #18181b !important;
+        }
+        html.dark .bg-slate-100 {
+            background-color: #27272a !important;
+        }
+        html.dark .border-slate-100,
+        html.dark .border-slate-200 {
+            border-color: #27272a !important;
+        }
+
     </style>
 </head>
-<body class="h-screen bg-[#fafafa] text-slate-900 antialiased flex overflow-hidden">
+<body class="h-screen bg-[#fafafa] dark:bg-[#09090b] text-slate-900 dark:text-slate-100 antialiased flex overflow-hidden">
 
     <!-- ==================== 移动端侧边栏遮罩 (Backdrop) ==================== -->
-    <div id="mobile-sidebar-backdrop" onclick="toggleSidebar(false)" class="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-40 hidden md:hidden transition-opacity duration-200"></div>
+    <div id="mobile-sidebar-backdrop" onclick="toggleSidebar(false)" class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-40 hidden md:hidden transition-opacity duration-200"></div>
 
     <!-- ==================== 统一侧边栏导航 (桌面端常驻256px，移动端抽屉滑出) ==================== -->
-    <aside id="main-sidebar" class="fixed inset-y-0 left-0 z-50 w-64 bg-white border-r border-slate-200/80 flex flex-col justify-between shrink-0 select-none shadow-xl md:shadow-none -translate-x-full md:translate-x-0 md:static transition-transform duration-200 ease-in-out">
+    <aside id="main-sidebar" class="fixed inset-y-0 left-0 z-50 w-64 bg-white dark:bg-[#121214] border-r border-slate-200/80 dark:border-[#27272a] flex flex-col justify-between shrink-0 select-none shadow-xl md:shadow-none -translate-x-full md:translate-x-0 md:static transition-transform duration-200 ease-in-out">
         <div>
             <!-- 品牌栏 (白底黑字 F 徽标 + 纯文字 Flow2API) -->
-            <div class="h-14 flex items-center justify-between px-5 border-b border-slate-100">
+            <div class="h-14 flex items-center justify-between px-5 border-b border-slate-100 dark:border-[#27272a]">
                 <div class="flex items-center gap-2.5">
-                    <div class="w-7 h-7 rounded-lg bg-white border border-slate-300 shadow-sm flex items-center justify-center font-extrabold text-sm text-slate-900 font-mono shrink-0">
+                    <div class="w-7 h-7 rounded-lg bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 shadow-sm flex items-center justify-center font-extrabold text-sm text-slate-900 dark:text-slate-100 font-mono shrink-0">
                         F
                     </div>
-                    <span class="font-bold text-base tracking-tight text-slate-900">Flow2API</span>
+                    <span class="font-bold text-base tracking-tight text-slate-900 dark:text-slate-100">Flow2API</span>
                 </div>
                 <!-- 移动端关闭按钮 -->
-                <button onclick="toggleSidebar(false)" class="md:hidden p-1.5 text-slate-400 hover:text-slate-600 rounded-lg focus:outline-none">
+                <button onclick="toggleSidebar(false)" class="md:hidden p-1.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-lg focus:outline-none">
                     <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
                 </button>
             </div>
 
             <!-- 侧边栏导航列表 (扁平线框 SVG 图标) -->
             <div class="px-3 py-4">
-                <p class="px-3 text-[11px] font-medium text-slate-400 tracking-wider mb-2">控制中心</p>
+                <p class="px-3 text-[11px] font-medium text-slate-400 dark:text-slate-500 tracking-wider mb-2">控制中心</p>
                 <nav class="space-y-1">
                     <!-- 1. 概览中心 -->
-                    <button onclick="switchTab('overview')" id="nav-overview" class="nav-item w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold transition-all bg-slate-900 text-white shadow-sm">
+                    <button onclick="switchTab('overview')" id="nav-overview" class="nav-item w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold transition-all bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900 shadow-sm">
                         <svg class="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"/></svg>
                         <span>概览中心</span>
                     </button>
 
                     <!-- 2. 测试工作台 -->
-                    <button onclick="switchTab('chat-paint')" id="nav-chat-paint" class="nav-item w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all text-slate-600 hover:bg-slate-100 hover:text-slate-900">
+                    <button onclick="switchTab('chat-paint')" id="nav-chat-paint" class="nav-item w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-slate-100">
                         <svg class="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
                         <span class="flex-1 text-left">测试工作台</span>
                     </button>
 
                     <!-- 3. 媒体管理 -->
-                    <button onclick="switchTab('media-mgr')" id="nav-media-mgr" class="nav-item w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all text-slate-600 hover:bg-slate-100 hover:text-slate-900">
+                    <button onclick="switchTab('media-mgr')" id="nav-media-mgr" class="nav-item w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-slate-100">
                         <svg class="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><rect x="2" y="4" width="20" height="16" rx="2.18"/><path d="M7 2v20M17 2v20M2 12h20M2 7h5M2 17h5M17 17h5M17 7h5"/></svg>
                         <span class="flex-1 text-left">媒体管理</span>
-                        <span class="text-[10px] px-1.5 py-0.2 rounded bg-slate-100 text-slate-500">防爆</span>
+                        <span class="text-[10px] px-1.5 py-0.2 rounded bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400">防爆</span>
                     </button>
 
                     <!-- 4. 请求日志 -->
-                    <button onclick="switchTab('logs')" id="nav-logs" class="nav-item w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all text-slate-600 hover:bg-slate-100 hover:text-slate-900">
+                    <button onclick="switchTab('logs')" id="nav-logs" class="nav-item w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-slate-100">
                         <svg class="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
                         <span>请求日志</span>
                     </button>
 
                     <!-- 5. 系统配置 -->
-                    <button onclick="switchTab('settings')" id="nav-settings" class="nav-item w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all text-slate-600 hover:bg-slate-100 hover:text-slate-900">
+                    <button onclick="switchTab('settings')" id="nav-settings" class="nav-item w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-slate-100">
                         <svg class="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
                         <span>系统配置</span>
                     </button>
@@ -95,41 +144,47 @@
         </div>
 
         <!-- 侧栏底部：管理员在线与退出登录 -->
-        <div class="p-3 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
+        <div class="p-3 border-t border-slate-100 dark:border-[#27272a] flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
             <div class="flex items-center gap-2">
                 <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
-                <span class="font-medium text-slate-700">管理员在线</span>
+                <span class="font-medium text-slate-700 dark:text-slate-300">管理员在线</span>
             </div>
-            <button onclick="logout()" class="hover:text-slate-900 transition-colors px-2 py-1 rounded hover:bg-slate-100">退出</button>
+            <button onclick="logout()" class="hover:text-slate-900 dark:hover:text-slate-100 transition-colors px-2 py-1 rounded hover:bg-slate-100 dark:hover:bg-slate-800">退出</button>
         </div>
     </aside>
 
     <!-- ==================== 右侧主工作区 (Header + 独立滚动容器) ==================== -->
     <div class="flex-1 flex flex-col min-w-0 h-screen overflow-hidden">
 
-        <!-- 顶部状态栏 Header (移动端汉堡按钮 + 标题 + 快捷操作) -->
-        <header class="h-14 bg-white border-b border-slate-200/80 px-4 sm:px-6 flex items-center justify-between shrink-0 z-30 shadow-sm/30">
+        <!-- 顶部状态栏 Header (移动端汉堡按钮 + 标题 + 外观切换 + 快捷操作) -->
+        <header class="h-14 bg-white dark:bg-[#121214] border-b border-slate-200/80 dark:border-[#27272a] px-4 sm:px-6 flex items-center justify-between shrink-0 z-30 shadow-sm/30">
             <div class="flex items-center gap-3">
                 <!-- 移动端汉堡按钮 -->
-                <button onclick="toggleSidebar(true)" class="md:hidden p-1.5 -ml-1 text-slate-700 hover:bg-slate-100 rounded-lg focus:outline-none" aria-label="打开侧边栏菜单">
+                <button onclick="toggleSidebar(true)" class="md:hidden p-1.5 -ml-1 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg focus:outline-none" aria-label="打开侧边栏菜单">
                     <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg>
                 </button>
-                <div class="flex items-center gap-2 text-sm font-bold text-slate-900" id="header-page-title">
+                <div class="flex items-center gap-2 text-sm font-bold text-slate-900 dark:text-slate-100" id="header-page-title">
                     <span>概览中心</span>
                 </div>
             </div>
 
             <!-- 右侧状态与刷新按钮 -->
             <div class="flex items-center gap-2 sm:gap-3">
-                <a href="https://github.com/TheSmallHanCat/flow2api" target="_blank" class="hidden sm:inline-flex items-center gap-1 text-xs text-slate-500 hover:text-slate-900 transition-colors" title="GitHub 仓库">
+                <!-- 外观主题切换器 (自动跟随系统 / 浅色 / 深色) -->
+                <button onclick="ThemeManager.cycle()" id="theme-toggle-btn" class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-slate-200 dark:border-slate-700 text-xs font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors" title="切换外观主题 (自动跟随系统 / 浅色 / 深色)">
+                    <span id="theme-toggle-icon" class="flex items-center"></span>
+                    <span id="theme-toggle-text" class="hidden sm:inline">跟随系统</span>
+                </button>
+                <span class="hidden sm:inline text-slate-200 dark:text-slate-700">|</span>
+                <a href="https://github.com/TheSmallHanCat/flow2api" target="_blank" class="hidden sm:inline-flex items-center gap-1 text-xs text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 transition-colors" title="GitHub 仓库">
                     <svg class="h-4 w-4" fill="currentColor" viewBox="0 0 24 24"><path fill-rule="evenodd" clip-rule="evenodd" d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.53 1.032 1.53 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z"/></svg>
                     <span>GitHub</span>
                 </a>
-                <span class="hidden sm:inline text-slate-200">|</span>
-                <button onclick="refreshAllCurrentTab()" class="text-xs font-medium text-slate-600 hover:text-slate-900 transition-colors">
+                <span class="hidden sm:inline text-slate-200 dark:text-slate-700">|</span>
+                <button onclick="refreshAllCurrentTab()" class="text-xs font-medium text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 transition-colors">
                     刷新
                 </button>
-                <span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-xs bg-emerald-50 text-emerald-700 font-medium border border-emerald-100">
+                <span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-xs bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-400 font-medium border border-emerald-100 dark:border-emerald-900/50">
                     <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
                     <span>服务正常</span>
                 </span>
@@ -144,127 +199,127 @@
                 <div id="panel-overview" class="space-y-5">
                     <!-- 第一排卡片：全局指标与资产状态 -->
                     <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-                        <div class="bg-white rounded-xl p-3.5 border border-slate-200/80 shadow-sm">
-                            <p class="text-xs text-slate-500 mb-0.5">账号总数</p>
-                            <div class="text-2xl font-bold text-slate-900" id="statTotal">-</div>
-                            <p class="text-[11px] text-emerald-600 font-medium mt-1 truncate" id="statActiveSub">-</p>
+                        <div class="bg-white dark:bg-[#121214] rounded-xl p-3.5 border border-slate-200/80 dark:border-[#27272a] shadow-sm">
+                            <p class="text-xs text-slate-500 dark:text-slate-400 mb-0.5">账号总数</p>
+                            <div class="text-2xl font-bold text-slate-900 dark:text-slate-100" id="statTotal">-</div>
+                            <p class="text-[11px] text-emerald-600 dark:text-emerald-400 font-medium mt-1 truncate" id="statActiveSub">-</p>
                         </div>
 
-                        <div class="bg-white rounded-xl p-3.5 border border-slate-200/80 shadow-sm">
-                            <p class="text-xs text-slate-500 mb-0.5">账号总点数</p>
-                            <div class="text-2xl font-bold text-slate-900" id="statCredits">-</div>
-                            <p class="text-[11px] text-slate-400 mt-1 truncate" id="statCreditsSub">-</p>
+                        <div class="bg-white dark:bg-[#121214] rounded-xl p-3.5 border border-slate-200/80 dark:border-[#27272a] shadow-sm">
+                            <p class="text-xs text-slate-500 dark:text-slate-400 mb-0.5">账号总点数</p>
+                            <div class="text-2xl font-bold text-slate-900 dark:text-slate-100" id="statCredits">-</div>
+                            <p class="text-[11px] text-slate-400 dark:text-slate-500 mt-1 truncate" id="statCreditsSub">-</p>
                         </div>
 
-                        <div class="bg-white rounded-xl p-3.5 border border-slate-200/80 shadow-sm">
-                            <p class="text-xs text-slate-500 mb-0.5">今日已用点数</p>
-                            <div class="text-2xl font-bold text-slate-900" id="statTodayCredits">-</div>
-                            <p class="text-[11px] text-slate-400 mt-1 truncate">视频生成消耗</p>
+                        <div class="bg-white dark:bg-[#121214] rounded-xl p-3.5 border border-slate-200/80 dark:border-[#27272a] shadow-sm">
+                            <p class="text-xs text-slate-500 dark:text-slate-400 mb-0.5">今日已用点数</p>
+                            <div class="text-2xl font-bold text-slate-900 dark:text-slate-100" id="statTodayCredits">-</div>
+                            <p class="text-[11px] text-slate-400 dark:text-slate-500 mt-1 truncate">视频生成消耗</p>
                         </div>
 
-                        <div class="bg-white rounded-xl p-3.5 border border-slate-200/80 shadow-sm">
-                            <p class="text-xs text-slate-500 mb-0.5">今日成功率</p>
-                            <div class="text-2xl font-bold text-emerald-600" id="statSuccessRate">100.0%</div>
-                            <p class="text-[11px] text-emerald-600 font-medium mt-1 truncate" id="statSuccessSub">健康稳定</p>
+                        <div class="bg-white dark:bg-[#121214] rounded-xl p-3.5 border border-slate-200/80 dark:border-[#27272a] shadow-sm">
+                            <p class="text-xs text-slate-500 dark:text-slate-400 mb-0.5">今日成功率</p>
+                            <div class="text-2xl font-bold text-emerald-600 dark:text-emerald-400" id="statSuccessRate">100.0%</div>
+                            <p class="text-[11px] text-emerald-600 dark:text-emerald-400 font-medium mt-1 truncate" id="statSuccessSub">健康稳定</p>
                         </div>
 
-                        <div class="bg-white rounded-xl p-3.5 border border-slate-200/80 shadow-sm">
-                            <p class="text-xs text-slate-500 mb-0.5">今日总调用</p>
-                            <div class="text-2xl font-bold text-slate-900" id="statTotalCalls">-</div>
-                            <p class="text-[11px] text-slate-400 mt-1 truncate" id="statCallsSub">累计调用</p>
+                        <div class="bg-white dark:bg-[#121214] rounded-xl p-3.5 border border-slate-200/80 dark:border-[#27272a] shadow-sm">
+                            <p class="text-xs text-slate-500 dark:text-slate-400 mb-0.5">今日总调用</p>
+                            <div class="text-2xl font-bold text-slate-900 dark:text-slate-100" id="statTotalCalls">-</div>
+                            <p class="text-[11px] text-slate-400 dark:text-slate-500 mt-1 truncate" id="statCallsSub">累计调用</p>
                         </div>
 
-                        <div class="bg-white rounded-xl p-3.5 border border-slate-200/80 shadow-sm">
-                            <p class="text-xs text-slate-500 mb-0.5">平均耗时</p>
-                            <div class="text-2xl font-bold text-slate-900" id="statAvgDuration">-</div>
-                            <p class="text-[11px] text-slate-400 mt-1 truncate">今日成功均值</p>
+                        <div class="bg-white dark:bg-[#121214] rounded-xl p-3.5 border border-slate-200/80 dark:border-[#27272a] shadow-sm">
+                            <p class="text-xs text-slate-500 dark:text-slate-400 mb-0.5">平均耗时</p>
+                            <div class="text-2xl font-bold text-slate-900 dark:text-slate-100" id="statAvgDuration">-</div>
+                            <p class="text-[11px] text-slate-400 dark:text-slate-500 mt-1 truncate">今日成功均值</p>
                         </div>
                     </div>
 
                     <!-- 第二排卡片：图片与视频业务拆解 (当前任务徽章行内嵌入红框位置) -->
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-3.5">
                         <!-- 图片卡片 -->
-                        <div class="bg-white rounded-xl p-4 border border-slate-200/80 shadow-sm">
-                            <div class="flex items-center justify-between border-b border-slate-100 pb-2.5">
-                                <span class="font-semibold text-xs sm:text-sm text-slate-800 flex items-center gap-1.5 sm:gap-2">
-                                    <svg class="w-4 h-4 text-blue-600 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>
+                        <div class="bg-white dark:bg-[#121214] rounded-xl p-4 border border-slate-200/80 dark:border-[#27272a] shadow-sm">
+                            <div class="flex items-center justify-between border-b border-slate-100 dark:border-[#27272a] pb-2.5">
+                                <span class="font-semibold text-xs sm:text-sm text-slate-800 dark:text-slate-200 flex items-center gap-1.5 sm:gap-2">
+                                    <svg class="w-4 h-4 text-blue-600 dark:text-blue-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>
                                     <span>图片生成</span>
-                                    <span class="text-[10px] px-1.5 py-0.2 rounded bg-slate-100 text-slate-600 font-normal">不扣点数</span>
+                                    <span class="text-[10px] px-1.5 py-0.2 rounded bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-normal">不扣点数</span>
                                 </span>
-                                <span class="text-xs text-slate-400">累计出图：<span class="font-mono font-bold text-slate-700" id="statTotalImages">-</span></span>
+                                <span class="text-xs text-slate-400 dark:text-slate-500">累计出图：<span class="font-mono font-bold text-slate-700 dark:text-slate-300" id="statTotalImages">-</span></span>
                             </div>
                             <div class="mt-2.5 flex flex-wrap items-center justify-between gap-2">
                                 <div class="flex items-center gap-2.5 flex-wrap">
                                     <div>
-                                        <span class="text-2xl sm:text-3xl font-extrabold text-slate-900" id="statTodayImages">-</span>
-                                        <span class="text-xs text-slate-500 ml-1">今日生成 (张)</span>
+                                        <span class="text-2xl sm:text-3xl font-extrabold text-slate-900 dark:text-slate-100" id="statTodayImages">-</span>
+                                        <span class="text-xs text-slate-500 dark:text-slate-400 ml-1">今日生成 (张)</span>
                                     </div>
                                     <!-- 实时任务徽章 -->
-                                    <div id="live-img-task" class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-slate-100 text-slate-500 text-[10px] border border-slate-200">
+                                    <div id="live-img-task" class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 text-[10px] border border-slate-200 dark:border-slate-700">
                                         <span>● 当前空闲</span>
                                     </div>
                                 </div>
-                                <div class="flex items-center gap-2 text-xs text-slate-500 font-medium">
-                                    <span>1K: <strong class="text-slate-800" id="statImg1k">0</strong></span>
-                                    <span>2K: <strong class="text-blue-600" id="statImg2k">0</strong></span>
-                                    <span>4K: <strong class="text-purple-600" id="statImg4k">0</strong></span>
+                                <div class="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400 font-medium">
+                                    <span>1K: <strong class="text-slate-800 dark:text-slate-200" id="statImg1k">0</strong></span>
+                                    <span>2K: <strong class="text-blue-600 dark:text-blue-400" id="statImg2k">0</strong></span>
+                                    <span>4K: <strong class="text-purple-600 dark:text-purple-400" id="statImg4k">0</strong></span>
                                 </div>
                             </div>
                         </div>
 
                         <!-- 视频卡片 -->
-                        <div class="bg-white rounded-xl p-4 border border-slate-200/80 shadow-sm">
-                            <div class="flex items-center justify-between border-b border-slate-100 pb-2.5">
-                                <span class="font-semibold text-xs sm:text-sm text-slate-800 flex items-center gap-1.5 sm:gap-2">
-                                    <svg class="w-4 h-4 text-purple-600 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><rect x="2" y="4" width="20" height="16" rx="2.18"/><path d="M7 2v20M17 2v20M2 12h20M2 7h5M2 17h5M17 17h5M17 7h5"/></svg>
+                        <div class="bg-white dark:bg-[#121214] rounded-xl p-4 border border-slate-200/80 dark:border-[#27272a] shadow-sm">
+                            <div class="flex items-center justify-between border-b border-slate-100 dark:border-[#27272a] pb-2.5">
+                                <span class="font-semibold text-xs sm:text-sm text-slate-800 dark:text-slate-200 flex items-center gap-1.5 sm:gap-2">
+                                    <svg class="w-4 h-4 text-purple-600 dark:text-purple-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><rect x="2" y="4" width="20" height="16" rx="2.18"/><path d="M7 2v20M17 2v20M2 12h20M2 7h5M2 17h5M17 17h5M17 7h5"/></svg>
                                     <span>视频生成</span>
-                                    <span class="text-[10px] px-1.5 py-0.2 rounded bg-purple-50 text-purple-700 font-normal">Omni 1.1 Flash</span>
+                                    <span class="text-[10px] px-1.5 py-0.2 rounded bg-purple-50 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300 font-normal">Omni 1.1 Flash</span>
                                 </span>
-                                <span class="text-xs text-slate-400">累计产出：<span class="font-mono font-bold text-slate-700" id="statTotalVideos">-</span></span>
+                                <span class="text-xs text-slate-400 dark:text-slate-500">累计产出：<span class="font-mono font-bold text-slate-700 dark:text-slate-300" id="statTotalVideos">-</span></span>
                             </div>
                             <div class="mt-2.5 flex flex-wrap items-center justify-between gap-2">
                                 <div class="flex items-center gap-2.5 flex-wrap">
                                     <div>
-                                        <span class="text-2xl sm:text-3xl font-extrabold text-slate-900" id="statTodayVideos">-</span>
-                                        <span class="text-xs text-slate-500 ml-1">今日生成 (支)</span>
+                                        <span class="text-2xl sm:text-3xl font-extrabold text-slate-900 dark:text-slate-100" id="statTodayVideos">-</span>
+                                        <span class="text-xs text-slate-500 dark:text-slate-400 ml-1">今日生成 (支)</span>
                                     </div>
                                     <!-- 实时任务徽章 -->
-                                    <div id="live-vid-task" class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-slate-100 text-slate-500 text-[10px] border border-slate-200">
+                                    <div id="live-vid-task" class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 text-[10px] border border-slate-200 dark:border-slate-700">
                                         <span>● 当前空闲</span>
                                     </div>
                                 </div>
-                                <div class="flex items-center gap-2 text-xs text-slate-500 font-medium">
-                                    <span>文生: <strong class="text-slate-800" id="statVidT2v">0</strong></span>
-                                    <span>图生: <strong class="text-slate-800" id="statVidI2v">0</strong></span>
-                                    <span>消耗: <strong class="text-amber-600" id="statVidPoints">0点</strong></span>
+                                <div class="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400 font-medium">
+                                    <span>文生: <strong class="text-slate-800 dark:text-slate-200" id="statVidT2v">0</strong></span>
+                                    <span>图生: <strong class="text-slate-800 dark:text-slate-200" id="statVidI2v">0</strong></span>
+                                    <span>消耗: <strong class="text-amber-600 dark:text-amber-400" id="statVidPoints">0点</strong></span>
                                 </div>
                             </div>
                         </div>
                     </div>
 
                     <!-- 中间：【账号 Token 列表】(移动端自适应竖向卡片 + 桌面端标准表格，集成小眼睛脱敏保护) -->
-                    <div class="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
-                        <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2.5 p-3.5 sm:p-4 border-b border-slate-100">
+                    <div class="rounded-xl border border-slate-200 dark:border-[#27272a] bg-white dark:bg-[#121214] shadow-sm overflow-hidden">
+                        <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2.5 p-3.5 sm:p-4 border-b border-slate-100 dark:border-[#27272a]">
                             <div>
-                                <h3 class="text-sm sm:text-base font-bold text-slate-900">账号 Token 列表</h3>
-                                <p class="text-xs text-slate-400 mt-0.5">管理 Google Flow 账号凭据与画板项目绑定状态</p>
+                                <h3 class="text-sm sm:text-base font-bold text-slate-900 dark:text-slate-100">账号 Token 列表</h3>
+                                <p class="text-xs text-slate-400 dark:text-slate-500 mt-0.5">管理 Google Flow 账号凭据与画板项目绑定状态</p>
                             </div>
                             <div class="flex items-center gap-2 w-full sm:w-auto justify-between sm:justify-end flex-wrap pt-1 sm:pt-0">
-                                <label class="flex items-center gap-1.5 text-xs text-slate-500 cursor-pointer select-none">
-                                    <input type="checkbox" id="atAutoRefreshToggle" onchange="toggleATAutoRefresh()" class="w-4 h-4 text-slate-900 rounded border-slate-300 focus:ring-0 cursor-pointer">
+                                <label class="flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400 cursor-pointer select-none">
+                                    <input type="checkbox" id="atAutoRefreshToggle" onchange="toggleATAutoRefresh()" class="w-4 h-4 text-slate-900 rounded border-slate-300 dark:border-slate-700 focus:ring-0 cursor-pointer">
                                     <span>自动刷新AT</span>
                                 </label>
                                 <!-- 小眼睛脱敏切换按钮 -->
-                                <button onclick="toggleEmailMask()" id="btnToggleEmailMask" class="inline-flex items-center justify-center rounded-lg border border-slate-200 text-slate-600 hover:text-slate-900 hover:bg-slate-50 h-8 w-8 transition-colors shrink-0" title="脱敏显示账号（方便截图）">
+                                <button onclick="toggleEmailMask()" id="btnToggleEmailMask" class="inline-flex items-center justify-center rounded-lg border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 hover:bg-slate-50 dark:hover:bg-slate-800 h-8 w-8 transition-colors shrink-0" title="脱敏显示账号（方便截图）">
                                     <svg class="h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                         <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>
                                     </svg>
                                 </button>
                                 <div class="flex items-center gap-1.5">
-                                    <button onclick="refreshAllCredits()" class="px-2.5 py-1.5 rounded-lg border border-slate-200 text-xs font-medium text-slate-700 hover:bg-slate-50 transition-colors">
+                                    <button onclick="refreshAllCredits()" class="px-2.5 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 text-xs font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
                                         刷新余额
                                     </button>
-                                    <button onclick="openAddModal()" class="px-3 py-1.5 rounded-lg bg-slate-900 text-white text-xs font-medium hover:bg-slate-800 transition-colors shadow-sm">
+                                    <button onclick="openAddModal()" class="px-3 py-1.5 rounded-lg bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900 text-xs font-medium hover:bg-slate-800 dark:hover:bg-slate-200 transition-colors shadow-sm">
                                         + 添加 Token
                                     </button>
                                 </div>
@@ -272,19 +327,19 @@
                         </div>
 
                         <!-- 移动端卡片视图 -->
-                        <div class="block md:hidden divide-y divide-slate-100" id="tokenMobileCards">
+                        <div class="block md:hidden divide-y divide-slate-100 dark:divide-slate-800" id="tokenMobileCards">
                             <div class="p-4 text-center text-xs text-slate-400">正在加载账号...</div>
                         </div>
 
                         <!-- 桌面端标准表格 -->
                         <div class="hidden md:block overflow-x-auto">
                             <table class="w-full text-xs text-left">
-                                <thead class="bg-slate-50/80 text-slate-500 font-medium border-b border-slate-100">
+                                <thead class="bg-slate-50/80 dark:bg-slate-800/60 text-slate-500 dark:text-slate-400 font-medium border-b border-slate-100 dark:border-[#27272a]">
                                     <tr>
                                         <th class="py-3 px-4">
                                             <div class="flex items-center gap-1.5 cursor-pointer select-none" onclick="toggleEmailMask()" title="点击切换账号脱敏">
                                                 <span>账号邮箱</span>
-                                                <span id="thEmailMaskIcon" class="text-slate-400 hover:text-slate-700"></span>
+                                                <span id="thEmailMaskIcon" class="text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"></span>
                                             </div>
                                         </th>
                                         <th class="py-3 px-3 text-center">状态</th>
@@ -296,7 +351,7 @@
                                         <th class="py-3 px-4 text-right">操作</th>
                                     </tr>
                                 </thead>
-                                <tbody class="divide-y divide-slate-100 text-slate-700" id="tokenTableBody">
+                                <tbody class="divide-y divide-slate-100 dark:divide-slate-800 text-slate-700 dark:text-slate-300" id="tokenTableBody">
                                     <tr><td colspan="8" class="py-8 text-center text-slate-400">正在加载账号...</td></tr>
                                 </tbody>
                             </table>
@@ -304,64 +359,64 @@
                     </div>
 
                     <!-- 下方：【生成时间轴】(粗柱体 + 24小时分布 + 7天/30天切换) -->
-                    <div class="rounded-xl border border-slate-200 bg-white shadow-sm p-4 sm:p-5 space-y-4">
+                    <div class="rounded-xl border border-slate-200 dark:border-[#27272a] bg-white dark:bg-[#121214] shadow-sm p-4 sm:p-5 space-y-4">
                         <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
                             <div>
-                                <h4 class="text-sm font-bold text-slate-900">生成时间轴 / 模型请求分布</h4>
-                                <p class="text-xs text-slate-400 mt-0.5">统计 24 小时各时段的真实出图与视频调用柱状分布</p>
+                                <h4 class="text-sm font-bold text-slate-900 dark:text-slate-100">生成时间轴 / 模型请求分布</h4>
+                                <p class="text-xs text-slate-400 dark:text-slate-500 mt-0.5">统计 24 小时各时段的真实出图与视频调用柱状分布</p>
                             </div>
 
                             <div class="flex items-center justify-between w-full sm:w-auto gap-3 flex-wrap">
-                                <div class="flex items-center gap-2 text-xs text-slate-600">
+                                <div class="flex items-center gap-2 text-xs text-slate-600 dark:text-slate-400">
                                     <span class="w-3 h-3 rounded-sm bg-[#2e9e6b] shrink-0"></span>
                                     <span class="font-mono text-[11px]" id="chart-legend-label">Nano Banana 2.1</span>
                                 </div>
-                                <div class="inline-flex rounded-lg border border-slate-200 p-0.5 bg-slate-50 text-xs font-medium text-slate-600 shrink-0">
-                                    <button onclick="switchTimelineView('today', this)" id="btn-chart-today" class="px-2.5 py-1 rounded-md bg-white text-slate-900 shadow-sm transition-all">今日</button>
-                                    <button onclick="switchTimelineView('7d', this)" id="btn-chart-7d" class="px-2.5 py-1 rounded-md hover:text-slate-900 transition-all">7天</button>
-                                    <button onclick="switchTimelineView('30d', this)" id="btn-chart-30d" class="px-2.5 py-1 rounded-md hover:text-slate-900 transition-all">30天</button>
+                                <div class="inline-flex rounded-lg border border-slate-200 dark:border-slate-700 p-0.5 bg-slate-50 dark:bg-slate-800/80 text-xs font-medium text-slate-600 dark:text-slate-400 shrink-0">
+                                    <button onclick="switchTimelineView('today', this)" id="btn-chart-today" class="px-2.5 py-1 rounded-md bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 shadow-sm transition-all">今日</button>
+                                    <button onclick="switchTimelineView('7d', this)" id="btn-chart-7d" class="px-2.5 py-1 rounded-md hover:text-slate-900 dark:hover:text-slate-100 transition-all">7天</button>
+                                    <button onclick="switchTimelineView('30d', this)" id="btn-chart-30d" class="px-2.5 py-1 rounded-md hover:text-slate-900 dark:hover:text-slate-100 transition-all">30天</button>
                                 </div>
                             </div>
                         </div>
 
                         <!-- 柱状图主区域 -->
                         <div class="relative pt-6 pb-2 overflow-x-auto custom-scrollbar">
-                            <div id="chart-tooltip" class="absolute pointer-events-none hidden z-20 bg-white border border-slate-200 rounded-xl px-3.5 py-2 shadow-xl transition-all -top-12">
-                                <span class="font-bold text-slate-900 block text-xs" id="tooltip-time">-</span>
-                                <div class="flex items-center gap-2 mt-1 text-xs text-slate-600">
+                            <div id="chart-tooltip" class="absolute pointer-events-none hidden z-20 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3.5 py-2 shadow-xl transition-all -top-12">
+                                <span class="font-bold text-slate-900 dark:text-slate-100 block text-xs" id="tooltip-time">-</span>
+                                <div class="flex items-center gap-2 mt-1 text-xs text-slate-600 dark:text-slate-300">
                                     <span class="w-2.5 h-2.5 rounded-full bg-[#2e9e6b]"></span>
                                     <span id="tooltip-val" class="font-medium">-</span>
                                 </div>
                             </div>
 
                             <div class="min-w-[700px]">
-                                <div class="relative h-44 w-full flex items-end justify-between gap-2 border-b border-slate-200 px-3" id="chart-bars-container">
+                                <div class="relative h-44 w-full flex items-end justify-between gap-2 border-b border-slate-200 dark:border-[#27272a] px-3" id="chart-bars-container">
                                     <!-- 刻度虚线 -->
-                                    <div class="absolute inset-x-0 top-0 border-b border-dashed border-slate-100 flex justify-between text-[10px] text-slate-300 pointer-events-none -translate-y-2.5"><span id="chart-scale-max">25</span></div>
-                                    <div class="absolute inset-x-0 top-1/4 border-b border-dashed border-slate-100 flex justify-between text-[10px] text-slate-300 pointer-events-none -translate-y-2.5"><span id="chart-scale-75">20</span></div>
-                                    <div class="absolute inset-x-0 top-2/4 border-b border-dashed border-slate-100 flex justify-between text-[10px] text-slate-300 pointer-events-none -translate-y-2.5"><span id="chart-scale-50">15</span></div>
-                                    <div class="absolute inset-x-0 top-3/4 border-b border-dashed border-slate-100 flex justify-between text-[10px] text-slate-300 pointer-events-none -translate-y-2.5"><span id="chart-scale-25">10</span></div>
+                                    <div class="absolute inset-x-0 top-0 border-b border-dashed border-slate-100 dark:border-[#27272a] flex justify-between text-[10px] text-slate-300 dark:text-slate-600 pointer-events-none -translate-y-2.5"><span id="chart-scale-max">25</span></div>
+                                    <div class="absolute inset-x-0 top-1/4 border-b border-dashed border-slate-100 dark:border-[#27272a] flex justify-between text-[10px] text-slate-300 dark:text-slate-600 pointer-events-none -translate-y-2.5"><span id="chart-scale-75">20</span></div>
+                                    <div class="absolute inset-x-0 top-2/4 border-b border-dashed border-slate-100 dark:border-[#27272a] flex justify-between text-[10px] text-slate-300 dark:text-slate-600 pointer-events-none -translate-y-2.5"><span id="chart-scale-50">15</span></div>
+                                    <div class="absolute inset-x-0 top-3/4 border-b border-dashed border-slate-100 dark:border-[#27272a] flex justify-between text-[10px] text-slate-300 dark:text-slate-600 pointer-events-none -translate-y-2.5"><span id="chart-scale-25">10</span></div>
                                 </div>
-                                <div class="w-full flex justify-between text-[10px] text-slate-400 px-3 pt-2 select-none" id="chart-axis-labels"></div>
+                                <div class="w-full flex justify-between text-[10px] text-slate-400 dark:text-slate-500 px-3 pt-2 select-none" id="chart-axis-labels"></div>
                             </div>
                         </div>
                     </div>
                 </div>
 
                 <!-- ==================== TAB 2: 图片生成 (对话式生图工作台) ==================== -->
-                <div id="panel-chat-paint" class="hidden rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden flex flex-col md:flex-row relative" style="min-height: calc(100vh - 120px);">
+                <div id="panel-chat-paint" class="hidden rounded-xl border border-slate-200 dark:border-[#27272a] bg-white dark:bg-[#121214] shadow-sm overflow-hidden flex flex-col md:flex-row relative" style="min-height: calc(100vh - 120px);">
                     <!-- 移动端生图历史抽屉遮罩 -->
-                    <div id="chatHistoryBackdrop" onclick="toggleChatHistory(false)" class="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-40 hidden md:hidden transition-opacity"></div>
+                    <div id="chatHistoryBackdrop" onclick="toggleChatHistory(false)" class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-40 hidden md:hidden transition-opacity"></div>
 
                     <!-- 历史任务侧栏：桌面端常驻，移动端抽屉 -->
-                    <div id="chatHistoryDrawer" class="fixed inset-y-0 left-0 z-50 w-72 bg-white md:bg-slate-50/60 border-r border-slate-200 flex flex-col shrink-0 -translate-x-full md:translate-x-0 md:static md:w-64 transition-transform duration-200 ease-in-out shadow-2xl md:shadow-none">
-                        <div class="p-3 border-b border-slate-100 flex items-center justify-between">
-                            <span class="font-bold text-xs text-slate-700">生图任务历史</span>
+                    <div id="chatHistoryDrawer" class="fixed inset-y-0 left-0 z-50 w-72 bg-white dark:bg-[#121214] md:bg-slate-50/60 md:dark:bg-slate-900/60 border-r border-slate-200 dark:border-[#27272a] flex flex-col shrink-0 -translate-x-full md:translate-x-0 md:static md:w-64 transition-transform duration-200 ease-in-out shadow-2xl md:shadow-none">
+                        <div class="p-3 border-b border-slate-100 dark:border-[#27272a] flex items-center justify-between">
+                            <span class="font-bold text-xs text-slate-700 dark:text-slate-300">生图任务历史</span>
                             <div class="flex items-center gap-1.5">
-                                <button onclick="newChatSession()" class="flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded bg-slate-900 text-white hover:bg-slate-800 transition-colors shadow-sm">
+                                <button onclick="newChatSession()" class="flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900 hover:bg-slate-800 dark:hover:bg-slate-200 transition-colors shadow-sm">
                                     <span>+ 新任务</span>
                                 </button>
-                                <button onclick="toggleChatHistory(false)" class="md:hidden p-1 text-slate-400 hover:text-slate-600 rounded">
+                                <button onclick="toggleChatHistory(false)" class="md:hidden p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded">
                                     <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
                                 </button>
                             </div>
@@ -370,52 +425,52 @@
                     </div>
 
                     <!-- 右侧生图聊天工作区 (移动端占满全宽) -->
-                    <div class="flex-1 flex flex-col bg-[#fafafa] min-w-0">
-                        <div class="h-11 bg-white border-b border-slate-200/80 px-3 sm:px-6 flex items-center justify-between shrink-0">
+                    <div class="flex-1 flex flex-col bg-[#fafafa] dark:bg-[#09090b] min-w-0">
+                        <div class="h-11 bg-white dark:bg-[#121214] border-b border-slate-200/80 dark:border-[#27272a] px-3 sm:px-6 flex items-center justify-between shrink-0">
                             <div class="flex items-center gap-2 min-w-0">
-                                <button onclick="toggleChatHistory(true)" class="md:hidden flex items-center gap-1 text-[11px] font-medium text-slate-700 bg-slate-100 hover:bg-slate-200 px-2 py-1 rounded-lg transition-colors shrink-0">
+                                <button onclick="toggleChatHistory(true)" class="md:hidden flex items-center gap-1 text-[11px] font-medium text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 px-2 py-1 rounded-lg transition-colors shrink-0">
                                     <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h7"/></svg>
                                     <span>任务历史</span>
                                 </button>
-                                <span class="font-bold text-xs text-slate-800 truncate" id="currentChatTitle">新画图任务</span>
+                                <span class="font-bold text-xs text-slate-800 dark:text-slate-200 truncate" id="currentChatTitle">新画图任务</span>
                             </div>
-                            <button onclick="clearCurrentChatMessages()" class="text-xs text-slate-400 hover:text-slate-600 shrink-0">清空对话</button>
+                            <button onclick="clearCurrentChatMessages()" class="text-xs text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300 shrink-0">清空对话</button>
                         </div>
 
                         <!-- 消息瀑布区 -->
                         <div class="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 custom-scrollbar" id="chatMessagesContainer">
-                            <div class="text-center py-16 text-slate-400 text-xs">
+                            <div class="text-center py-16 text-slate-400 dark:text-slate-500 text-xs">
                                 <p>请在下方输入画面提示词，选择模型并开始生成</p>
                             </div>
                         </div>
 
                         <!-- 底部输入栏 -->
-                        <div class="p-3 sm:p-4 bg-white border-t border-slate-200">
-                            <div class="bg-slate-50 rounded-xl border border-slate-200 p-2.5 sm:p-3 focus-within:bg-white focus-within:border-slate-400 transition-all">
-                                <div id="chatRefPreview" class="hidden mb-2 flex items-center gap-2 bg-slate-100 p-1.5 rounded-lg">
-                                    <img id="chatRefThumb" src="" class="w-8 h-8 rounded object-cover border border-slate-300">
-                                    <span class="text-xs text-slate-600 flex-1 truncate">已挂载参考垫图</span>
+                        <div class="p-3 sm:p-4 bg-white dark:bg-[#121214] border-t border-slate-200 dark:border-[#27272a]">
+                            <div class="bg-slate-50 dark:bg-slate-800/80 rounded-xl border border-slate-200 dark:border-slate-700 p-2.5 sm:p-3 focus-within:bg-white dark:focus-within:bg-slate-800 focus-within:border-slate-400 dark:focus-within:border-slate-500 transition-all">
+                                <div id="chatRefPreview" class="hidden mb-2 flex items-center gap-2 bg-slate-100 dark:bg-slate-700/80 p-1.5 rounded-lg">
+                                    <img id="chatRefThumb" src="" class="w-8 h-8 rounded object-cover border border-slate-300 dark:border-slate-600">
+                                    <span class="text-xs text-slate-600 dark:text-slate-300 flex-1 truncate">已挂载参考垫图</span>
                                     <button onclick="removeChatRefImage()" class="text-slate-400 hover:text-red-500 text-xs px-1">✕</button>
                                 </div>
 
-                                <textarea id="chatPromptInput" rows="2" placeholder="输入你想生成的画面提示词，支持粘贴截图或选择参考图..." class="w-full bg-transparent resize-none focus:outline-none text-xs text-slate-900 placeholder-slate-400 leading-relaxed"></textarea>
+                                <textarea id="chatPromptInput" rows="2" placeholder="输入你想生成的画面提示词，支持粘贴截图或选择参考图..." class="w-full bg-transparent resize-none focus:outline-none text-xs text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 leading-relaxed"></textarea>
 
-                                <div class="flex items-center justify-between pt-2 border-t border-slate-200/60 mt-1 select-none flex-wrap gap-2">
+                                <div class="flex items-center justify-between pt-2 border-t border-slate-200/60 dark:border-slate-700/60 mt-1 select-none flex-wrap gap-2">
                                     <div class="flex items-center gap-1.5 sm:gap-2 flex-wrap">
-                                        <label class="cursor-pointer px-2.5 py-1 rounded bg-white border border-slate-200 hover:bg-slate-50 text-xs text-slate-700 transition-colors inline-flex items-center gap-1 shrink-0">
-                                            <svg class="w-3.5 h-3.5 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/></svg>
+                                        <label class="cursor-pointer px-2.5 py-1 rounded bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 text-xs text-slate-700 dark:text-slate-300 transition-colors inline-flex items-center gap-1 shrink-0">
+                                            <svg class="w-3.5 h-3.5 text-slate-500 dark:text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/></svg>
                                             <span>参考图</span>
                                             <input type="file" accept="image/*" class="hidden" onchange="handleChatFileInput(event)">
                                         </label>
 
-                                        <select id="chatSelectModel" onchange="onChatModelChange()" class="bg-white border border-slate-200 rounded px-2.5 py-1 text-xs font-semibold text-slate-900 focus:outline-none cursor-pointer">
+                                        <select id="chatSelectModel" onchange="onChatModelChange()" class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded px-2.5 py-1 text-xs font-semibold text-slate-900 dark:text-slate-100 focus:outline-none cursor-pointer">
                                             <option value="Nano Banana 2.1">🍌 Nano Banana 2.1 (BELUGA)</option>
                                             <option value="Nano Banana 2 Lite">🍌 Nano Banana 2 Lite</option>
                                             <option value="Nano Banana Pro">🍌 Nano Banana Pro</option>
                                             <option value="Omni 1.1 Flash">🎬 Omni 1.1 Flash (视频)</option>
                                         </select>
 
-                                        <select id="chatSelectAspect" class="bg-white border border-slate-200 rounded px-2.5 py-1 text-xs text-slate-700 focus:outline-none cursor-pointer">
+                                        <select id="chatSelectAspect" class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded px-2.5 py-1 text-xs text-slate-700 dark:text-slate-300 focus:outline-none cursor-pointer">
                                             <option value="9:16">9:16 竖屏</option>
                                             <option value="16:9">16:9 横屏</option>
                                             <option value="1:1">1:1 正方</option>
@@ -424,7 +479,7 @@
                                         </select>
 
                                         <div id="chatBoxResolution">
-                                            <select id="chatSelectSize" class="bg-white border border-slate-200 rounded px-2.5 py-1 text-xs text-slate-700 focus:outline-none cursor-pointer">
+                                            <select id="chatSelectSize" class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded px-2.5 py-1 text-xs text-slate-700 dark:text-slate-300 focus:outline-none cursor-pointer">
                                                 <option value="2k">2K 原生重塑</option>
                                                 <option value="4k">4K 超分 (Lanczos3)</option>
                                                 <option value="1k">1K 标清</option>
@@ -432,7 +487,7 @@
                                         </div>
 
                                         <div id="chatBoxDuration" class="hidden">
-                                            <select id="chatSelectDuration" class="bg-purple-50 border border-purple-200 text-purple-700 rounded px-2.5 py-1 text-xs font-semibold focus:outline-none cursor-pointer">
+                                            <select id="chatSelectDuration" class="bg-purple-50 dark:bg-purple-950/60 border border-purple-200 dark:border-purple-800 text-purple-700 dark:text-purple-300 rounded px-2.5 py-1 text-xs font-semibold focus:outline-none cursor-pointer">
                                                 <option value="6">时长: 6 秒</option>
                                                 <option value="4">时长: 4 秒</option>
                                                 <option value="8">时长: 8 秒</option>
@@ -441,7 +496,7 @@
                                         </div>
                                     </div>
 
-                                    <button onclick="handleChatSend()" id="btnChatSend" class="px-4 py-1.5 rounded-lg bg-slate-900 text-white text-xs font-medium hover:bg-slate-800 transition-colors shrink-0 ml-auto">
+                                    <button onclick="handleChatSend()" id="btnChatSend" class="px-4 py-1.5 rounded-lg bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900 text-xs font-medium hover:bg-slate-800 dark:hover:bg-slate-200 transition-colors shrink-0 ml-auto">
                                         生成画面
                                     </button>
                                 </div>
@@ -452,37 +507,37 @@
 
                 <!-- ==================== TAB 3: 本地媒体管理 ==================== -->
                 <div id="panel-media-mgr" class="hidden space-y-4">
-                    <div class="bg-white rounded-xl p-4 border border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-sm">
+                    <div class="bg-white dark:bg-[#121214] rounded-xl p-4 border border-slate-200 dark:border-[#27272a] flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-sm">
                         <div>
-                            <h3 class="font-bold text-slate-900 text-sm">本地媒体缓存空间监控</h3>
-                            <p class="text-xs text-slate-400 mt-0.5" id="mediaStatsSummary">正在统计 tmp/ 目录存储...</p>
+                            <h3 class="font-bold text-slate-900 dark:text-slate-100 text-sm">本地媒体缓存空间监控</h3>
+                            <p class="text-xs text-slate-400 dark:text-slate-500 mt-0.5" id="mediaStatsSummary">正在统计 tmp/ 目录存储...</p>
                         </div>
                         <div class="flex items-center gap-2 flex-wrap">
-                            <button onclick="triggerCleanup('7d')" class="text-xs px-3 py-1.5 rounded border border-slate-200 hover:bg-slate-50 transition-colors">清理 7 天前</button>
-                            <button onclick="triggerCleanup('3d')" class="text-xs px-3 py-1.5 rounded border border-slate-200 hover:bg-slate-50 transition-colors">清理 3 天前</button>
-                            <button onclick="triggerCleanup('all')" class="text-xs px-3 py-1.5 rounded bg-red-50 text-red-600 border border-red-200 hover:bg-red-100 transition-colors">清空全部缓存</button>
+                            <button onclick="triggerCleanup('7d')" class="text-xs px-3 py-1.5 rounded border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">清理 7 天前</button>
+                            <button onclick="triggerCleanup('3d')" class="text-xs px-3 py-1.5 rounded border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">清理 3 天前</button>
+                            <button onclick="triggerCleanup('all')" class="text-xs px-3 py-1.5 rounded bg-red-50 dark:bg-red-950/60 text-red-600 dark:text-red-400 border border-red-200 dark:border-red-800 hover:bg-red-100 dark:hover:bg-red-900/60 transition-colors">清空全部缓存</button>
                         </div>
                     </div>
 
-                    <div class="flex items-center justify-between text-xs text-slate-500 px-1">
+                    <div class="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400 px-1">
                         <div class="flex items-center gap-2">
                             <span>筛选类型:</span>
-                            <button onclick="filterMediaFiles('all')" id="btnMediaFilterAll" class="px-2 py-0.5 rounded bg-slate-900 text-white font-medium">全部</button>
-                            <button onclick="filterMediaFiles('image')" id="btnMediaFilterImg" class="px-2 py-0.5 rounded bg-slate-100 hover:bg-slate-200">仅图片</button>
-                            <button onclick="filterMediaFiles('video')" id="btnMediaFilterVid" class="px-2 py-0.5 rounded bg-slate-100 hover:bg-slate-200">仅视频</button>
+                            <button onclick="filterMediaFiles('all')" id="btnMediaFilterAll" class="px-2 py-0.5 rounded bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900 font-medium">全部</button>
+                            <button onclick="filterMediaFiles('image')" id="btnMediaFilterImg" class="px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700">仅图片</button>
+                            <button onclick="filterMediaFiles('video')" id="btnMediaFilterVid" class="px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700">仅视频</button>
                         </div>
                         <span id="mediaTotalCountText">共 0 个文件</span>
                     </div>
 
                     <!-- 媒体列表视图 (正方形轻量缩略图 + 详细信息) -->
-                    <div class="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
-                        <div class="block md:hidden divide-y divide-slate-100" id="mediaMobileList">
-                            <div class="p-6 text-center text-xs text-slate-400">正在加载媒体...</div>
+                    <div class="rounded-xl border border-slate-200 dark:border-[#27272a] bg-white dark:bg-[#121214] shadow-sm overflow-hidden">
+                        <div class="block md:hidden divide-y divide-slate-100 dark:divide-slate-800" id="mediaMobileList">
+                            <div class="p-6 text-center text-xs text-slate-400 dark:text-slate-500">正在加载媒体...</div>
                         </div>
 
                         <div class="hidden md:block overflow-x-auto">
                             <table class="w-full text-xs text-left">
-                                <thead class="bg-slate-50/80 text-slate-500 font-medium border-b border-slate-100">
+                                <thead class="bg-slate-50/80 dark:bg-slate-800/60 text-slate-500 dark:text-slate-400 font-medium border-b border-slate-100 dark:border-[#27272a]">
                                     <tr>
                                         <th class="py-3 px-4 w-24">缩略图</th>
                                         <th class="py-3 px-4">文件名</th>
@@ -493,8 +548,8 @@
                                         <th class="py-3 px-4 text-right">操作</th>
                                     </tr>
                                 </thead>
-                                <tbody class="divide-y divide-slate-100 text-slate-700" id="mediaTableBody">
-                                    <tr><td colspan="7" class="py-8 text-center text-slate-400">正在加载媒体列表...</td></tr>
+                                <tbody class="divide-y divide-slate-100 dark:divide-slate-800 text-slate-700 dark:text-slate-300" id="mediaTableBody">
+                                    <tr><td colspan="7" class="py-8 text-center text-slate-400 dark:text-slate-500">正在加载媒体列表...</td></tr>
                                 </tbody>
                             </table>
                         </div>
@@ -505,193 +560,220 @@
                 <div id="panel-settings" class="hidden space-y-5">
                     <div class="grid gap-5 grid-cols-1 lg:grid-cols-2">
 
-                        <!-- 核心：图片放大 / 4K 分级超分策略 -->
-                        <div class="bg-white rounded-xl p-5 border border-slate-200/80 shadow-sm flex flex-col justify-between lg:col-span-2">
-                            <div class="space-y-4">
-                                <div class="flex items-center justify-between border-b border-slate-100 pb-3 flex-wrap gap-2">
+                        <!-- 外观主题设置 -->
+                        <div class="bg-white dark:bg-[#121214] rounded-xl p-5 border border-slate-200/80 dark:border-[#27272a] shadow-sm flex flex-col justify-between">
+                            <div>
+                                <h3 class="text-sm font-bold text-slate-900 dark:text-slate-100 mb-3 flex items-center gap-2">
+                                    <span>外观主题配置</span>
+                                    <span class="text-[10px] px-2 py-0.5 rounded bg-purple-50 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300 font-semibold border border-purple-100 dark:border-purple-900/50">个性化</span>
+                                </h3>
+                                <div class="space-y-3">
                                     <div>
-                                        <h3 class="font-bold text-slate-900 text-sm flex items-center gap-2">
-                                            <span>图片放大 / 4K 分级超分策略</span>
-                                            <span class="text-[10px] px-2 py-0.5 rounded bg-blue-50 text-blue-700 font-semibold border border-blue-100">核心配置</span>
-                                        </h3>
-                                        <p class="text-xs text-slate-400 mt-0.5">智能适配各类账号等级：优先利用官方原生能力，缺失时由本地超分算法无缝补齐</p>
+                                        <label class="text-xs text-slate-500 dark:text-slate-400 mb-1 block">色彩模式</label>
+                                        <select id="cfgThemeSelect" onchange="ThemeManager.setPreference(this.value)" class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-slate-800 dark:text-slate-100 focus:outline-none cursor-pointer">
+                                            <option value="system">自动跟随设备 / 系统深浅色外观 (默认推荐)</option>
+                                            <option value="light">浅色模式 (亮白极简)</option>
+                                            <option value="dark">深色模式 (暗黑夜间护眼)</option>
+                                        </select>
+                                        <p class="text-[11px] text-slate-400 dark:text-slate-500 mt-1.5 leading-relaxed">
+                                            选择“自动跟随设备”后，控制台将随您手机或操作系统的白天/黑夜模式自动实时切换，无需手动调节。
+                                        </p>
                                     </div>
-                                    <span class="text-xs text-emerald-600 font-medium">● 引擎就绪</span>
+                                </div>
+                            </div>
+                            <div class="mt-4 pt-3 border-t border-slate-100 dark:border-[#27272a] flex justify-between items-center text-xs text-slate-500 dark:text-slate-400">
+                                <span>支持顶栏快捷键一键循环切换</span>
+                                <button onclick="ThemeManager.cycle()" type="button" class="px-2.5 py-1 rounded border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200 transition-colors">立即切换下一个</button>
+                            </div>
+                        </div>
+
+                        <!-- 核心：图片放大 / 4K 分级超分策略 -->
+                        <div class="bg-white dark:bg-[#121214] rounded-xl p-5 border border-slate-200/80 dark:border-[#27272a] shadow-sm flex flex-col justify-between">
+                            <div class="space-y-4">
+                                <div class="flex items-center justify-between border-b border-slate-100 dark:border-[#27272a] pb-3 flex-wrap gap-2">
+                                    <div>
+                                        <h3 class="font-bold text-slate-900 dark:text-slate-100 text-sm flex items-center gap-2">
+                                            <span>图片放大 / 4K 分级超分策略</span>
+                                            <span class="text-[10px] px-2 py-0.5 rounded bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 font-semibold border border-blue-100 dark:border-blue-900/50">核心配置</span>
+                                        </h3>
+                                        <p class="text-xs text-slate-400 dark:text-slate-500 mt-0.5">智能适配各类账号等级：优先利用官方原生能力，缺失时由本地超分算法无缝补齐</p>
+                                    </div>
+                                    <span class="text-xs text-emerald-600 dark:text-emerald-400 font-medium">● 引擎就绪</span>
                                 </div>
 
-                                <div class="flex items-center gap-3 p-3 rounded-lg bg-slate-50 border border-slate-200">
-                                    <input type="checkbox" id="cfgAutoUpscale" checked class="w-4 h-4 text-slate-900 rounded border-slate-300 focus:ring-0 cursor-pointer">
-                                    <label for="cfgAutoUpscale" class="text-xs font-semibold text-slate-800 cursor-pointer flex-1">
+                                <div class="flex items-center gap-3 p-3 rounded-lg bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700">
+                                    <input type="checkbox" id="cfgAutoUpscale" checked class="w-4 h-4 text-slate-900 rounded border-slate-300 dark:border-slate-700 focus:ring-0 cursor-pointer">
+                                    <label for="cfgAutoUpscale" class="text-xs font-semibold text-slate-800 dark:text-slate-200 cursor-pointer flex-1">
                                         图片尺寸不足时自动放大 (默认开启)
                                     </label>
-                                    <span class="text-[11px] text-slate-500">检测到客户端请求 2K/4K 且账号不足时自动触发</span>
+                                    <span class="text-[11px] text-slate-500 dark:text-slate-400">检测到客户端请求 2K/4K 且账号不足时自动触发</span>
                                 </div>
 
                                 <div class="space-y-1.5">
-                                    <label class="block text-xs font-semibold text-slate-700">超分放大引擎</label>
-                                    <select id="cfgUpscaleEngine" class="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs font-medium text-slate-800 focus:outline-none">
+                                    <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300">超分放大引擎</label>
+                                    <select id="cfgUpscaleEngine" class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-xs font-medium text-slate-800 dark:text-slate-100 focus:outline-none">
                                         <option value="lanczos3">Sharp / Lanczos3 (推荐 · 高清锐化重采样 · 速度极快)</option>
                                         <option value="bicubic">Bicubic 三次样条插值 (平滑过渡)</option>
                                     </select>
                                 </div>
 
-                                <div class="bg-slate-50/80 rounded-xl p-3.5 border border-slate-200/60 space-y-2 text-xs text-slate-600">
-                                    <span class="font-bold text-slate-800 block text-[11px] uppercase tracking-wider text-blue-600">4K / 2K 超分分级执行机制：</span>
-                                    <ul class="space-y-1.5 pl-4 list-disc text-[11px] leading-relaxed text-slate-600">
-                                        <li><strong class="text-slate-900">👑 Ultra 顶级账号 (有官方4K权限)</strong>：直接调用 Google Flow 原生 4K 模型放大，完全不走本地超分，100% 原汁原味交付。</li>
-                                        <li><strong class="text-slate-900">💎 Pro 付费账号 (有原生2K、无4K)</strong>：先调用 Google 官方原生模型放大到 2K 底图，接着由本地 Sharp / Lanczos3 算法无损超分到 4K 补齐分辨率交付。</li>
-                                        <li><strong class="text-slate-900">⚪ Free 普通账号 (仅有1K权限)</strong>：直接以 1K 底图通过 Lanczos3 算法超分至 4K 交付；请求 2K 则超分至 2K 交付。</li>
+                                <div class="bg-slate-50/80 dark:bg-slate-800/50 rounded-xl p-3.5 border border-slate-200/60 dark:border-slate-700/60 space-y-2 text-xs text-slate-600 dark:text-slate-400">
+                                    <span class="font-bold text-slate-800 dark:text-slate-200 block text-[11px] uppercase tracking-wider text-blue-600 dark:text-blue-400">4K / 2K 超分分级执行机制：</span>
+                                    <ul class="space-y-1.5 pl-4 list-disc text-[11px] leading-relaxed text-slate-600 dark:text-slate-400">
+                                        <li><strong class="text-slate-900 dark:text-slate-200">👑 Ultra 顶级账号</strong>：直接调用 Google Flow 原生 4K 模型放大，100% 原生交付。</li>
+                                        <li><strong class="text-slate-900 dark:text-slate-200">💎 Pro 付费账号</strong>：先调用 Google 原生放大到 2K 底图，再由本地 Lanczos3 算法超分到 4K 补齐。</li>
+                                        <li><strong class="text-slate-900 dark:text-slate-200">⚪ Free 普通账号</strong>：以 1K 底图通过 Lanczos3 算法超分至 4K / 2K 交付。</li>
                                     </ul>
                                 </div>
                             </div>
 
-                            <div class="pt-4 border-t border-slate-100 flex justify-end mt-2">
-                                <button onclick="saveAllGenerationConfig()" class="px-4 py-1.5 rounded-lg bg-slate-900 text-white text-xs font-medium hover:bg-slate-800 shadow-sm transition-colors">
+                            <div class="pt-4 border-t border-slate-100 dark:border-[#27272a] flex justify-end mt-2">
+                                <button onclick="saveAllGenerationConfig()" class="px-4 py-1.5 rounded-lg bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900 text-xs font-medium hover:bg-slate-800 dark:hover:bg-slate-200 shadow-sm transition-colors">
                                     保存超分配置
                                 </button>
                             </div>
                         </div>
 
                         <!-- 安全配置 -->
-                        <div class="bg-white rounded-xl p-5 border border-slate-200/80 shadow-sm flex flex-col justify-between">
+                        <div class="bg-white dark:bg-[#121214] rounded-xl p-5 border border-slate-200/80 dark:border-[#27272a] shadow-sm flex flex-col justify-between">
                             <div>
-                                <h3 class="text-sm font-bold text-slate-900 mb-3">安全配置 (管理员密码)</h3>
+                                <h3 class="text-sm font-bold text-slate-900 dark:text-slate-100 mb-3">安全配置 (管理员密码)</h3>
                                 <div class="space-y-3">
                                     <div>
-                                        <label class="text-xs text-slate-500 mb-1 block">管理员用户名</label>
-                                        <input id="cfgAdminUsername" type="text" class="flex h-8 w-full rounded-lg border border-slate-200 bg-slate-50 px-2.5 text-xs text-slate-800 focus:outline-none">
+                                        <label class="text-xs text-slate-500 dark:text-slate-400 mb-1 block">管理员用户名</label>
+                                        <input id="cfgAdminUsername" type="text" class="flex h-8 w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-2.5 text-xs text-slate-800 dark:text-slate-100 focus:outline-none">
                                     </div>
                                     <div>
-                                        <label class="text-xs text-slate-500 mb-1 block">旧密码</label>
-                                        <input id="cfgOldPassword" type="password" placeholder="输入旧密码" class="flex h-8 w-full rounded-lg border border-slate-200 bg-white px-2.5 text-xs text-slate-800 focus:outline-none">
+                                        <label class="text-xs text-slate-500 dark:text-slate-400 mb-1 block">旧密码</label>
+                                        <input id="cfgOldPassword" type="password" placeholder="输入旧密码" class="flex h-8 w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-2.5 text-xs text-slate-800 dark:text-slate-100 focus:outline-none">
                                     </div>
                                     <div>
-                                        <label class="text-xs text-slate-500 mb-1 block">新密码</label>
-                                        <input id="cfgNewPassword" type="password" placeholder="输入新密码" class="flex h-8 w-full rounded-lg border border-slate-200 bg-white px-2.5 text-xs text-slate-800 focus:outline-none">
+                                        <label class="text-xs text-slate-500 dark:text-slate-400 mb-1 block">新密码</label>
+                                        <input id="cfgNewPassword" type="password" placeholder="输入新密码" class="flex h-8 w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-2.5 text-xs text-slate-800 dark:text-slate-100 focus:outline-none">
                                     </div>
                                 </div>
                             </div>
-                            <button onclick="updateAdminPassword()" class="mt-4 w-full py-1.5 rounded-lg bg-slate-900 text-white text-xs font-medium hover:bg-slate-800">修改密码</button>
+                            <button onclick="updateAdminPassword()" class="mt-4 w-full py-1.5 rounded-lg bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900 text-xs font-medium hover:bg-slate-800 dark:hover:bg-slate-200">修改密码</button>
                         </div>
 
                         <!-- API 密钥配置 -->
-                        <div class="bg-white rounded-xl p-5 border border-slate-200/80 shadow-sm flex flex-col justify-between">
+                        <div class="bg-white dark:bg-[#121214] rounded-xl p-5 border border-slate-200/80 dark:border-[#27272a] shadow-sm flex flex-col justify-between">
                             <div>
-                                <h3 class="text-sm font-bold text-slate-900 mb-3">API 密钥配置</h3>
+                                <h3 class="text-sm font-bold text-slate-900 dark:text-slate-100 mb-3">API 密钥配置</h3>
                                 <div class="space-y-3">
                                     <div>
-                                        <label class="text-xs text-slate-500 mb-1 block">当前 API Key</label>
-                                        <input id="cfgCurrentAPIKey" type="text" disabled readonly class="flex h-8 w-full rounded-lg border border-slate-200 bg-slate-50 px-2.5 text-xs font-mono text-slate-500">
+                                        <label class="text-xs text-slate-500 dark:text-slate-400 mb-1 block">当前 API Key</label>
+                                        <input id="cfgCurrentAPIKey" type="text" disabled readonly class="flex h-8 w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/60 px-2.5 text-xs font-mono text-slate-500 dark:text-slate-400">
                                     </div>
                                     <div>
-                                        <label class="text-xs text-slate-500 mb-1 block">设置新 API Key</label>
-                                        <input id="cfgNewAPIKey" type="text" placeholder="输入新的 API Key" class="flex h-8 w-full rounded-lg border border-slate-200 bg-white px-2.5 text-xs text-slate-800 focus:outline-none">
-                                        <p class="text-[11px] text-slate-400 mt-1">用于客户端调用的 Bearer 认证密钥</p>
+                                        <label class="text-xs text-slate-500 dark:text-slate-400 mb-1 block">设置新 API Key</label>
+                                        <input id="cfgNewAPIKey" type="text" placeholder="输入新的 API Key" class="flex h-8 w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-2.5 text-xs text-slate-800 dark:text-slate-100 focus:outline-none">
+                                        <p class="text-[11px] text-slate-400 dark:text-slate-500 mt-1">用于客户端调用的 Bearer 认证密钥</p>
                                     </div>
                                 </div>
                             </div>
-                            <button onclick="updateAPIKey()" class="mt-4 w-full py-1.5 rounded-lg bg-slate-900 text-white text-xs font-medium hover:bg-slate-800">更新 API Key</button>
+                            <button onclick="updateAPIKey()" class="mt-4 w-full py-1.5 rounded-lg bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900 text-xs font-medium hover:bg-slate-800 dark:hover:bg-slate-200">更新 API Key</button>
                         </div>
 
                         <!-- 代理配置 -->
-                        <div class="bg-white rounded-xl p-5 border border-slate-200/80 shadow-sm flex flex-col justify-between">
+                        <div class="bg-white dark:bg-[#121214] rounded-xl p-5 border border-slate-200/80 dark:border-[#27272a] shadow-sm flex flex-col justify-between">
                             <div>
-                                <h3 class="text-sm font-bold text-slate-900 mb-3">代理配置</h3>
+                                <h3 class="text-sm font-bold text-slate-900 dark:text-slate-100 mb-3">代理配置</h3>
                                 <div class="space-y-3">
                                     <label class="inline-flex items-center gap-2 cursor-pointer">
-                                        <input type="checkbox" id="cfgProxyEnabled" class="w-4 h-4 text-slate-900 rounded border-slate-300">
-                                        <span class="text-xs font-medium text-slate-700">启用请求代理 (透明网关建议关闭)</span>
+                                        <input type="checkbox" id="cfgProxyEnabled" class="w-4 h-4 text-slate-900 rounded border-slate-300 dark:border-slate-700">
+                                        <span class="text-xs font-medium text-slate-700 dark:text-slate-300">启用请求代理 (透明网关建议关闭)</span>
                                     </label>
                                     <div>
-                                        <label class="text-xs text-slate-500 mb-1 block">请求代理地址</label>
-                                        <input id="cfgProxyUrl" type="text" class="flex h-8 w-full rounded-lg border border-slate-200 bg-white px-2.5 text-xs text-slate-800 focus:outline-none">
+                                        <label class="text-xs text-slate-500 dark:text-slate-400 mb-1 block">请求代理地址</label>
+                                        <input id="cfgProxyUrl" type="text" class="flex h-8 w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-2.5 text-xs text-slate-800 dark:text-slate-100 focus:outline-none">
                                     </div>
-                                    <div class="pt-2 border-t border-slate-100">
+                                    <div class="pt-2 border-t border-slate-100 dark:border-[#27272a]">
                                         <label class="inline-flex items-center gap-2 cursor-pointer">
-                                            <input type="checkbox" id="cfgMediaProxyEnabled" class="w-4 h-4 text-slate-900 rounded border-slate-300" onchange="toggleMediaProxyInput()">
-                                            <span class="text-xs font-medium text-slate-700">媒体上传下载独立代理</span>
+                                            <input type="checkbox" id="cfgMediaProxyEnabled" class="w-4 h-4 text-slate-900 rounded border-slate-300 dark:border-slate-700" onchange="toggleMediaProxyInput()">
+                                            <span class="text-xs font-medium text-slate-700 dark:text-slate-300">媒体上传下载独立代理</span>
                                         </label>
                                         <div id="mediaProxyUrlInput" class="hidden mt-2">
-                                            <input id="cfgMediaProxyUrl" class="flex h-8 w-full rounded-lg border border-slate-200 bg-white px-2.5 text-xs text-slate-800 focus:outline-none" placeholder="http://127.0.0.1:7897">
+                                            <input id="cfgMediaProxyUrl" class="flex h-8 w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-2.5 text-xs text-slate-800 dark:text-slate-100 focus:outline-none" placeholder="http://127.0.0.1:7897">
                                         </div>
                                     </div>
                                 </div>
                             </div>
                             <div class="grid grid-cols-2 gap-2 mt-4">
-                                <button onclick="testProxyConfig()" id="btnTestProxy" class="py-1.5 rounded-lg border border-slate-200 text-xs text-slate-700 hover:bg-slate-50">测试连通</button>
-                                <button onclick="saveProxyConfig()" class="py-1.5 rounded-lg bg-slate-900 text-white text-xs font-medium hover:bg-slate-800">保存代理</button>
+                                <button onclick="testProxyConfig()" id="btnTestProxy" class="py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 text-xs text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800">测试连通</button>
+                                <button onclick="saveProxyConfig()" class="py-1.5 rounded-lg bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900 text-xs font-medium hover:bg-slate-800 dark:hover:bg-slate-200">保存代理</button>
                             </div>
                         </div>
 
                         <!-- 生成与超时配置 -->
-                        <div class="bg-white rounded-xl p-5 border border-slate-200/80 shadow-sm flex flex-col justify-between">
+                        <div class="bg-white dark:bg-[#121214] rounded-xl p-5 border border-slate-200/80 dark:border-[#27272a] shadow-sm flex flex-col justify-between">
                             <div>
-                                <h3 class="text-sm font-bold text-slate-900 mb-3">生成与超时配置</h3>
+                                <h3 class="text-sm font-bold text-slate-900 dark:text-slate-100 mb-3">生成与超时配置</h3>
                                 <div class="space-y-3">
                                     <div class="grid grid-cols-2 gap-2.5">
                                         <div>
-                                            <label class="text-xs text-slate-500 mb-1 block">图片超时 (秒)</label>
-                                            <input id="cfgImageTimeout" type="number" class="flex h-8 w-full rounded-lg border border-slate-200 bg-white px-2.5 text-xs text-slate-800 focus:outline-none">
+                                            <label class="text-xs text-slate-500 dark:text-slate-400 mb-1 block">图片超时 (秒)</label>
+                                            <input id="cfgImageTimeout" type="number" class="flex h-8 w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-2.5 text-xs text-slate-800 dark:text-slate-100 focus:outline-none">
                                         </div>
                                         <div>
-                                            <label class="text-xs text-slate-500 mb-1 block">视频超时 (秒)</label>
-                                            <input id="cfgVideoTimeout" type="number" class="flex h-8 w-full rounded-lg border border-slate-200 bg-white px-2.5 text-xs text-slate-800 focus:outline-none">
+                                            <label class="text-xs text-slate-500 dark:text-slate-400 mb-1 block">视频超时 (秒)</label>
+                                            <input id="cfgVideoTimeout" type="number" class="flex h-8 w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-2.5 text-xs text-slate-800 dark:text-slate-100 focus:outline-none">
                                         </div>
                                     </div>
                                     <div class="grid grid-cols-2 gap-2.5">
                                         <div>
-                                            <label class="text-xs text-slate-500 mb-1 block">兜底换号 (次)</label>
-                                            <input id="cfgImageFallbackAttempts" type="number" class="flex h-8 w-full rounded-lg border border-slate-200 bg-white px-2.5 text-xs text-slate-800 focus:outline-none">
+                                            <label class="text-xs text-slate-500 dark:text-slate-400 mb-1 block">兜底换号 (次)</label>
+                                            <input id="cfgImageFallbackAttempts" type="number" class="flex h-8 w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-2.5 text-xs text-slate-800 dark:text-slate-100 focus:outline-none">
                                         </div>
                                         <div>
-                                            <label class="text-xs text-slate-500 mb-1 block">最大重试次数</label>
-                                            <input id="cfgMaxRetries" type="number" class="flex h-8 w-full rounded-lg border border-slate-200 bg-white px-2.5 text-xs text-slate-800 focus:outline-none">
+                                            <label class="text-xs text-slate-500 dark:text-slate-400 mb-1 block">最大重试次数</label>
+                                            <input id="cfgMaxRetries" type="number" class="flex h-8 w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-2.5 text-xs text-slate-800 dark:text-slate-100 focus:outline-none">
                                         </div>
                                     </div>
                                 </div>
                             </div>
-                            <button onclick="saveAllGenerationConfig()" class="mt-4 w-full py-1.5 rounded-lg bg-slate-900 text-white text-xs font-medium hover:bg-slate-800">保存生成配置</button>
+                            <button onclick="saveAllGenerationConfig()" class="mt-4 w-full py-1.5 rounded-lg bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900 text-xs font-medium hover:bg-slate-800 dark:hover:bg-slate-200">保存生成配置</button>
                         </div>
 
                         <!-- 缓存配置 -->
-                        <div class="bg-white rounded-xl p-5 border border-slate-200/80 shadow-sm flex flex-col justify-between">
+                        <div class="bg-white dark:bg-[#121214] rounded-xl p-5 border border-slate-200/80 dark:border-[#27272a] shadow-sm flex flex-col justify-between">
                             <div>
-                                <h3 class="text-sm font-bold text-slate-900 mb-3">本地缓存配置</h3>
+                                <h3 class="text-sm font-bold text-slate-900 dark:text-slate-100 mb-3">本地缓存配置</h3>
                                 <div class="space-y-3">
                                     <label class="inline-flex items-center gap-2 cursor-pointer">
-                                        <input type="checkbox" id="cfgCacheEnabled" onchange="toggleCacheOptions()" class="w-4 h-4 text-slate-900 rounded border-slate-300">
-                                        <span class="text-xs font-medium text-slate-700">启用本地媒体缓存 (tmp/)</span>
+                                        <input type="checkbox" id="cfgCacheEnabled" onchange="toggleCacheOptions()" class="w-4 h-4 text-slate-900 rounded border-slate-300 dark:border-slate-700">
+                                        <span class="text-xs font-medium text-slate-700 dark:text-slate-300">启用本地媒体缓存 (tmp/)</span>
                                     </label>
                                     <div id="cacheOptions">
                                         <div>
-                                            <label class="text-xs text-slate-500 mb-1 block">缓存过期 (秒，0为不自动删)</label>
-                                            <input id="cfgCacheTimeout" type="number" class="flex h-8 w-full rounded-lg border border-slate-200 bg-white px-2.5 text-xs text-slate-800 focus:outline-none">
+                                            <label class="text-xs text-slate-500 dark:text-slate-400 mb-1 block">缓存过期 (秒，0为不自动删)</label>
+                                            <input id="cfgCacheTimeout" type="number" class="flex h-8 w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-2.5 text-xs text-slate-800 dark:text-slate-100 focus:outline-none">
                                         </div>
                                         <div class="mt-2">
-                                            <label class="text-xs text-slate-500 mb-1 block">对外访问域名 (留空为本机 IP)</label>
-                                            <input id="cfgCacheBaseUrl" type="text" class="flex h-8 w-full rounded-lg border border-slate-200 bg-white px-2.5 text-xs text-slate-800 focus:outline-none">
+                                            <label class="text-xs text-slate-500 dark:text-slate-400 mb-1 block">对外访问域名 (留空为本机 IP)</label>
+                                            <input id="cfgCacheBaseUrl" type="text" class="flex h-8 w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-2.5 text-xs text-slate-800 dark:text-slate-100 focus:outline-none">
                                         </div>
                                     </div>
                                 </div>
                             </div>
-                            <button onclick="saveCacheConfig()" class="mt-4 w-full py-1.5 rounded-lg bg-slate-900 text-white text-xs font-medium hover:bg-slate-800">保存缓存配置</button>
+                            <button onclick="saveCacheConfig()" class="mt-4 w-full py-1.5 rounded-lg bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900 text-xs font-medium hover:bg-slate-800 dark:hover:bg-slate-200">保存缓存配置</button>
                         </div>
 
                         <!-- 企业微信通知配置 -->
-                        <div class="bg-white rounded-xl p-5 border border-slate-200/80 shadow-sm flex flex-col justify-between">
+                        <div class="bg-white dark:bg-[#121214] rounded-xl p-5 border border-slate-200/80 dark:border-[#27272a] shadow-sm flex flex-col justify-between">
                             <div>
-                                <h3 class="text-sm font-bold text-slate-900 mb-3">企业微信通知配置</h3>
+                                <h3 class="text-sm font-bold text-slate-900 dark:text-slate-100 mb-3">企业微信通知配置</h3>
                                 <div class="space-y-3">
                                     <label class="inline-flex items-center gap-2 cursor-pointer">
-                                        <input type="checkbox" id="cfgWebhookEnabled" onchange="toggleWebhookOptions()" class="w-4 h-4 text-slate-900 rounded border-slate-300">
-                                        <span class="text-xs font-medium text-slate-700">启用企微群机器人告警汇报</span>
+                                        <input type="checkbox" id="cfgWebhookEnabled" onchange="toggleWebhookOptions()" class="w-4 h-4 text-slate-900 rounded border-slate-300 dark:border-slate-700">
+                                        <span class="text-xs font-medium text-slate-700 dark:text-slate-300">启用企微群机器人告警汇报</span>
                                     </label>
                                     <div id="webhookOptions">
                                         <div>
-                                            <label class="text-xs text-slate-500 mb-1 block">Webhook 机器人地址</label>
-                                            <input id="cfgWecomWebhookUrl" type="text" class="flex h-8 w-full rounded-lg border border-slate-200 bg-white px-2.5 text-xs text-slate-800 focus:outline-none">
+                                            <label class="text-xs text-slate-500 dark:text-slate-400 mb-1 block">Webhook 机器人地址</label>
+                                            <input id="cfgWecomWebhookUrl" type="text" class="flex h-8 w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-2.5 text-xs text-slate-800 dark:text-slate-100 focus:outline-none">
                                         </div>
-                                        <div class="grid grid-cols-2 gap-2 text-xs text-slate-600 mt-2">
+                                        <div class="grid grid-cols-2 gap-2 text-xs text-slate-600 dark:text-slate-400 mt-2">
                                             <label class="inline-flex items-center gap-1.5">
                                                 <input type="checkbox" id="cfgNotifyOnExpired" class="w-3.5 h-3.5 text-slate-900 rounded">
                                                 <span>失效即时告警</span>
@@ -705,46 +787,46 @@
                                 </div>
                             </div>
                             <div class="flex gap-2 mt-4">
-                                <button onclick="saveWebhookConfig()" class="flex-1 py-1.5 rounded-lg bg-slate-900 text-white text-xs font-medium hover:bg-slate-800">保存通知</button>
-                                <button onclick="testWebhook()" class="px-3 py-1.5 rounded-lg border border-slate-200 text-xs text-slate-700 hover:bg-slate-50">测试</button>
+                                <button onclick="saveWebhookConfig()" class="flex-1 py-1.5 rounded-lg bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900 text-xs font-medium hover:bg-slate-800 dark:hover:bg-slate-200">保存通知</button>
+                                <button onclick="testWebhook()" class="px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 text-xs text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800">测试</button>
                             </div>
                         </div>
 
                         <!-- 验证码服务配置 -->
-                        <div class="bg-white rounded-xl p-5 border border-slate-200/80 shadow-sm flex flex-col justify-between lg:col-span-2">
+                        <div class="bg-white dark:bg-[#121214] rounded-xl p-5 border border-slate-200/80 dark:border-[#27272a] shadow-sm flex flex-col justify-between lg:col-span-2">
                             <div>
-                                <div class="flex items-center justify-between border-b border-slate-100 pb-3 mb-3">
-                                    <h3 class="text-sm font-bold text-slate-900">验证码与浏览器扩展配置 (当前版本: v1.1.38)</h3>
+                                <div class="flex items-center justify-between border-b border-slate-100 dark:border-[#27272a] pb-3 mb-3">
+                                    <h3 class="text-sm font-bold text-slate-900 dark:text-slate-100">验证码与浏览器扩展配置 (当前版本: v1.1.38)</h3>
                                     <div class="flex items-center gap-2">
-                                        <a href="/api/plugin/download" download class="px-2.5 py-1 text-xs border border-slate-200 rounded-lg text-slate-700 hover:bg-slate-50 transition-colors inline-flex items-center gap-1 font-medium">
-                                            <svg class="w-3.5 h-3.5 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+                                        <a href="/api/plugin/download" download class="px-2.5 py-1 text-xs border border-slate-200 dark:border-slate-700 rounded-lg text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors inline-flex items-center gap-1 font-medium">
+                                            <svg class="w-3.5 h-3.5 text-slate-500 dark:text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
                                             <span>下载插件包 (.zip)</span>
                                         </a>
-                                        <button onclick="triggerReloadAllPlugins()" type="button" class="px-2.5 py-1 text-xs bg-slate-100 text-slate-700 hover:bg-slate-200 rounded-lg transition-colors inline-flex items-center gap-1 font-medium">
-                                            <svg class="w-3.5 h-3.5 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+                                        <button onclick="triggerReloadAllPlugins()" type="button" class="px-2.5 py-1 text-xs bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-lg transition-colors inline-flex items-center gap-1 font-medium">
+                                            <svg class="w-3.5 h-3.5 text-slate-500 dark:text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
                                             <span>远程热重载所有插件</span>
                                         </button>
                                     </div>
                                 </div>
                                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                                     <div>
-                                        <label class="text-xs text-slate-500 mb-1 block">打码获取方式</label>
-                                        <select id="cfgCaptchaMethod" onchange="toggleCaptchaOptions()" class="w-full bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-slate-800 focus:outline-none">
+                                        <label class="text-xs text-slate-500 dark:text-slate-400 mb-1 block">打码获取方式</label>
+                                        <select id="cfgCaptchaMethod" onchange="toggleCaptchaOptions()" class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-slate-800 dark:text-slate-100 focus:outline-none">
                                             <option value="extension">浏览器扩展插件打码 (当前使用 · 100% 免费稳定)</option>
                                             <option value="yescaptcha">YesCaptcha 第三方云端打码</option>
                                             <option value="capsolver">CapSolver 第三方云端打码</option>
                                             <option value="capmonster">CapMonster 第三方云端打码</option>
                                         </select>
-                                        <p class="text-[11px] text-slate-400 mt-1">扩展支持无感自动登录、多账号记忆匹配选择及无感定时续期</p>
+                                        <p class="text-[11px] text-slate-400 dark:text-slate-500 mt-1">扩展支持无感自动登录、多账号记忆匹配选择及无感定时续期</p>
                                     </div>
                                     <div>
-                                        <label class="text-xs text-slate-500 mb-1 block">第三方平台 API Key</label>
-                                        <input id="cfgYescaptchaApiKey" type="text" placeholder="使用扩展打码时留空即可" class="flex h-8 w-full rounded-lg border border-slate-200 bg-white px-2.5 text-xs text-slate-800 focus:outline-none">
+                                        <label class="text-xs text-slate-500 dark:text-slate-400 mb-1 block">第三方平台 API Key</label>
+                                        <input id="cfgYescaptchaApiKey" type="text" placeholder="使用扩展打码时留空即可" class="flex h-8 w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-2.5 text-xs text-slate-800 dark:text-slate-100 focus:outline-none">
                                     </div>
                                 </div>
                             </div>
                             <div class="flex justify-end mt-4">
-                                <button onclick="saveCaptchaConfig()" class="px-4 py-1.5 rounded-lg bg-slate-900 text-white text-xs font-medium hover:bg-slate-800">保存打码配置</button>
+                                <button onclick="saveCaptchaConfig()" class="px-4 py-1.5 rounded-lg bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900 text-xs font-medium hover:bg-slate-800 dark:hover:bg-slate-200">保存打码配置</button>
                             </div>
                         </div>
                     </div>
@@ -783,7 +865,7 @@
                                         <th class="py-2.5 px-3 text-center">详情</th>
                                     </tr>
                                 </thead>
-                                <tbody class="divide-y divide-slate-100" id="logsTableBody">
+                                <tbody class="divide-y divide-slate-100 dark:divide-[#27272a] text-slate-700 dark:text-zinc-200" id="logsTableBody">
                                     <tr><td colspan="9" class="py-8 text-center text-slate-400">正在加载日志...</td></tr>
                                 </tbody>
                             </table>
@@ -798,7 +880,7 @@
     <!-- ==================== 模态框组 ==================== -->
     <!-- 添加 Token Modal -->
     <div id="addModal" class="hidden fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
-        <div class="bg-white rounded-xl border border-slate-200 w-full max-w-xl shadow-2xl p-5 space-y-4 my-auto">
+        <div class="bg-white dark:bg-[#121214] rounded-xl border border-slate-200 dark:border-[#27272a] text-slate-900 dark:text-zinc-100 w-full max-w-xl shadow-2xl p-5 space-y-4 my-auto">
             <div class="flex items-center justify-between border-b border-slate-100 pb-3">
                 <h3 class="text-base font-bold text-slate-900">添加 Google Flow Token</h3>
                 <button onclick="closeAddModal()" class="text-slate-400 hover:text-slate-600">✕</button>
@@ -806,16 +888,16 @@
             <div class="space-y-3 max-h-[70vh] overflow-y-auto custom-scrollbar pr-1">
                 <div>
                     <label class="text-xs font-medium block text-slate-700 mb-1">Session Token (ST) <span class="text-red-500">*</span></label>
-                    <textarea id="addTokenST" rows="3" class="w-full text-xs font-mono p-2.5 border border-slate-200 rounded-lg bg-slate-50 focus:bg-white focus:outline-none" placeholder="输入从浏览器 Cookie 中复制的 __Secure-next-auth.session-token"></textarea>
+                    <textarea id="addTokenST" rows="3" class="w-full text-xs font-mono p-2.5 border border-slate-200 dark:border-[#27272a] rounded-lg bg-slate-50 dark:bg-[#18181b] text-slate-900 dark:text-zinc-100 focus:bg-white dark:focus:bg-[#18181b] focus:outline-none" placeholder="输入从浏览器 Cookie 中复制的 __Secure-next-auth.session-token"></textarea>
                 </div>
                 <div class="grid grid-cols-2 gap-3">
                     <div>
                         <label class="text-xs font-medium block text-slate-700 mb-1">备注信息</label>
-                        <input id="addTokenRemark" type="text" class="w-full text-xs p-2 border border-slate-200 rounded-lg bg-white" placeholder="如：主号1">
+                        <input id="addTokenRemark" type="text" class="w-full text-xs p-2 border border-slate-200 dark:border-[#27272a] rounded-lg bg-white dark:bg-[#18181b] text-slate-900 dark:text-zinc-100" placeholder="如：主号1">
                     </div>
                     <div>
                         <label class="text-xs font-medium block text-slate-700 mb-1">画板 Project ID</label>
-                        <input id="addTokenProjectId" type="text" class="w-full text-xs font-mono p-2 border border-slate-200 rounded-lg bg-white" placeholder="留空自动生成">
+                        <input id="addTokenProjectId" type="text" class="w-full text-xs font-mono p-2 border border-slate-200 dark:border-[#27272a] rounded-lg bg-white dark:bg-[#18181b] text-slate-900 dark:text-zinc-100" placeholder="留空自动生成">
                     </div>
                 </div>
             </div>
@@ -831,7 +913,7 @@
 
     <!-- 编辑 Token Modal -->
     <div id="editModal" class="hidden fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
-        <div class="bg-white rounded-xl border border-slate-200 w-full max-w-xl shadow-2xl p-5 space-y-4 my-auto">
+        <div class="bg-white dark:bg-[#121214] rounded-xl border border-slate-200 dark:border-[#27272a] text-slate-900 dark:text-zinc-100 w-full max-w-xl shadow-2xl p-5 space-y-4 my-auto">
             <input type="hidden" id="editTokenId">
             <div class="flex items-center justify-between border-b border-slate-100 pb-3">
                 <h3 class="text-base font-bold text-slate-900">编辑 Token 配置</h3>
@@ -840,21 +922,21 @@
             <div class="space-y-3 max-h-[70vh] overflow-y-auto custom-scrollbar pr-1">
                 <div>
                     <label class="text-xs font-medium block text-slate-700 mb-1">Session Token (ST)</label>
-                    <textarea id="editTokenST" rows="3" class="w-full text-xs font-mono p-2.5 border border-slate-200 rounded-lg bg-slate-50 focus:bg-white focus:outline-none"></textarea>
+                    <textarea id="editTokenST" rows="3" class="w-full text-xs font-mono p-2.5 border border-slate-200 dark:border-[#27272a] rounded-lg bg-slate-50 dark:bg-[#18181b] text-slate-900 dark:text-zinc-100 focus:bg-white dark:focus:bg-[#18181b] focus:outline-none"></textarea>
                 </div>
                 <div class="grid grid-cols-2 gap-3">
                     <div>
                         <label class="text-xs font-medium block text-slate-700 mb-1">备注</label>
-                        <input id="editTokenRemark" type="text" class="w-full text-xs p-2 border border-slate-200 rounded-lg bg-white">
+                        <input id="editTokenRemark" type="text" class="w-full text-xs p-2 border border-slate-200 dark:border-[#27272a] rounded-lg bg-white dark:bg-[#18181b] text-slate-900 dark:text-zinc-100">
                     </div>
                     <div>
                         <label class="text-xs font-medium block text-slate-700 mb-1">当前画板 Project ID</label>
-                        <input id="editTokenProjectId" type="text" class="w-full text-xs font-mono p-2 border border-slate-200 rounded-lg bg-white">
+                        <input id="editTokenProjectId" type="text" class="w-full text-xs font-mono p-2 border border-slate-200 dark:border-[#27272a] rounded-lg bg-white dark:bg-[#18181b] text-slate-900 dark:text-zinc-100">
                     </div>
                 </div>
                 <div>
                     <label class="text-xs font-medium block text-slate-700 mb-1">自定义打码代理 (留空使用全局)</label>
-                    <input id="editTokenCaptchaProxyUrl" type="text" class="w-full text-xs font-mono p-2 border border-slate-200 rounded-lg bg-white">
+                    <input id="editTokenCaptchaProxyUrl" type="text" class="w-full text-xs font-mono p-2 border border-slate-200 dark:border-[#27272a] rounded-lg bg-white dark:bg-[#18181b] text-slate-900 dark:text-zinc-100">
                 </div>
             </div>
             <div class="pt-3 border-t border-slate-100 flex justify-between items-center">
@@ -872,7 +954,7 @@
 
     <!-- 日志详情 Modal -->
     <div id="logDetailModal" class="hidden fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
-        <div class="bg-white rounded-xl border border-slate-200 w-full max-w-3xl shadow-2xl p-5 space-y-4 max-h-[85vh] flex flex-col">
+        <div class="bg-white dark:bg-[#121214] rounded-xl border border-slate-200 dark:border-[#27272a] text-slate-900 dark:text-zinc-100 w-full max-w-3xl shadow-2xl p-5 space-y-4 max-h-[85vh] flex flex-col">
             <div class="flex items-center justify-between border-b border-slate-100 pb-2.5">
                 <h3 class="text-sm font-bold text-slate-900">请求日志详情</h3>
                 <button onclick="closeLogDetailModal()" class="text-slate-400 hover:text-slate-600">✕</button>
@@ -905,6 +987,92 @@
     <!-- ==================== 前端核心 JavaScript 脚本 ==================== -->
     <script>
         const $ = id => document.getElementById(id);
+        // ==================== 主题管理器 (纯黑白灰 Dark Mode & 自动跟随系统) ====================
+        const ThemeManager = {
+            KEY: 'flow2api_theme',
+
+            getPreference() {
+                return localStorage.getItem(this.KEY) || 'system';
+            },
+
+            setPreference(theme) {
+                localStorage.setItem(this.KEY, theme);
+                this.apply();
+                this.updateUI();
+                const map = { 'system': '自动跟随系统', 'light': '浅色模式', 'dark': '深色模式' };
+                if (typeof showToast === 'function') {
+                    showToast(`已切换外观为：${map[theme]}`, 'info', 1500);
+                }
+            },
+
+            isDark() {
+                const pref = this.getPreference();
+                if (pref === 'dark') return true;
+                if (pref === 'light') return false;
+                return window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+            },
+
+            apply() {
+                if (this.isDark()) {
+                    document.documentElement.classList.add('dark');
+                } else {
+                    document.documentElement.classList.remove('dark');
+                }
+            },
+
+            cycle() {
+                const current = this.getPreference();
+                const next = current === 'system' ? 'light' : (current === 'light' ? 'dark' : 'system');
+                this.setPreference(next);
+                return next;
+            },
+
+            init() {
+                this.apply();
+                if (window.matchMedia) {
+                    window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
+                        if (this.getPreference() === 'system') {
+                            this.apply();
+                            this.updateUI();
+                        }
+                    });
+                }
+                this.updateUI();
+            },
+
+            updateUI() {
+                const pref = this.getPreference();
+                const btn = $('theme-toggle-btn');
+                const textEl = $('theme-toggle-text');
+                const iconEl = $('theme-toggle-icon');
+                const selectEl = $('cfgThemeSelect');
+
+                if (selectEl) selectEl.value = pref;
+
+                if (iconEl) {
+                    if (pref === 'system') {
+                        iconEl.innerHTML = `<svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg>`;
+                    } else if (pref === 'dark') {
+                        iconEl.innerHTML = `<svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"/></svg>`;
+                    } else {
+                        iconEl.innerHTML = `<svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"/></svg>`;
+                    }
+                }
+                if (textEl) {
+                    const labels = { 'system': '跟随系统', 'light': '浅色', 'dark': '深色' };
+                    textEl.textContent = labels[pref];
+                }
+                if (btn) {
+                    const titleMap = {
+                        'system': '当前：自动跟随系统（点击切换）',
+                        'light': '当前：浅色模式（点击切换）',
+                        'dark': '当前：深色模式（点击切换）'
+                    };
+                    btn.title = titleMap[pref];
+                }
+            }
+        };
+
         let allTokens = [];
         let allLogs = [];
         let activeTab = 'overview';
@@ -1238,6 +1406,7 @@
         function toggleEmailMask() {
             window.isEmailMasked = !window.isEmailMasked;
             localStorage.setItem('flow2api_mask_emails', window.isEmailMasked ? '1' : '0');
+            ThemeManager.init();
             updateEmailMaskButtons();
             renderTokensTable(allTokens);
             renderTokensMobile(allTokens);
@@ -1249,6 +1418,7 @@
             const res = await apiRequest('/api/tokens');
             if (!res) return;
             allTokens = await res.json();
+            ThemeManager.init();
             updateEmailMaskButtons();
             renderTokensTable(allTokens);
             renderTokensMobile(allTokens);
@@ -1257,7 +1427,7 @@
         function renderTokensTable(tokens) {
             const tbody = $('tokenTableBody');
             if (!tokens.length) {
-                tbody.innerHTML = '<tr><td colspan="8" class="py-8 text-center text-slate-400">暂无 Token，请点击右上角添加</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="8" class="py-8 text-center text-slate-400 dark:text-zinc-500">暂无 Token，请点击右上角添加</td></tr>';
                 return;
             }
             tbody.innerHTML = tokens.map(t => {
@@ -1265,38 +1435,38 @@
                 const isProtocol = t.protocol_mode === 'protocol';
                 const emailText = formatTokenEmail(t.email);
                 return `
-                    <tr class="hover:bg-slate-50/60 transition-colors">
-                        <td class="py-3 px-4 font-medium text-slate-900 truncate max-w-[200px]" title="${escapeHtml(emailText)}">
+                    <tr class="hover:bg-slate-50/60 dark:hover:bg-zinc-800/40 transition-colors">
+                        <td class="py-3 px-4 font-semibold text-slate-900 dark:text-white truncate max-w-[200px]" title="${escapeHtml(emailText)}">
                             ${escapeHtml(emailText)}
                         </td>
                         <td class="py-3 px-3 text-center">
-                            <span class="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium ${t.is_active ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-500'}">
+                            <span class="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium ${t.is_active ? 'bg-emerald-50 dark:bg-emerald-950/70 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800' : 'bg-slate-100 dark:bg-zinc-800 text-slate-500 dark:text-zinc-400 border border-slate-200 dark:border-zinc-700'}">
                                 ${t.is_active ? '启用' : '禁用'}
                             </span>
                         </td>
                         <td class="py-3 px-3 text-center">
-                            <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[11px] bg-slate-100 text-slate-600 font-medium">
+                            <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[11px] bg-slate-100 dark:bg-zinc-800 text-slate-600 dark:text-zinc-300 font-medium border border-slate-200 dark:border-zinc-700">
                                 ${isProtocol ? '协议' : 'ST'}
                             </span>
                         </td>
-                        <td class="py-3 px-3 text-center font-mono text-slate-500 text-xs">
+                        <td class="py-3 px-3 text-center font-mono text-slate-500 dark:text-zinc-300 text-xs">
                             ${expText}
                         </td>
                         <td class="py-3 px-3 text-center">
-                            <button onclick="refreshTokenCredits(${t.id})" class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 hover:bg-blue-100 font-semibold font-mono" title="点击刷新余额">
+                            <button onclick="refreshTokenCredits(${t.id})" class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-900/60 font-semibold font-mono border border-blue-100 dark:border-blue-900" title="点击刷新余额">
                                 <span>${t.credits !== undefined ? t.credits : '-'}</span>
-                                <svg class="w-3 h-3 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+                                <svg class="w-3 h-3 text-blue-500 dark:text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
                             </button>
                         </td>
-                        <td class="py-3 px-4 font-mono text-slate-500 text-[11px] truncate max-w-[160px]" title="${escapeHtml(t.current_project_id || '-')}">
+                        <td class="py-3 px-4 font-mono text-slate-500 dark:text-zinc-400 text-[11px] truncate max-w-[160px]" title="${escapeHtml(t.current_project_id || '-')}">
                             ${escapeHtml(t.current_project_id || '-')}
                         </td>
-                        <td class="py-3 px-3 text-center text-slate-500 font-mono text-xs">
+                        <td class="py-3 px-3 text-center text-slate-500 dark:text-zinc-400 font-mono text-xs">
                             图 ${t.image_count || 0} / 视 ${t.video_count || 0}
                         </td>
                         <td class="py-3 px-4 text-right space-x-1.5 whitespace-nowrap">
-                            <button onclick="openEditModal(${t.id})" class="px-2 py-1 text-slate-600 hover:text-slate-900 font-medium">编辑</button>
-                            <button onclick="refreshTokenAT(${t.id})" class="px-2 py-1 text-blue-600 hover:underline">刷新AT</button>
+                            <button onclick="openEditModal(${t.id})" class="px-2 py-1 text-slate-600 dark:text-zinc-300 hover:text-slate-900 dark:hover:text-white font-medium">编辑</button>
+                            <button onclick="refreshTokenAT(${t.id})" class="px-2 py-1 text-blue-600 dark:text-blue-400 hover:underline">刷新AT</button>
                         </td>
                     </tr>
                 `;
@@ -1306,7 +1476,7 @@
         function renderTokensMobile(tokens) {
             const container = $('tokenMobileCards');
             if (!tokens.length) {
-                container.innerHTML = '<div class="p-6 text-center text-xs text-slate-400">暂无 Token</div>';
+                container.innerHTML = '<div class="p-6 text-center text-xs text-slate-400 dark:text-zinc-500">暂无 Token</div>';
                 return;
             }
             container.innerHTML = tokens.map(t => {
@@ -1314,35 +1484,35 @@
                 return `
                     <div class="p-3.5 space-y-2.5">
                         <div class="flex items-center justify-between gap-2">
-                            <span class="font-bold text-xs text-slate-900 truncate">${escapeHtml(emailText)}</span>
-                            <span class="px-2 py-0.5 rounded text-[10px] font-medium ${t.is_active ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-500'} shrink-0">${t.is_active ? '启用' : '禁用'}</span>
+                            <span class="font-bold text-xs text-slate-900 dark:text-white truncate">${escapeHtml(emailText)}</span>
+                            <span class="px-2 py-0.5 rounded text-[10px] font-medium ${t.is_active ? 'bg-emerald-50 dark:bg-emerald-950/70 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800' : 'bg-slate-100 dark:bg-zinc-800 text-slate-500 dark:text-zinc-400 border border-slate-200 dark:border-zinc-700'} shrink-0">${t.is_active ? '启用' : '禁用'}</span>
                         </div>
-                        <div class="grid grid-cols-2 gap-2 text-[11px] bg-slate-50 p-2.5 rounded-lg border border-slate-100">
+                        <div class="grid grid-cols-2 gap-2 text-[11px] bg-slate-50 dark:bg-[#18181b] p-2.5 rounded-lg border border-slate-100 dark:border-[#27272a]">
                             <div>
-                                <span class="text-slate-400 block text-[10px] mb-0.5">点数余额</span>
-                                <button onclick="refreshTokenCredits(${t.id})" class="inline-flex items-center gap-1 font-bold text-blue-600 font-mono">
+                                <span class="text-slate-400 dark:text-zinc-400 block text-[10px] mb-0.5">点数余额</span>
+                                <button onclick="refreshTokenCredits(${t.id})" class="inline-flex items-center gap-1 font-bold text-blue-600 dark:text-blue-400 font-mono">
                                     <span>${t.credits !== undefined ? t.credits : '-'} 点</span>
-                                    <svg class="w-3 h-3 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+                                    <svg class="w-3 h-3 text-blue-500 dark:text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
                                 </button>
                             </div>
                             <div>
-                                <span class="text-slate-400 block text-[10px] mb-0.5">AT 过期时间</span>
-                                <span class="text-slate-700 font-mono text-[10px]">${formatTokenExpiry(t.at_expires)}</span>
+                                <span class="text-slate-400 dark:text-zinc-400 block text-[10px] mb-0.5">AT 过期时间</span>
+                                <span class="text-slate-700 dark:text-zinc-200 font-mono text-[10px]">${formatTokenExpiry(t.at_expires)}</span>
                             </div>
                             <div>
-                                <span class="text-slate-400 block text-[10px] mb-0.5">运行模式</span>
-                                <span class="text-slate-700 font-medium">${t.protocol_mode === 'protocol' ? '协议模式' : 'Session'}</span>
+                                <span class="text-slate-400 dark:text-zinc-400 block text-[10px] mb-0.5">运行模式</span>
+                                <span class="text-slate-700 dark:text-zinc-200 font-medium">${t.protocol_mode === 'protocol' ? '协议模式' : 'Session'}</span>
                             </div>
                             <div>
-                                <span class="text-slate-400 block text-[10px] mb-0.5">累计出图/视</span>
-                                <span class="text-slate-700 font-mono">图 ${t.image_count || 0} / 视 ${t.video_count || 0}</span>
+                                <span class="text-slate-400 dark:text-zinc-400 block text-[10px] mb-0.5">累计出图/视</span>
+                                <span class="text-slate-700 dark:text-zinc-200 font-mono">图 ${t.image_count || 0} / 视 ${t.video_count || 0}</span>
                             </div>
                         </div>
                         <div class="flex items-center justify-between pt-0.5">
-                            <span class="text-[10px] text-slate-400 font-mono truncate max-w-[130px]">项目: ${(t.current_project_id || '-').slice(0, 8)}...</span>
+                            <span class="text-[10px] text-slate-400 dark:text-zinc-500 font-mono truncate max-w-[130px]">项目: ${(t.current_project_id || '-').slice(0, 8)}...</span>
                             <div class="flex items-center gap-1.5">
-                                <button onclick="openEditModal(${t.id})" class="px-2.5 py-1 text-xs border border-slate-200 rounded-md text-slate-700 hover:bg-slate-50">编辑</button>
-                                <button onclick="refreshTokenAT(${t.id})" class="px-2.5 py-1 text-xs bg-slate-900 text-white rounded-md hover:bg-slate-800">刷新AT</button>
+                                <button onclick="openEditModal(${t.id})" class="px-2.5 py-1 text-xs border border-slate-200 dark:border-[#27272a] rounded-md text-slate-700 dark:text-zinc-200 hover:bg-slate-50 dark:hover:bg-zinc-800">编辑</button>
+                                <button onclick="refreshTokenAT(${t.id})" class="px-2.5 py-1 text-xs bg-slate-900 text-white dark:bg-zinc-100 dark:text-zinc-900 rounded-md hover:bg-slate-800 dark:hover:bg-zinc-200">刷新AT</button>
                             </div>
                         </div>
                     </div>
@@ -1533,7 +1703,7 @@
                                     ${isVid ? `<span class="absolute inset-0 bg-black/30 flex items-center justify-center text-white text-xs">▶</span>` : ''}
                                 </div>
                             </td>
-                            <td class="py-2.5 px-4 font-medium text-slate-900">
+                            <td class="py-2.5 px-4 font-semibold text-slate-900 dark:text-white">
                                 <div class="font-mono text-xs truncate max-w-[280px]" title="${escapeHtml(f.filename)}">${escapeHtml(f.filename)}</div>
                                 <span class="inline-block mt-1 px-1.5 py-0.2 rounded text-[10px] font-semibold border ${resBadgeClass}">${f.resolution_label || '1K'}</span>
                             </td>
@@ -1574,7 +1744,7 @@
                             </div>
                             <div class="flex-1 min-w-0 space-y-1">
                                 <div class="flex items-center justify-between">
-                                    <span class="text-xs font-bold text-slate-800 truncate">${escapeHtml(f.filename)}</span>
+                                    <span class="text-xs font-bold text-slate-900 dark:text-white truncate">${escapeHtml(f.filename)}</span>
                                     <span class="font-mono text-[11px] text-slate-500">${roundMb(f.size_bytes)}MB</span>
                                 </div>
                                 <div class="flex items-center gap-2 text-[11px] text-slate-400">
@@ -1867,20 +2037,20 @@
             }
             tbody.innerHTML = logs.map(l => {
                 const sc = l.status_code;
-                const scClass = sc === 200 ? 'bg-emerald-50 text-emerald-700' : (sc === 102 ? 'bg-amber-50 text-amber-700' : 'bg-red-50 text-red-600');
+                const scClass = sc === 200 ? 'bg-emerald-50 dark:bg-emerald-950/70 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800' : (sc === 102 ? 'bg-amber-50 dark:bg-amber-950/70 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800' : 'bg-red-50 dark:bg-red-950/70 text-red-600 dark:text-red-300 border border-red-200 dark:border-red-800');
                 const timeText = l.created_at ? formatTime(l.created_at) : '-';
                 return `
-                    <tr class="hover:bg-slate-50/60 transition-colors">
-                        <td class="py-2.5 px-3 font-medium text-slate-800">${escapeHtml(l.operation || '-')}</td>
-                        <td class="py-2.5 px-3 text-slate-500 font-mono text-[11px] truncate max-w-[140px]" title="${escapeHtml(l.token_email || '')}">${escapeHtml(formatTokenEmail(l.token_email) || '未知')}</td>
-                        <td class="py-2.5 px-3 text-center"><span class="px-2 py-0.5 rounded text-[10px] bg-slate-100 text-slate-700 font-medium">${escapeHtml(l.status_text || '-')}</span></td>
-                        <td class="py-2.5 px-3 text-center font-mono text-slate-500">${l.progress || 0}%</td>
+                    <tr class="hover:bg-slate-50/60 dark:hover:bg-zinc-800/40 transition-colors">
+                        <td class="py-2.5 px-3 font-medium text-slate-800 dark:text-zinc-200">${escapeHtml(l.operation || '-')}</td>
+                        <td class="py-2.5 px-3 text-slate-500 dark:text-zinc-300 font-mono text-[11px] truncate max-w-[140px]" title="${escapeHtml(l.token_email || '')}">${escapeHtml(formatTokenEmail(l.token_email) || '未知')}</td>
+                        <td class="py-2.5 px-3 text-center"><span class="px-2 py-0.5 rounded text-[10px] bg-slate-100 dark:bg-zinc-800 text-slate-700 dark:text-zinc-300 font-medium border border-slate-200 dark:border-zinc-700">${escapeHtml(l.status_text || '-')}</span></td>
+                        <td class="py-2.5 px-3 text-center font-mono text-slate-500 dark:text-zinc-400">${l.progress || 0}%</td>
                         <td class="py-2.5 px-3 text-center"><span class="px-2 py-0.5 rounded text-[10px] font-bold ${scClass}">${sc ?? '-'}</span></td>
-                        <td class="py-2.5 px-3 text-slate-600 truncate max-w-[180px]">${escapeHtml(l.error_summary || '已返回结果')}</td>
-                        <td class="py-2.5 px-3 font-mono text-slate-500">${Number(l.duration || 0).toFixed(1)}</td>
-                        <td class="py-2.5 px-3 text-slate-400 font-mono text-[11px]">${timeText}</td>
+                        <td class="py-2.5 px-3 text-slate-600 dark:text-zinc-300 truncate max-w-[180px]">${escapeHtml(l.error_summary || '已返回结果')}</td>
+                        <td class="py-2.5 px-3 font-mono text-slate-500 dark:text-zinc-400">${Number(l.duration || 0).toFixed(1)}</td>
+                        <td class="py-2.5 px-3 text-slate-400 dark:text-zinc-500 font-mono text-[11px]">${timeText}</td>
                         <td class="py-2.5 px-3 text-center">
-                            <button onclick="showLogDetail(${l.id})" class="px-2 py-1 text-blue-600 hover:underline">详情</button>
+                            <button onclick="showLogDetail(${l.id})" class="px-2 py-1 text-blue-600 dark:text-blue-400 hover:underline">详情</button>
                         </td>
                     </tr>
                 `;
@@ -2259,6 +2429,7 @@
 
         // 初始化
         window.addEventListener('DOMContentLoaded', async () => {
+            ThemeManager.init();
             updateEmailMaskButtons();
             await loadAdminConfig();
             switchTab('overview');

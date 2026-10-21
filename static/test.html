@@ -6,9 +6,22 @@
     <title>测试工作台 - Flow2API</title>
     <!-- 纯净矢量 Favicon: 白底黑色 F 字符，极简大气 -->
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%23ffffff' stroke='%23cbd5e1' stroke-width='1.5'/%3E%3Ctext x='16' y='24' font-family='-apple-system, BlinkMacSystemFont, Roboto, sans-serif' font-size='22' font-weight='800' fill='%230f172a' text-anchor='middle'%3EF%3C/text%3E%3C/svg%3E">
+        <!-- 主题防闪烁初始化：自动跟随设备颜色模式或读取用户偏好 -->
+    <script>
+        (function() {
+            const pref = localStorage.getItem('flow2api_theme') || 'system';
+            const isDark = pref === 'dark' || (pref === 'system' && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
+            if (isDark) {
+                document.documentElement.classList.add('dark');
+            } else {
+                document.documentElement.classList.remove('dark');
+            }
+        })();
+    </script>
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
         tailwind.config = {
+            darkMode: 'class',
             theme: {
                 extend: {
                     colors: {
@@ -32,15 +45,49 @@
         @keyframes bubbleIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
         @keyframes slide-up { from { transform: translateY(100%); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
         .animate-slide-up { animation: slide-up .25s ease-out; }
+        html.dark {
+            color-scheme: dark;
+        }
+        html.dark body {
+            background-color: #09090b;
+            color: #f4f4f5;
+        }
+        html.dark input, html.dark textarea, html.dark select {
+            color-scheme: dark;
+        }
+        html.dark .text-slate-900,
+        html.dark .text-slate-800 {
+            color: #ffffff !important;
+        }
+        html.dark .text-slate-700 {
+            color: #e4e4e7 !important;
+        }
+        html.dark .text-slate-600 {
+            color: #d4d4d8 !important;
+        }
+        html.dark .text-slate-500 {
+            color: #a1a1aa !important;
+        }
+        html.dark .bg-slate-50 {
+            background-color: #18181b !important;
+        }
+        html.dark .bg-slate-100 {
+            background-color: #27272a !important;
+        }
+        html.dark .border-slate-100,
+        html.dark .border-slate-200 {
+            border-color: #27272a !important;
+        }
+
     </style>
 </head>
-<body class="h-screen bg-[#fafafa] text-slate-900 antialiased flex overflow-hidden">
+<body class="h-screen bg-[#fafafa] dark:bg-[#09090b] text-slate-900 dark:text-zinc-100 antialiased flex overflow-hidden">
 
     <!-- ==================== 移动端侧边栏遮罩 (Backdrop) ==================== -->
     <div id="mobile-sidebar-backdrop" onclick="toggleSidebar(false)" class="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-40 hidden md:hidden transition-opacity duration-200"></div>
 
     <!-- ==================== 侧边栏：历史任务与控制台导航 (桌面端常驻260px，移动端抽屉) ==================== -->
-    <aside id="main-sidebar" class="fixed inset-y-0 left-0 z-50 w-72 md:w-64 bg-white border-r border-slate-200/80 flex flex-col justify-between shrink-0 select-none shadow-xl md:shadow-none -translate-x-full md:translate-x-0 md:static transition-transform duration-200 ease-in-out">
+    <aside id="main-sidebar" class="fixed inset-y-0 left-0 z-50 w-72 md:w-64 bg-white dark:bg-[#121214] border-r border-slate-200/80 dark:border-[#27272a] flex flex-col justify-between shrink-0 select-none shadow-xl md:shadow-none -translate-x-full md:translate-x-0 md:static transition-transform duration-200 ease-in-out">
         <div class="flex-1 flex flex-col min-h-0">
             <!-- 品牌栏 (白底黑字 F 徽标 + Flow2API + 返回后台) -->
             <div class="h-14 flex items-center justify-between px-4 border-b border-slate-100 shrink-0">
@@ -92,10 +139,10 @@
     </aside>
 
     <!-- ==================== 右侧主工作区 (Header + 聊天瀑布 + 底部输入框) ==================== -->
-    <div class="flex-1 flex flex-col min-w-0 h-screen overflow-hidden bg-[#fafafa]">
+    <div class="flex-1 flex flex-col min-w-0 h-screen overflow-hidden bg-[#fafafa] dark:bg-[#09090b]">
 
         <!-- 顶部状态栏 Header (移动端汉堡按钮 + 任务标题 + 操作) -->
-        <header class="h-14 bg-white border-b border-slate-200/80 px-4 sm:px-6 flex items-center justify-between shrink-0 z-30 shadow-sm/30">
+        <header class="h-14 bg-white dark:bg-[#121214] border-b border-slate-200/80 dark:border-[#27272a] px-4 sm:px-6 flex items-center justify-between shrink-0 z-30 shadow-sm/30">
             <div class="flex items-center gap-3 min-w-0">
                 <!-- 移动端汉堡按钮 (唤出侧边栏) -->
                 <button onclick="toggleSidebar(true)" class="md:hidden p-1.5 -ml-1 text-slate-700 hover:bg-slate-100 rounded-lg focus:outline-none shrink-0" aria-label="打开侧边栏菜单">
@@ -116,7 +163,13 @@
                     清空对话
                 </button>
                 <span class="hidden sm:inline text-slate-200">|</span>
-                <a href="/manage" class="hidden sm:inline-flex items-center gap-1 text-xs font-medium text-slate-600 hover:text-slate-900 transition-colors">
+                                <!-- 外观主题切换器 (自动跟随系统 / 浅色 / 深色) -->
+                <button onclick="ThemeManager.cycle()" id="theme-toggle-btn" class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-slate-200 dark:border-zinc-700 text-xs font-medium text-slate-600 dark:text-zinc-300 hover:bg-slate-50 dark:hover:bg-zinc-800 transition-colors" title="切换外观主题 (自动跟随系统 / 浅色 / 深色)">
+                    <span id="theme-toggle-icon" class="flex items-center"></span>
+                    <span id="theme-toggle-text" class="hidden sm:inline">跟随系统</span>
+                </button>
+                <span class="hidden sm:inline text-slate-200 dark:text-zinc-700">|</span>
+<a href="/manage" class="hidden sm:inline-flex items-center gap-1 text-xs font-medium text-slate-600 hover:text-slate-900 transition-colors">
                     返回管理控制台
                 </a>
             </div>
@@ -130,7 +183,7 @@
         </main>
 
         <!-- 底部输入栏 (固定底栏，自适应手机视口) -->
-        <footer class="p-2.5 sm:p-4 bg-white border-t border-slate-200/90 shrink-0 pb-[max(0.625rem,env(safe-area-inset-bottom))]">
+        <footer class="p-2.5 sm:p-4 bg-white dark:bg-[#121214] border-t border-slate-200/90 dark:border-[#27272a] shrink-0 pb-[max(0.625rem,env(safe-area-inset-bottom))]">
             <div class="max-w-4xl mx-auto bg-slate-50 rounded-xl border border-slate-200 p-2 sm:p-3 focus-within:bg-white focus-within:border-slate-400 transition-all shadow-sm">
                 <!-- 垫图预览卡片 -->
                 <div id="chatRefPreview" class="hidden mb-2 flex items-center gap-2 bg-slate-100 p-1.5 rounded-lg">
@@ -217,6 +270,73 @@
 
     <script>
         const $ = id => document.getElementById(id);
+        const ThemeManager = {
+            KEY: 'flow2api_theme',
+            getPreference() { return localStorage.getItem(this.KEY) || 'system'; },
+            setPreference(theme) {
+                localStorage.setItem(this.KEY, theme);
+                this.apply();
+                this.updateUI();
+                const map = { 'system': '自动跟随系统', 'light': '浅色模式', 'dark': '深色模式' };
+                if (typeof showToast === 'function') showToast(`已切换外观为：${map[theme]}`, 'info', 1500);
+            },
+            isDark() {
+                const pref = this.getPreference();
+                if (pref === 'dark') return true;
+                if (pref === 'light') return false;
+                return window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+            },
+            apply() {
+                if (this.isDark()) document.documentElement.classList.add('dark');
+                else document.documentElement.classList.remove('dark');
+            },
+            cycle() {
+                const current = this.getPreference();
+                const next = current === 'system' ? 'light' : (current === 'light' ? 'dark' : 'system');
+                this.setPreference(next);
+                return next;
+            },
+            init() {
+                this.apply();
+                if (window.matchMedia) {
+                    window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
+                        if (this.getPreference() === 'system') {
+                            this.apply();
+                            this.updateUI();
+                        }
+                    });
+                }
+                this.updateUI();
+            },
+            updateUI() {
+                const pref = this.getPreference();
+                const btn = $('theme-toggle-btn');
+                const textEl = $('theme-toggle-text');
+                const iconEl = $('theme-toggle-icon');
+                if (iconEl) {
+                    if (pref === 'system') {
+                        iconEl.innerHTML = `<svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg>`;
+                    } else if (pref === 'dark') {
+                        iconEl.innerHTML = `<svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"/></svg>`;
+                    } else {
+                        iconEl.innerHTML = `<svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"/></svg>`;
+                    }
+                }
+                if (textEl) {
+                    const labels = { 'system': '跟随系统', 'light': '浅色', 'dark': '深色' };
+                    textEl.textContent = labels[pref];
+                }
+                if (btn) {
+                    const titleMap = {
+                        'system': '当前：自动跟随系统（点击切换）',
+                        'light': '当前：浅色模式（点击切换）',
+                        'dark': '当前：深色模式（点击切换）'
+                    };
+                    btn.title = titleMap[pref];
+                }
+            }
+        };
+
         let chatSessions = [];
         let activeChatSessionId = 1;
         let attachedImageBase64 = null;
@@ -567,6 +687,7 @@
         function escapeHtml(s) { return String(s || '').replace(/[&<>"']/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[m]); }
 
         window.addEventListener('DOMContentLoaded', async () => {
+            ThemeManager.init();
             initChatWorkbench();
             try {
                 const res = await fetch('/api/admin/config', { credentials: 'include' });

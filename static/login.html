@@ -4,13 +4,49 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>登录 - Flow2API</title>
+        <!-- 主题防闪烁初始化：自动跟随设备颜色模式或读取用户偏好 -->
+    <script>
+        (function() {
+            const pref = localStorage.getItem('flow2api_theme') || 'system';
+            const isDark = pref === 'dark' || (pref === 'system' && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
+            if (isDark) {
+                document.documentElement.classList.add('dark');
+            } else {
+                document.documentElement.classList.remove('dark');
+            }
+        })();
+    </script>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         @keyframes slide-up{from{transform:translateY(100%);opacity:0}to{transform:translateY(0);opacity:1}}
         .animate-slide-up{animation:slide-up .3s ease-out}
+        html.dark body {
+            background-color: #09090b !important;
+            color: #f4f4f5 !important;
+        }
+        html.dark .bg-background {
+            background-color: #121214 !important;
+            color: #f4f4f5 !important;
+        }
+        html.dark .border-input {
+            border-color: #27272a !important;
+        }
+        html.dark input {
+            color: #ffffff !important;
+            background-color: #18181b !important;
+        }
+        html.dark .bg-primary {
+            background-color: #f4f4f5 !important;
+            color: #18181b !important;
+        }
+        html.dark .bg-primary:hover {
+            background-color: #e4e4e7 !important;
+        }
+
     </style>
     <script>
-        tailwind.config={theme:{extend:{colors:{border:"hsl(0 0% 89%)",input:"hsl(0 0% 89%)",ring:"hsl(0 0% 3.9%)",background:"hsl(0 0% 100%)",foreground:"hsl(0 0% 3.9%)",primary:{DEFAULT:"hsl(0 0% 9%)",foreground:"hsl(0 0% 98%)"},secondary:{DEFAULT:"hsl(0 0% 96.1%)",foreground:"hsl(0 0% 9%)"},muted:{DEFAULT:"hsl(0 0% 96.1%)",foreground:"hsl(0 0% 45.1%)"},destructive:{DEFAULT:"hsl(0 84.2% 60.2%)",foreground:"hsl(0 0% 98%)"}}}}}
+        tailwind.config = {
+        darkMode: 'class',theme:{extend:{colors:{border:"hsl(0 0% 89%)",input:"hsl(0 0% 89%)",ring:"hsl(0 0% 3.9%)",background:"hsl(0 0% 100%)",foreground:"hsl(0 0% 3.9%)",primary:{DEFAULT:"hsl(0 0% 9%)",foreground:"hsl(0 0% 98%)"},secondary:{DEFAULT:"hsl(0 0% 96.1%)",foreground:"hsl(0 0% 9%)"},muted:{DEFAULT:"hsl(0 0% 96.1%)",foreground:"hsl(0 0% 45.1%)"},destructive:{DEFAULT:"hsl(0 84.2% 60.2%)",foreground:"hsl(0 0% 98%)"}}}}}
     </script>
 </head>
 <body class="h-full bg-background text-foreground antialiased">
