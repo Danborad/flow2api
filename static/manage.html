@@ -1461,9 +1461,9 @@
                             ${escapeHtml(emailText)}
                         </td>
                         <td class="py-3 px-3 text-center">
-                            <span class="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium ${t.is_active ? 'bg-emerald-50 dark:bg-emerald-950/70 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800' : 'bg-slate-100 dark:bg-zinc-800 text-slate-500 dark:text-zinc-400 border border-slate-200 dark:border-zinc-700'}">
+                            <button onclick="toggleTokenActive(${t.id}, ${t.is_active ? 1 : 0})" title="点击切换启用/禁用状态" class="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium transition-colors ${t.is_active ? 'bg-emerald-50 dark:bg-emerald-950/70 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 hover:bg-emerald-100 dark:hover:bg-emerald-900/60' : 'bg-slate-100 dark:bg-zinc-800 text-slate-500 dark:text-zinc-400 border border-slate-200 dark:border-zinc-700 hover:bg-slate-200 dark:hover:bg-zinc-700'}">
                                 ${t.is_active ? '启用' : '禁用'}
-                            </span>
+                            </button>
                         </td>
                         <td class="py-3 px-3 text-center">
                             <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[11px] font-medium border ${isCookie ? 'bg-purple-50 dark:bg-purple-950/70 text-purple-700 dark:text-purple-300 border-purple-200 dark:border-purple-800' : 'bg-slate-100 dark:bg-zinc-800 text-slate-600 dark:text-zinc-300 border-slate-200 dark:border-zinc-700'}">
@@ -1486,8 +1486,10 @@
                             图 ${t.image_count || 0} / 视 ${t.video_count || 0}
                         </td>
                         <td class="py-3 px-4 text-right space-x-1.5 whitespace-nowrap">
-                            <button onclick="openEditModal(${t.id})" class="px-2 py-1 text-slate-600 dark:text-zinc-300 hover:text-slate-900 dark:hover:text-white font-medium">编辑</button>
-                            <button onclick="refreshTokenAT(${t.id})" class="px-2 py-1 text-blue-600 dark:text-blue-400 hover:underline">刷新AT</button>
+                            <button onclick="toggleTokenActive(${t.id}, ${t.is_active ? 1 : 0})" class="px-2 py-1 text-xs font-semibold rounded ${t.is_active ? 'text-amber-600 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/60' : 'text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/60'}">${t.is_active ? '禁用' : '启用'}</button>
+                            <button onclick="openEditModal(${t.id})" class="px-2 py-1 text-xs text-slate-600 dark:text-zinc-300 hover:text-slate-900 dark:hover:text-white font-medium">编辑</button>
+                            <button onclick="refreshTokenAT(${t.id})" class="px-2 py-1 text-xs text-blue-600 dark:text-blue-400 hover:underline">刷新AT</button>
+                            <button onclick="deleteToken(${t.id})" class="px-1.5 py-1 text-xs text-red-500 hover:text-red-700 font-medium" title="删除 Token">删除</button>
                         </td>
                     </tr>
                 `;
@@ -1506,7 +1508,7 @@
                     <div class="p-3.5 space-y-2.5">
                         <div class="flex items-center justify-between gap-2">
                             <span class="font-bold text-xs text-slate-900 dark:text-white truncate">${escapeHtml(emailText)}</span>
-                            <span class="px-2 py-0.5 rounded text-[10px] font-medium ${t.is_active ? 'bg-emerald-50 dark:bg-emerald-950/70 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800' : 'bg-slate-100 dark:bg-zinc-800 text-slate-500 dark:text-zinc-400 border border-slate-200 dark:border-zinc-700'} shrink-0">${t.is_active ? '启用' : '禁用'}</span>
+                            <button onclick="toggleTokenActive(${t.id}, ${t.is_active ? 1 : 0})" class="px-2 py-0.5 rounded text-[10px] font-medium ${t.is_active ? 'bg-emerald-50 dark:bg-emerald-950/70 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800' : 'bg-slate-100 dark:bg-zinc-800 text-slate-500 dark:text-zinc-400 border border-slate-200 dark:border-zinc-700'} shrink-0">${t.is_active ? '启用' : '禁用'}</button>
                         </div>
                         <div class="grid grid-cols-2 gap-2 text-[11px] bg-slate-50 dark:bg-[#18181b] p-2.5 rounded-lg border border-slate-100 dark:border-[#27272a]">
                             <div>
@@ -1532,8 +1534,10 @@
                         <div class="flex items-center justify-between pt-0.5">
                             <span class="text-[10px] text-slate-400 dark:text-zinc-500 font-mono truncate max-w-[130px]">项目: ${(t.current_project_id || '-').slice(0, 8)}...</span>
                             <div class="flex items-center gap-1.5">
+                                <button onclick="toggleTokenActive(${t.id}, ${t.is_active ? 1 : 0})" class="px-2 py-1 text-xs font-semibold rounded ${t.is_active ? 'text-amber-600 dark:text-amber-400 border border-amber-200 dark:border-amber-800' : 'text-emerald-600 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800'}">${t.is_active ? '禁用' : '启用'}</button>
                                 <button onclick="openEditModal(${t.id})" class="px-2.5 py-1 text-xs border border-slate-200 dark:border-[#27272a] rounded-md text-slate-700 dark:text-zinc-200 hover:bg-slate-50 dark:hover:bg-zinc-800">编辑</button>
                                 <button onclick="refreshTokenAT(${t.id})" class="px-2.5 py-1 text-xs bg-slate-900 text-white dark:bg-zinc-100 dark:text-zinc-900 rounded-md hover:bg-slate-800 dark:hover:bg-zinc-200">刷新AT</button>
+                                <button onclick="deleteToken(${t.id})" class="px-2 py-1 text-xs text-red-500 hover:text-red-700 border border-red-200 dark:border-red-900/60 rounded-md">删除</button>
                             </div>
                         </div>
                     </div>
@@ -1563,6 +1567,23 @@
             if (hours < 1) return `<span class="text-amber-600 dark:text-amber-400 font-medium">${Math.floor(diff / 6e4)}分钟后 (即将过期)</span>`;
             if (hours < 24) return `<span class="text-amber-600 dark:text-amber-400 font-medium">剩余 ${hours}小时 (需同步)</span>`;
             return `剩余 ${Math.floor(diff / 864e5)}天`;
+        }
+
+        async function toggleTokenActive(id, currentActive) {
+            const action = currentActive ? 'disable' : 'enable';
+            const actionName = currentActive ? '禁用' : '启用';
+            const res = await apiRequest(`/api/tokens/${id}/${action}`, { method: 'POST' });
+            if (!res) return;
+            showToast(`账号已${actionName}`, 'success');
+            await loadTokens();
+        }
+
+        async function deleteToken(id) {
+            if (!confirm('确定要删除该 Token 账号记录吗？此操作不可恢复。')) return;
+            const res = await apiRequest(`/api/tokens/${id}`, { method: 'DELETE' });
+            if (!res) return;
+            showToast('账号已成功删除', 'success');
+            await loadTokens();
         }
 
         async function refreshTokenAT(id) {
