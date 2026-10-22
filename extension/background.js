@@ -618,11 +618,8 @@ async function checkPluginVersion() {
         if (res.ok) {
             const data = await res.json();
             if (data.version && data.version !== EXTENSION_VERSION) {
-                console.log(`[Flow2API] 检测到扩展新版本: ${data.version} (当前: ${EXTENSION_VERSION})，准备自动重新加载...`);
-                logExtensionEvent("auto_reload_for_version", { newVersion: data.version, currentVersion: EXTENSION_VERSION });
-                setTimeout(() => {
-                    chrome.runtime.reload();
-                }, 1000);
+                console.log(`[Flow2API] 发现新版本: ${data.version} (当前本地: ${EXTENSION_VERSION})`);
+                chrome.storage.local.set({ latestServerVersion: data.version });
             }
         }
     } catch (e) {
