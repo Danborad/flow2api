@@ -1736,6 +1736,16 @@ class GenerationHandler:
                     yield self._create_stream_chunk(f"错误: {error_msg}\n")
                 yield self._create_error_response(error_msg, status_code=400)
                 return
+
+            is_cookie_valid = bool(token.google_cookies and ("OSID" in token.google_cookies or "__Secure-OSID" in token.google_cookies))
+            if not is_cookie_valid:
+                error_msg = f"指定的测试账号 ({token.email}) 缺少 Flow 会话凭据 OSID (需同步)"
+                debug_logger.log_error(f"[GENERATION] {error_msg}")
+                if stream:
+                    yield self._create_stream_chunk(f"错误: {error_msg}\n")
+                yield self._create_error_response(error_msg, status_code=400)
+                return
+
             debug_logger.log_info(f"[GENERATION] ✅ 已指定账号测试: ID={token.id}, Email={token.email}")
         else:
             if generation_type == "image":

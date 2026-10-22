@@ -189,13 +189,16 @@ class LoadBalancer:
         now_utc = datetime.now(timezone.utc)
 
         for token in active_tokens:
-            # 过滤已失效的旧账号 (无有效 Cookie 且旧 AT 已过期)
-            is_cookie_mode = bool(token.google_cookies and ("OSID" in token.google_cookies or "__Secure-OSID" in token.google_cookies))
-            if not is_cookie_mode and token.at_expires:
-                exp_dt = token.at_expires if getattr(token.at_expires, "tzinfo", None) else token.at_expires.replace(tzinfo=timezone.utc)
-                if exp_dt <= now_utc:
-                    filtered_reasons[token.id] = "旧凭据已过期 (需重新同步)"
-                    continue
+            # 严格过滤：在 Cookie-first 时代，只有具备完整有效 Flow Cookie (包含 OSID) 的账号才允许被负载均衡调度
+            is_cookie_valid = bool(token.google_cookies and ("OSID" in token.google_cookies or "__Secure-OSID" in token.google_cookies))
+            if not is_cookie_valid:
+                filtered_reasons[token.id] = "账号缺少 Flow 会话凭据 OSID (需同步)"
+                continue
+
+            last_res = str(getattr(token, "last_st_refresh_result", "") or "").lower()
+            if "fail" in last_res or "失败" in last_res:
+                filtered_reasons[token.id] = "账号凭据最近验证失败 (需重新同步)"
+                continue
 
             normalized_tier = normalize_user_paygate_tier(token.user_paygate_tier)
             if model and not supports_model_for_tier(model, normalized_tier):
