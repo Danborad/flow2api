@@ -406,7 +406,7 @@ async function refreshLabsSessionCookie(force = false) {
     let tabId = null;
     let freshToken = "";
     try {
-        const tab = await chrome.tabs.create({ url: "https://labs.google/fx", active: true });
+        const tab = await chrome.tabs.create({ url: "https://flow.google.com/", active: true });
         tabId = tab.id;
         await waitForTabReady(tabId);
         await sleep(2000);
@@ -513,8 +513,8 @@ async function importCurrentAccount(reason = "manual") {
         if (!sessionToken) {
             // 自动打开前台授权页面，Google 已登录时通常秒级完成自动登录
             logExtensionEvent("session_token_missing_opening_auth_page");
-            chrome.tabs.create({ url: "https://labs.google/fx", active: true });
-            throw new Error("正在自动打开 Google 授权页面（https://labs.google/fx）。页面加载完成后会自动写入登录凭据，请稍候几秒后再次点击导入。");
+            chrome.tabs.create({ url: "https://flow.google.com/", active: true });
+            throw new Error("正在自动打开 Google Flow 页面（https://flow.google.com/）。页面加载完成后会自动同步凭据，请稍候几秒后再次点击导入。");
         }
 
         const googleCookies = await getGoogleCookies();
@@ -1197,11 +1197,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     }
     if (message && message.type === "flow2api_open_oauth") {
         getOAuthSignInUrl().then(url => {
-            const targetUrl = url || "https://labs.google/fx";
+            const targetUrl = url || "https://flow.google.com/";
             chrome.tabs.create({ url: targetUrl, active: true });
             sendResponse({ success: true });
         }).catch(err => {
-            chrome.tabs.create({ url: "https://labs.google/fx", active: true });
+            chrome.tabs.create({ url: "https://flow.google.com/", active: true });
             sendResponse({ success: true });
         });
         return true;

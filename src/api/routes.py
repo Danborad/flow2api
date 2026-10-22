@@ -985,7 +985,7 @@ async def import_current_browser_account(
 async def get_plugin_version():
     """Get latest extension version information."""
     manifest_path = Path(__file__).parent.parent.parent / "extension" / "manifest.json"
-    version = "1.1.38"
+    version = "1.1.39"
     if manifest_path.exists():
         try:
             with open(manifest_path, "r", encoding="utf-8") as f:

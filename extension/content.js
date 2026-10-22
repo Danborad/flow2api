@@ -134,14 +134,17 @@ function runLabsAutoLogin() {
         // 2. 如果已在执行中或已点过登录，避免重复点击
         if (hasClickedLogin) return;
 
-        // 3. 查找右上角“使用 Google 账号登录”按钮
-        const loginBtn = document.querySelector('button[aria-haspopup="dialog"]') ||
-            Array.from(document.querySelectorAll('header button, header a')).find(el => {
+        // 3. 查找右上角“使用 Google 账号登录”按钮 / flow.google.com 的 Sign in 链接
+        const loginBtn = document.querySelector('a[href*="ServiceLogin"], .gb_6a, button[aria-haspopup="dialog"]') ||
+            Array.from(document.querySelectorAll('header button, header a, div.gb_Od a, a.gb_6a, .boqOnegoogleliteOgbOneGoogleBar a')).find(el => {
                 const txt = (el.innerText || "").trim();
+                const aria = (el.getAttribute("aria-label") || "").trim();
                 return txt.includes("使用 Google 账号登录") ||
                        txt.includes("Sign in with Google") ||
                        txt.includes("Sign in") ||
                        txt.includes("登录") ||
+                       aria.includes("Sign in") ||
+                       aria.includes("登录") ||
                        el.querySelector('[aria-label="Google 徽标"]');
             });
 

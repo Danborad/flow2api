@@ -270,8 +270,8 @@ document.addEventListener("DOMContentLoaded", () => {
   $("importBtn").addEventListener("click", importCurrentAccount);
   if ($("openLabsBtn")) {
     $("openLabsBtn").addEventListener("click", () => {
-      window.open("https://labs.google/fx", "_blank");
-      setStatus("已在浏览器中打开授权页面。页面加载完毕确认已进入后，请返回此处再次点击“导入当前 Google 账号”。");
+      window.open("https://flow.google.com/", "_blank");
+      setStatus("已在浏览器中打开 Flow 页面。页面加载完毕确认已进入后，请返回此处再次点击“导入当前 Google 账号”。");
     });
   }
   $("reconnectBtn").addEventListener("click", async () => {
