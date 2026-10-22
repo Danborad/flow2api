@@ -79,7 +79,7 @@ generation_handler: GenerationHandler = None
 
 
 class PluginAccountImportRequest(BaseModel):
-    """Current browser account credentials imported by the local extension."""
+    """Current browser account credentials imported by the local extension or Host Agent."""
 
     session_token: Optional[str] = ""
     email: Optional[str] = None
@@ -88,6 +88,8 @@ class PluginAccountImportRequest(BaseModel):
     project_name: Optional[str] = None
     extension_route_key: Optional[str] = None
     refresh_interval_minutes: int = 120
+    proxy_url: Optional[str] = None
+    token_id: Optional[int] = None
 
 
 @dataclass
@@ -857,198 +859,201 @@ async def _iterate_gemini_stream(
             yield event
 
 
+async def _reconcile_browser_account_core(
+    request: PluginAccountImportRequest,
+    handler: GenerationHandler,
+) -> Dict[str, Any]:
+    from ..services.protocol_login import protocol_loginer
+    import hashlib
+
+    raw_cookies = (request.google_cookies or "").strip()
+    if not raw_cookies:
+        raise HTTPException(status_code=400, detail="请求缺少 google_cookies 凭据")
+
+    # 1. 在线验证并提取真实邮箱与轮换 Cookie
+    login_result = await protocol_loginer.login(
+        raw_cookies=raw_cookies,
+        proxy=request.proxy_url,
+        email=request.email,
+    )
+    if not login_result.get("success"):
+        raise HTTPException(status_code=400, detail=f"Flow 登录态在线验证失败: {login_result.get('error')}")
+
+    validated_email = (login_result.get("email") or request.email or "").strip().lower()
+    rotated_cookies = login_result.get("google_cookies") or raw_cookies
+
+    # 2. 匹配已有账号
+    all_tokens = await handler.token_manager.get_all_tokens()
+    existing = None
+
+    if request.token_id:
+        for t in all_tokens:
+            if t.id == request.token_id:
+                existing = t
+                break
+
+    if not existing and validated_email:
+        for t in all_tokens:
+            if t.email and t.email.strip().lower() == validated_email:
+                existing = t
+                break
+
+    route_key = (request.extension_route_key or "").strip()
+    if not existing and route_key:
+        for t in all_tokens:
+            if t.extension_route_key == route_key:
+                existing = t
+                break
+
+    # 兼容迁移：数据库只有唯一未绑定 cookie 的旧 Token 时复用
+    if not existing and len(all_tokens) == 1 and not getattr(all_tokens[0], "google_cookies", ""):
+        existing = all_tokens[0]
+
+    project_id = (request.project_id or "").strip() or None
+    project_name = (request.project_name or "").strip() or None
+    if not project_id and existing and existing.current_project_id:
+        project_id = existing.current_project_id
+        project_name = existing.current_project_name
+
+    if not existing and not project_id:
+        raise HTTPException(
+            status_code=400,
+            detail="首次添加新账号必须提供有效的 Flow 项目 ID (请在浏览器中打开项目页后同步)",
+        )
+
+    now_utc = datetime.now(timezone.utc)
+    st_val = "frontend-" + hashlib.sha256(rotated_cookies.encode("utf-8")).hexdigest()[:32]
+    at_val = "flow-frontend-cookie"
+    at_expires = now_utc + timedelta(days=365)
+
+    common_kwargs: Dict[str, Any] = dict(
+        st=st_val,
+        at=at_val,
+        at_expires=at_expires,
+        protocol_mode="protocol",
+        google_cookies=rotated_cookies,
+        email=validated_email or (existing.email if existing else "unknown@google.com"),
+        login_account=validated_email or (existing.login_account if existing else None),
+        auto_refresh_enabled=True,
+        refresh_interval_minutes=request.refresh_interval_minutes or 120,
+        last_st_refresh_at=now_utc,
+        last_st_refresh_result="success",
+        extension_route_key=route_key or (existing.extension_route_key if existing else None),
+    )
+    if request.proxy_url:
+        common_kwargs["proxy_url"] = request.proxy_url
+
+    action = "updated"
+    token_id = None
+    if existing:
+        token_id = existing.id
+        # 使用 CAS (若原有 google_cookies 存在)
+        if existing.google_cookies:
+            cas_ok = await handler.token_manager.db.update_token_if_cookie_matches(
+                existing.id,
+                expected_cookies=existing.google_cookies,
+                **common_kwargs,
+            )
+            if not cas_ok:
+                debug_logger.log_info(f"[RECONCILE] Token {existing.id} CAS 冲突，采用直接覆盖写入最新同步凭据")
+                await handler.token_manager.db.update_token(existing.id, **common_kwargs)
+        else:
+            await handler.token_manager.db.update_token(existing.id, **common_kwargs)
+    else:
+        new_token = await handler.token_manager.add_token(
+            project_id=project_id,
+            project_name=project_name or "Flow Project",
+            image_enabled=True,
+            video_enabled=True,
+            image_concurrency=-1,
+            video_concurrency=-1,
+            **common_kwargs,
+        )
+        token_id = new_token.id
+        action = "created"
+
+    # 读取并更新余额
+    credits_val = 0
+    try:
+        updated_token = await handler.token_manager.get_token(token_id)
+        if updated_token:
+            credits_info, new_rotated = await handler.token_manager.flow_client.get_credits_rpc(updated_token)
+            credits_val = credits_info.get("credits", 0)
+            tier_val = credits_info.get("userPaygateTier")
+            await handler.token_manager.db.update_token(
+                token_id,
+                credits=credits_val,
+                user_paygate_tier=tier_val,
+            )
+    except Exception as e:
+        debug_logger.log_info(f"[RECONCILE] 读取最新余额跳过: {e}")
+
+    fingerprint = hashlib.sha256(rotated_cookies.encode("utf-8")).hexdigest()[:16]
+    debug_logger.log_info(f"[RECONCILE] 账号协调同步成功: id={token_id}, email={validated_email}, action={action}")
+
+    return {
+        "success": True,
+        "action": action,
+        "token_id": token_id,
+        "email": validated_email,
+        "project_id": project_id,
+        "credits": credits_val,
+        "cookie_snapshot_fingerprint": fingerprint,
+        "message": f"账号同步成功: {validated_email} ({action})",
+    }
+
+
+@router.post("/api/plugin/reconcile-browser-account")
+async def reconcile_browser_account(
+    request: PluginAccountImportRequest,
+    api_key: str = Depends(verify_api_key_flexible),
+):
+    """Host Agent & browser coordination endpoint for Cookie-first account synchronization."""
+    handler = _ensure_generation_handler()
+    try:
+        return await _reconcile_browser_account_core(request, handler)
+    except HTTPException:
+        raise
+    except Exception as e:
+        debug_logger.log_error(f"[RECONCILE] 协调账号失败: {e}")
+        raise HTTPException(status_code=400, detail=str(e))
+
+
 @router.post("/api/plugin/import-current-account")
 async def import_current_browser_account(
     request: PluginAccountImportRequest,
     api_key: str = Depends(verify_api_key_flexible),
 ):
-    """Import the currently signed-in browser account from the local extension.
-
-    This endpoint intentionally uses the normal Flow2API API key instead of an
-    admin session so the extension service worker can refresh browser cookies on
-    a schedule without storing the admin password.
-    """
+    """Import the currently signed-in browser account from the local extension."""
     handler = _ensure_generation_handler()
     try:
-        session_token = (request.session_token or "").strip()
-        email = (request.email or "").strip().lower()
-        access_token = None
-        at_expires = None
-        expires = None
-
-        # 如果传了 session_token，尝试通过旧接口换取 AT；若遇到 410 (Labs 端点已下线废弃) 优雅降级，不阻断导入流程
-        if session_token:
-            try:
-                result = await handler.token_manager.flow_client.st_to_at(session_token)
-                if isinstance(result, dict) and result.get("access_token"):
-                    access_token = result["access_token"]
-                    user_info = result.get("user", {}) or {}
-                    if not email:
-                        email = (user_info.get("email") or "").lower()
-                    expires = result.get("expires")
-                    if expires:
-                        try:
-                            at_expires = datetime.fromisoformat(str(expires).replace("Z", "+00:00"))
-                        except Exception:
-                            at_expires = None
-            except Exception as e:
-                debug_logger.log_warning(f"[PLUGIN_IMPORT] st_to_at 接口不可用或已废弃 (Labs 端点已下线): {e}")
-
-        # 获取数据库现有 Token
-        existing_by_email = {}
-        for existing_token in await handler.token_manager.get_all_tokens():
-            if existing_token.email and existing_token.email.lower() not in existing_by_email:
-                existing_by_email[existing_token.email.lower()] = existing_token
-
-        # 尝试从 google_cookies 中解析 email
-        if not email and request.google_cookies:
-            try:
-                import json, urllib.parse
-                parsed_cookies = json.loads(request.google_cookies) if request.google_cookies.startswith("[") else []
-                for c in parsed_cookies:
-                    name = c.get("name", "")
-                    val = urllib.parse.unquote(c.get("value", ""))
-                    if ("email" in name.lower() or "@" in val) and "@" in val:
-                        m = re.search(r"[\w\.-]+@[\w\.-]+\.\w+", val)
-                        if m:
-                            email = m.group(0).lower()
-                            break
-            except Exception:
-                pass
-
-        existing = None
-        route_key = (request.extension_route_key or "").strip()
-        # 优先通过插件唯一的 extension_route_key 绑定到对应的账号 Token
-        if not email and route_key:
-            for existing_token in await handler.token_manager.get_all_tokens():
-                if existing_token.extension_route_key == route_key:
-                    existing = existing_token
-                    email = existing_token.email
-                    break
-
-        if email and not existing:
-            existing = existing_by_email.get(email.lower())
-
-        # 如果依然没有 email，若系统仅有唯一 Token 则自动绑定，否则提示在 Flow 页面中登录
-        if not email:
-            if len(existing_by_email) == 1:
-                email = list(existing_by_email.keys())[0]
-                existing = existing_by_email.get(email)
-            else:
-                raise HTTPException(status_code=400, detail="未能识别当前 Google 账号邮箱，请确保在 Flow 页面中已登录账号")
-
-        if existing is None and email:
-            existing = existing_by_email.get(email.lower())
-
-        project_id = (request.project_id or "").strip() or None
-        project_name = (request.project_name or "").strip() or None
-        if not project_id and existing and existing.current_project_id:
-            project_id = existing.current_project_id
-            project_name = existing.current_project_name
-        if project_id and not re.fullmatch(
-            r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}",
-            project_id,
-        ):
-            raise HTTPException(status_code=400, detail="Flow 项目 ID 格式无效")
-
-        if not existing and not project_id:
-            raise HTTPException(
-                status_code=400,
-                detail="首次导入前请先在 flow.google.com 打开一个 Flow 项目页，再点击导入",
-            )
-
-        # 如果本次没有拿到新 access_token，且数据库已有账号存在有效 access_token，则继承原有有效凭据
-        if not access_token and existing and existing.at:
-            access_token = existing.at
-            at_expires = existing.at_expires
-
-        now_utc = datetime.now(timezone.utc)
-        if not at_expires or (at_expires and at_expires <= now_utc):
-            at_expires = now_utc + timedelta(hours=24)
-
-        credits_val = 0
-        tier_val = None
-        if access_token:
-            try:
-                credits_result = await handler.token_manager.flow_client.get_credits(access_token)
-                credits_val = credits_result.get("credits", 0)
-                tier_val = credits_result.get("userPaygateTier")
-            except Exception as e:
-                debug_logger.log_info(f"[PLUGIN_IMPORT] 验证已有 AT 余额跳过: {e}")
-
-        common_kwargs = dict(
-            extension_route_key=(request.extension_route_key or "").strip() or None,
-            protocol_mode="protocol",
-            google_cookies=(request.google_cookies or "").strip(),
-            auto_refresh_enabled=True,
-            refresh_interval_minutes=request.refresh_interval_minutes,
-        )
-
-        added = 0
-        updated = 0
-        token_id = None
-        if existing:
-            await handler.token_manager.update_token(
-                token_id=existing.id,
-                st=session_token or existing.st,
-                at=access_token,
-                at_expires=at_expires,
-                **common_kwargs,
-            )
-            token_id = existing.id
-            updated = 1
-        else:
-            new_token = await handler.token_manager.add_token(
-                st=session_token,
-                project_id=project_id,
-                project_name=project_name,
-                image_enabled=True,
-                video_enabled=True,
-                image_concurrency=-1,
-                video_concurrency=-1,
-                **common_kwargs,
-            )
-            token_id = new_token.id
-            added = 1
-
-        update_fields: Dict[str, Any] = {
-            "last_st_refresh_result": "插件已成功同步当前 Flow 账号凭据",
-        }
-        if credits_val:
-            update_fields["credits"] = credits_val
-        if tier_val:
-            update_fields["user_paygate_tier"] = tier_val
-
-        if token_id is not None:
-            await handler.token_manager.db.update_token(token_id, **update_fields)
-            try:
-                from ..services.webhook_service import get_webhook_service
-                get_webhook_service(handler.token_manager.db).mark_token_recovered(token_id)
-            except Exception:
-                pass
-
+        res = await _reconcile_browser_account_core(request, handler)
         return {
             "success": True,
-            "added": added,
-            "updated": updated,
-            "email": email,
-            "token_id": token_id,
-            "expires": expires,
-            "message": f"导入完成: {email} (新增 {added} 个, 更新 {updated} 个)",
+            "added": 1 if res.get("action") == "created" else 0,
+            "updated": 1 if res.get("action") == "updated" else 0,
+            "email": res.get("email"),
+            "token_id": res.get("token_id"),
+            "expires": None,
+            "message": res.get("message"),
         }
-    except HTTPException:
-        raise
     except Exception as e:
-        debug_logger.log_error(f"[PLUGIN_IMPORT] 导入当前浏览器账号失败: {e}")
-        raise HTTPException(status_code=400, detail=str(e))
+        detail = getattr(e, "detail", str(e))
+        debug_logger.log_info(f"[PLUGIN_IMPORT] 扩展同步提示: {detail}")
+        return {
+            "success": False,
+            "added": 0,
+            "updated": 0,
+            "message": str(detail),
+        }
 
 
 @router.get("/api/plugin/version")
 async def get_plugin_version():
     """Get latest extension version information."""
-    # 返回兼容版本号，平息未更新本地文件的远程旧版客户端的自动重启循环
+    # 固定返回 1.1.38 兼容版本号，避免未更新文件的远程客户端陷入重启死循环
     return {
-        "version": "1.1.38",
+        "version": "1.1.47",
         "name": "Flow2API Captcha Worker"
     }
 

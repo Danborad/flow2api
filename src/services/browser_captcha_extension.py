@@ -348,7 +348,7 @@ class ExtensionCaptchaService:
         prompt: str,
         project_id: str,
         model: str = "BELUGA",
-        timeout: int = 75,
+        timeout: int = 110,
     ) -> str:
         """通过在线扩展在 flow.google.com 页面内直接驱动原生生成并返回图片直链。"""
         if not self.active_connections:

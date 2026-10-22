@@ -18,13 +18,15 @@ from curl_cffi.requests import AsyncSession
 from ..core.logger import debug_logger
 from ..core.config import config, get_yescaptcha_min_score
 
+from .flow_current import CurrentFlowClientMixin
+
 try:
     import httpx
 except ImportError:
     httpx = None
 
 
-class FlowClient:
+class FlowClient(CurrentFlowClientMixin):
     """VideoFX API客户端"""
 
     FLOW_PUBLIC_API_KEY = os.getenv("FLOW_PUBLIC_API_KEY", "")
@@ -41,6 +43,7 @@ class FlowClient:
     YESCAPTCHA_SLOT_BACKOFF_SECONDS = (3, 5, 8, 13, 20)
 
     def __init__(self, proxy_manager, db=None):
+        super().__init__()
         self.proxy_manager = proxy_manager
         self.db = db  # Database instance for captcha config
         self.labs_base_url = config.flow_labs_base_url  # https://labs.google/fx/api
@@ -1193,125 +1196,67 @@ class FlowClient:
 
     # ========== 认证相关 (使用ST) ==========
 
-    async def st_to_at(self, st: str) -> dict:
-        """ST转AT
-
-        Args:
-            st: Session Token
-
-        Returns:
-            {
-                "access_token": "AT",
-                "expires": "2025-11-15T04:46:04.000Z",
-                "user": {...}
-            }
-        """
-        url = f"{self.labs_base_url}/auth/session"
-        try:
-            return await self._make_request(
-                method="GET",
-                url=url,
-                use_st=True,
-                st_token=st,
-                timeout=self._get_control_plane_timeout(),
-            )
-        except Exception as e:
-            if not self._is_proxy_connection_error(e):
-                raise
-
-            debug_logger.log_warning(
-                f"[AUTH] ST->AT failed via configured proxy, retrying direct connection: {e}"
-            )
-            return await self._make_request(
-                method="GET",
-                url=url,
-                use_st=True,
-                st_token=st,
-                timeout=self._get_control_plane_timeout(),
-                force_no_proxy=True,
-            )
+    async def st_to_at(self, st: str, token_obj: Optional[Any] = None) -> dict:
+        """ST转AT (Cookie-first 兼容适配)"""
+        from datetime import datetime, timezone, timedelta
+        if token_obj and (getattr(token_obj, "protocol_mode", "") == "protocol" or getattr(token_obj, "google_cookies", "")):
+            try:
+                credits_info, rotated_cookies = await self.get_credits_rpc(token_obj)
+                if self.db and rotated_cookies and rotated_cookies != getattr(token_obj, "google_cookies", ""):
+                    await self.db.update_token_if_cookie_matches(
+                        token_obj.id,
+                        expected_cookies=token_obj.google_cookies,
+                        google_cookies=rotated_cookies,
+                    )
+                now_dt = datetime.now(timezone.utc) + timedelta(minutes=55)
+                return {
+                    "access_token": "flow-frontend-cookie",
+                    "expires": now_dt.isoformat(),
+                    "user": {},
+                    "credits": credits_info.get("credits", 0),
+                    "userPaygateTier": credits_info.get("userPaygateTier"),
+                    "google_cookies": rotated_cookies,
+                }
+            except Exception as e:
+                debug_logger.log_warning(f"[AUTH] nzlxg 获取余额失败: {e}")
+                now_dt = datetime.now(timezone.utc) + timedelta(minutes=55)
+                return {
+                    "access_token": "flow-frontend-cookie",
+                    "expires": now_dt.isoformat(),
+                    "user": {},
+                    "credits": getattr(token_obj, "credits", 0) or 0,
+                    "userPaygateTier": getattr(token_obj, "user_paygate_tier", None),
+                    "google_cookies": getattr(token_obj, "google_cookies", ""),
+                }
+        raise RuntimeError("The retired Labs NextAuth session transport is disabled")
 
     # ========== 项目管理 (使用ST) ==========
 
-    async def create_project(self, st: str, title: str) -> str:
-        """创建项目,返回project_id
-
-        Args:
-            st: Session Token
-            title: 项目标题
-
-        Returns:
-            project_id (UUID)
-        """
-        url = f"{self.labs_base_url}/trpc/project.createProject"
-        json_data = {
-            "json": {
-                "projectTitle": title,
-                "toolName": "PINHOLE"
-            }
-        }
-        max_retries = config.flow_max_retries
-        request_timeout = max(self._get_control_plane_timeout(), min(self.timeout, 15))
-        last_error: Optional[Exception] = None
-
-        for retry_attempt in range(max_retries):
-            try:
-                result = await self._make_request(
-                    method="POST",
-                    url=url,
-                    json_data=json_data,
-                    use_st=True,
-                    st_token=st,
-                    timeout=request_timeout,
+    async def create_project(self, st: str, title: str, token_obj: Optional[Any] = None) -> str:
+        """创建项目,返回project_id (Cookie-first 优先)"""
+        if token_obj and (getattr(token_obj, "protocol_mode", "") == "protocol" or getattr(token_obj, "google_cookies", "")):
+            proj_id, rotated_cookies = await self.create_project_rpc(token_obj, title)
+            if self.db and rotated_cookies and rotated_cookies != getattr(token_obj, "google_cookies", ""):
+                await self.db.update_token_if_cookie_matches(
+                    token_obj.id,
+                    expected_cookies=token_obj.google_cookies,
+                    google_cookies=rotated_cookies,
                 )
-                project_result = (
-                    result.get("result", {})
-                    .get("data", {})
-                    .get("json", {})
-                    .get("result", {})
+            return proj_id
+        raise RuntimeError("The retired Labs tRPC project.createProject transport is disabled")
+
+    async def delete_project(self, st: str, project_id: str, token_obj: Optional[Any] = None):
+        """删除项目 (Cookie-first 优先)"""
+        if token_obj and (getattr(token_obj, "protocol_mode", "") == "protocol" or getattr(token_obj, "google_cookies", "")):
+            ok, rotated_cookies = await self.delete_project_rpc(token_obj, project_id)
+            if self.db and rotated_cookies and rotated_cookies != getattr(token_obj, "google_cookies", ""):
+                await self.db.update_token_if_cookie_matches(
+                    token_obj.id,
+                    expected_cookies=token_obj.google_cookies,
+                    google_cookies=rotated_cookies,
                 )
-                project_id = project_result.get("projectId")
-                if not project_id:
-                    raise Exception("Invalid project.createProject response: missing projectId")
-                return project_id
-            except Exception as e:
-                last_error = e
-                retry_reason = "网络超时" if self._is_timeout_error(e) else self._get_retry_reason(str(e))
-                if retry_reason and retry_attempt < max_retries - 1:
-                    debug_logger.log_warning(
-                        f"[PROJECT] 创建项目失败，准备重试 ({retry_attempt + 2}/{max_retries}) "
-                        f"title={title!r}, reason={retry_reason}: {e}"
-                    )
-                    await asyncio.sleep(1)
-                    continue
-                raise
-
-        if last_error is not None:
-            raise last_error
-        raise RuntimeError("创建项目失败")
-
-    async def delete_project(self, st: str, project_id: str):
-        """删除项目
-
-        Args:
-            st: Session Token
-            project_id: 项目ID
-        """
-        url = f"{self.labs_base_url}/trpc/project.deleteProject"
-        json_data = {
-            "json": {
-                "projectToDeleteId": project_id
-            }
-        }
-
-        await self._make_request(
-            method="POST",
-            url=url,
-            json_data=json_data,
-            use_st=True,
-            st_token=st,
-            timeout=self._get_control_plane_timeout(),
-        )
+            return ok
+        raise RuntimeError("The retired Labs tRPC project.deleteProject transport is disabled")
 
     # ========== 媒体获取 (使用AT) ==========
 
@@ -1348,27 +1293,28 @@ class FlowClient:
 
     # ========== 余额查询 (使用AT) ==========
 
-    async def get_credits(self, at: str) -> dict:
-        """查询余额
+    async def get_credits(self, at: str, token_obj: Optional[Any] = None) -> dict:
+        """查询余额 (Cookie-first 优先)"""
+        if token_obj and (getattr(token_obj, "protocol_mode", "") == "protocol" or at == "flow-frontend-cookie" or getattr(token_obj, "google_cookies", "")):
+            credits_info, rotated_cookies = await self.get_credits_rpc(token_obj)
+            if self.db and rotated_cookies and rotated_cookies != getattr(token_obj, "google_cookies", ""):
+                await self.db.update_token_if_cookie_matches(
+                    token_obj.id,
+                    expected_cookies=token_obj.google_cookies,
+                    google_cookies=rotated_cookies,
+                )
+            return credits_info
 
-        Args:
-            at: Access Token
-
-        Returns:
-            {
-                "credits": 920,
-                "userPaygateTier": "PAYGATE_TIER_ONE"
-            }
-        """
-        url = f"{self.api_base_url}/credits"
-        result = await self._make_request(
-            method="GET",
-            url=url,
-            use_at=True,
-            at_token=at,
-            timeout=self._get_control_plane_timeout(),
-        )
-        return result
+        if at and at.startswith("ya29."):
+            url = f"{self.api_base_url}/credits"
+            return await self._make_request(
+                method="GET",
+                url=url,
+                use_at=True,
+                at_token=at,
+                timeout=self._get_control_plane_timeout(),
+            )
+        raise RuntimeError("The retired AI Sandbox REST credits transport is disabled for Cookie-first accounts")
 
     # ========== 图片上传 (使用AT) ==========
 
@@ -1431,19 +1377,24 @@ class FlowClient:
         at: str,
         image_bytes: bytes,
         aspect_ratio: str = "IMAGE_ASPECT_RATIO_LANDSCAPE",
-        project_id: Optional[str] = None
+        project_id: Optional[str] = None,
+        token_obj: Optional[Any] = None,
     ) -> str:
-        """上传图片,返回mediaId
-
-        Args:
-            at: Access Token
-            image_bytes: 图片字节数据
-            aspect_ratio: 图片或视频宽高比（会自动转换为图片格式）
-            project_id: 项目ID（新上传接口可使用）
-
-        Returns:
-            mediaId
-        """
+        """上传图片,返回mediaId (Cookie-first 优先)"""
+        if token_obj and (getattr(token_obj, "protocol_mode", "") == "protocol" or at == "flow-frontend-cookie" or getattr(token_obj, "google_cookies", "")):
+            recaptcha_token, _ = await self._get_recaptcha_token(
+                project_id or "", action="UPLOAD_IMAGE", token_id=getattr(token_obj, "id", None)
+            )
+            res, rotated_cookies = await self.upload_image_rpc(
+                token_obj, image_bytes, project_id or "", recaptcha_token=recaptcha_token or ""
+            )
+            if self.db and rotated_cookies and rotated_cookies != getattr(token_obj, "google_cookies", ""):
+                await self.db.update_token_if_cookie_matches(
+                    token_obj.id,
+                    expected_cookies=token_obj.google_cookies,
+                    google_cookies=rotated_cookies,
+                )
+            return res.get("media_id") or res.get("name")
         # 转换视频aspect_ratio为图片aspect_ratio
         # VIDEO_ASPECT_RATIO_LANDSCAPE -> IMAGE_ASPECT_RATIO_LANDSCAPE
         # VIDEO_ASPECT_RATIO_PORTRAIT -> IMAGE_ASPECT_RATIO_PORTRAIT
@@ -1717,6 +1668,45 @@ class FlowClient:
             }
 
             try:
+                # 1. 若为 Cookie-first 模式账号，优先调用当前 Flow 官方前端 RPC: ogiZ0b
+                token_obj = await self.db.get_token(token_id) if (token_id and self.db) else None
+                is_cookie_mode = bool(
+                    token_obj and (
+                        getattr(token_obj, "protocol_mode", "") == "protocol"
+                        or at == "flow-frontend-cookie"
+                        or bool(getattr(token_obj, "google_cookies", ""))
+                    )
+                )
+
+                if is_cookie_mode:
+                    debug_logger.log_info(f"[IMAGE] 使用 Cookie-first 原生 RPC ogiZ0b 提交生成...")
+                    try:
+                        result, session_id, rotated_cookies = await self.generate_image_rpc(
+                            token_obj=token_obj,
+                            project_id=project_id,
+                            prompt=prompt,
+                            model_name=model_name,
+                            aspect_ratio=aspect_ratio,
+                            recaptcha_token=recaptcha_token,
+                            image_inputs=image_inputs,
+                        )
+                        if self.db and rotated_cookies and rotated_cookies != getattr(token_obj, "google_cookies", ""):
+                            await self.db.update_token_if_cookie_matches(
+                                token_obj.id,
+                                expected_cookies=token_obj.google_cookies,
+                                google_cookies=rotated_cookies,
+                            )
+                        attempt_trace["success"] = True
+                        attempt_trace["duration_ms"] = int((time.time() - attempt_started_at) * 1000)
+                        perf_trace["generation_attempts"].append(attempt_trace)
+                        perf_trace["final_success_attempt"] = retry_attempt + 1
+                        return result, session_id, perf_trace
+                    except Exception as rpc_err:
+                        debug_logger.log_warning(f"[IMAGE] ogiZ0b 原生 RPC 异常: {rpc_err}，尝试自动化降级...")
+
+                if not at or at == "flow-frontend-cookie":
+                    raise Exception("HTTP Error 401: No OAuth Access Token for protocol token")
+
                 result = await self._make_image_generation_request(
                     url=url,
                     json_data=json_data,
@@ -1732,10 +1722,53 @@ class FlowClient:
                 return result, session_id, perf_trace
             except Exception as e:
                 err_str = str(e).lower()
-                # 若遇到 401 (旧 OAuth AT 失效) 且当前连接了扩展，自动无缝切换到 Flow 原生直交通道
-                if ("401" in err_str or "unauthenticated" in err_str or "invalid authentication" in err_str) and config.captcha_method == "extension":
-                    debug_logger.log_info(f"[IMAGE] 上游返回 401 鉴权失效，准备自动通过在线扩展调用 Flow 原生生成通道...")
+                # 若遇到 401 (旧 OAuth AT 失效) 且当前连接了扩展，自动无缝切换到 Flow 原生通道
+                if ("401" in err_str or "unauthenticated" in err_str or "invalid authentication" in err_str or "上游响应异常" in err_str or "no oauth" in err_str):
+                    debug_logger.log_info(f"[IMAGE] 鉴权失效或上游未返回，准备尝试本地 CDP 及扩展原生通道...")
+
+                    # 二级降级：优先尝试本地活跃 CDP 实例直连生成 (9224 / 9222)
+                    for cdp_port in (9224, 9222):
+                        try:
+                            from .local_cdp_generator import execute_local_cdp_generate
+                            cdp_img_url = await execute_local_cdp_generate(prompt=prompt, port=cdp_port, timeout=75)
+                            if cdp_img_url:
+                                m_name = str(uuid.uuid4())
+                                native_result = {
+                                    "media": [
+                                        {
+                                            "name": m_name,
+                                            "image": {
+                                                "generatedImage": {
+                                                    "fifeUrl": cdp_img_url,
+                                                    "url": cdp_img_url,
+                                                }
+                                            }
+                                        }
+                                    ],
+                                    "imagePanels": [
+                                        {
+                                            "generatedImages": [
+                                                {
+                                                    "encodedImage": cdp_img_url,
+                                                    "fifeUrl": cdp_img_url,
+                                                    "media": {"name": m_name}
+                                                }
+                                            ]
+                                        }
+                                    ],
+                                    "url": cdp_img_url
+                                }
+                                attempt_trace["success"] = True
+                                attempt_trace["duration_ms"] = int((time.time() - attempt_started_at) * 1000)
+                                perf_trace["generation_attempts"].append(attempt_trace)
+                                perf_trace["final_success_attempt"] = retry_attempt + 1
+                                return native_result, session_id, perf_trace
+                        except Exception as cdp_err:
+                            debug_logger.log_info(f"[IMAGE] 本地 CDP 端口 {cdp_port} 跳过: {cdp_err}")
+
+                    # 三级降级：通过在线 Chrome 扩展生成
                     try:
+                        from .browser_captcha_extension import ExtensionCaptchaService
                         ext_service = await ExtensionCaptchaService.get_instance(self.db)
                         if ext_service.active_connections:
                             if progress_callback is not None:
@@ -1747,14 +1780,26 @@ class FlowClient:
                                 model=model_name
                             )
                             if native_img_url:
+                                m_name = str(uuid.uuid4())
                                 native_result = {
+                                    "media": [
+                                        {
+                                            "name": m_name,
+                                            "image": {
+                                                "generatedImage": {
+                                                    "fifeUrl": native_img_url,
+                                                    "url": native_img_url,
+                                                }
+                                            }
+                                        }
+                                    ],
                                     "imagePanels": [
                                         {
                                             "generatedImages": [
                                                 {
                                                     "encodedImage": native_img_url,
                                                     "fifeUrl": native_img_url,
-                                                    "media": {"name": str(uuid.uuid4())}
+                                                    "media": {"name": m_name}
                                                 }
                                             ]
                                         }
@@ -1767,7 +1812,31 @@ class FlowClient:
                                 perf_trace["final_success_attempt"] = retry_attempt + 1
                                 return native_result, session_id, perf_trace
                     except Exception as fallback_err:
-                        debug_logger.log_warning(f"[IMAGE] Flow 原生生成降级失败: {fallback_err}")
+                        print(f"[IMAGE_DEBUG] Flow 扩展原生生成降级失败: {fallback_err}")
+                        debug_logger.log_warning(f"[IMAGE] Flow 扩展原生生成降级失败: {fallback_err}")
+                    try:
+                        token_obj = await self.db.get_token(token_id)
+                        if token_obj and token_obj.google_cookies:
+                            debug_logger.log_info(f"[IMAGE] 准备通过 FlowBatchExecuteClient 协议生成...")
+                            from .flow_batchexecute import FlowBatchExecuteClient
+                            batch_client = FlowBatchExecuteClient()
+                            batch_result = await batch_client.generate_image(
+                                raw_cookies=token_obj.google_cookies,
+                                project_id=project_id,
+                                prompt=prompt,
+                                model_name=model_name,
+                                aspect_ratio=aspect_ratio,
+                                recaptcha_token=recaptcha_token or ""
+                            )
+                            if batch_result and batch_result.get("url"):
+                                attempt_trace["success"] = True
+                                attempt_trace["duration_ms"] = int((time.time() - attempt_started_at) * 1000)
+                                perf_trace["generation_attempts"].append(attempt_trace)
+                                perf_trace["final_success_attempt"] = retry_attempt + 1
+                                return batch_result, session_id, perf_trace
+                    except Exception as batch_err:
+                        print(f"[IMAGE_DEBUG] FlowBatchExecute 协议生成降级失败: {batch_err}")
+                        debug_logger.log_warning(f"[IMAGE] FlowBatchExecute 协议生成降级失败: {batch_err}")
 
                 last_error = e
                 attempt_trace["success"] = False

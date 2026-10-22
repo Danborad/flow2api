@@ -70,7 +70,7 @@ class FlowBatchExecuteClient:
             loop = asyncio.get_event_loop()
             resp = await loop.run_in_executor(
                 None,
-                lambda: requests.get(url, headers=headers, timeout=12)
+                lambda: requests.get(url, headers=headers, timeout=12, impersonate="chrome124")
             )
 
             if resp.status_code != 200:
@@ -178,7 +178,7 @@ class FlowBatchExecuteClient:
         loop = asyncio.get_event_loop()
         resp = await loop.run_in_executor(
             None,
-            lambda: requests.post(url, data=body_data, headers=headers, timeout=60)
+            lambda: requests.post(url, data=body_data, headers=headers, timeout=60, impersonate="chrome124")
         )
 
         if resp.status_code != 200:

@@ -1380,6 +1380,31 @@ class Database:
                 await db.execute(query, params)
                 await db.commit()
 
+    async def update_token_if_cookie_matches(
+        self,
+        token_id: int,
+        expected_cookies: str,
+        **kwargs
+    ) -> bool:
+        """使用 CAS (比较并交换) 更新 token。只有当前数据库中的 google_cookies 等于 expected_cookies 时才允许更新。"""
+        async with self._connect(write=True) as db:
+            updates = []
+            params = []
+
+            for key, value in kwargs.items():
+                updates.append(f"{key} = ?")
+                params.append(value)
+
+            if not updates:
+                return True
+
+            params.append(token_id)
+            params.append(expected_cookies)
+            query = f"UPDATE tokens SET {', '.join(updates)} WHERE id = ? AND google_cookies = ?"
+            cursor = await db.execute(query, params)
+            await db.commit()
+            return cursor.rowcount > 0
+
     async def delete_token(self, token_id: int):
         """Delete token and related data"""
         async with self._connect(write=True) as db:

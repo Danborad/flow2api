@@ -1,3 +1,4 @@
+import json
 import unittest
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
@@ -15,60 +16,68 @@ class PluginAccountImportTests(unittest.IsolatedAsyncioTestCase):
         routes.generation_handler = self.original_handler
 
     async def test_new_account_requires_browser_project_id(self):
-        flow_client = SimpleNamespace(
-            st_to_at=AsyncMock(return_value={
-                "access_token": "at-test",
-                "expires": "2099-01-01T00:00:00Z",
-                "user": {"email": "tester@example.com"},
-            }),
-            get_credits=AsyncMock(return_value={"credits": 100}),
-        )
         token_manager = SimpleNamespace(
-            flow_client=flow_client,
             get_all_tokens=AsyncMock(return_value=[]),
             add_token=AsyncMock(),
         )
         routes.generation_handler = SimpleNamespace(token_manager=token_manager)
 
+        valid_cookies = json.dumps([
+            {"name": "OSID", "value": "osid-val", "domain": "flow.google.com", "path": "/", "secure": True},
+            {"name": "SID", "value": "sid-val", "domain": ".google.com", "path": "/", "secure": True},
+        ])
+
         request = routes.PluginAccountImportRequest(
-            session_token="st-test",
-            google_cookies="[]",
+            google_cookies=valid_cookies,
+            email="tester@example.com",
+            project_id=None,
         )
 
-        with self.assertRaises(HTTPException) as error:
-            await routes.import_current_browser_account(request, api_key="test")
-
-        self.assertEqual(error.exception.status_code, 400)
-        self.assertIn("Flow 项目页", error.exception.detail)
+        with patch("src.services.protocol_login.protocol_loginer.login", AsyncMock(return_value={
+            "success": True,
+            "email": "tester@example.com",
+            "google_cookies": valid_cookies,
+        })):
+            res = await routes.import_current_browser_account(request, api_key="test")
+            self.assertFalse(res["success"])
+            self.assertIn("Flow 项目 ID", res["message"])
         token_manager.add_token.assert_not_awaited()
 
     async def test_new_account_uses_browser_project_id(self):
-        flow_client = SimpleNamespace(
-            st_to_at=AsyncMock(return_value={
-                "access_token": "at-test",
-                "expires": "2099-01-01T00:00:00Z",
-                "user": {"email": "tester@example.com", "name": "Tester"},
-            }),
-            get_credits=AsyncMock(return_value={"credits": 100}),
+        db = SimpleNamespace(
+            update_token=AsyncMock(),
+            update_token_if_cookie_matches=AsyncMock(return_value=True),
         )
-        db = SimpleNamespace(update_token=AsyncMock())
         new_token = SimpleNamespace(id=7)
+        flow_client = SimpleNamespace(
+            get_credits_rpc=AsyncMock(return_value=({"credits": 100, "userPaygateTier": "PAYGATE_TIER_ONE"}, "[]"))
+        )
         token_manager = SimpleNamespace(
-            flow_client=flow_client,
             db=db,
+            flow_client=flow_client,
             get_all_tokens=AsyncMock(return_value=[]),
+            get_token=AsyncMock(return_value=new_token),
             add_token=AsyncMock(return_value=new_token),
         )
         routes.generation_handler = SimpleNamespace(token_manager=token_manager)
 
+        valid_cookies = json.dumps([
+            {"name": "OSID", "value": "osid-val", "domain": "flow.google.com", "path": "/", "secure": True},
+            {"name": "SID", "value": "sid-val", "domain": ".google.com", "path": "/", "secure": True},
+        ])
+
         request = routes.PluginAccountImportRequest(
-            session_token="st-test",
-            google_cookies="[]",
+            google_cookies=valid_cookies,
+            email="tester@example.com",
             project_id="12345678-1234-1234-1234-123456789abc",
             project_name="Current Flow project",
         )
 
-        with patch("src.services.webhook_service.get_webhook_service"):
+        with patch("src.services.protocol_login.protocol_loginer.login", AsyncMock(return_value={
+            "success": True,
+            "email": "tester@example.com",
+            "google_cookies": valid_cookies,
+        })):
             result = await routes.import_current_browser_account(request, api_key="test")
 
         self.assertTrue(result["success"])
@@ -77,34 +86,24 @@ class PluginAccountImportTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(add_kwargs["project_id"], "12345678-1234-1234-1234-123456789abc")
         self.assertEqual(add_kwargs["project_name"], "Current Flow project")
 
-    async def test_invalid_access_token_is_rejected_before_account_update(self):
-        flow_client = SimpleNamespace(
-            st_to_at=AsyncMock(return_value={
-                "access_token": "revoked-at",
-                "expires": "2099-01-01T00:00:00Z",
-                "user": {"email": "tester@example.com"},
-            }),
-            get_credits=AsyncMock(side_effect=RuntimeError("HTTP 401 UNAUTHENTICATED")),
-        )
-        existing = SimpleNamespace(id=7, email="tester@example.com")
+    async def test_invalid_cookies_rejected(self):
         token_manager = SimpleNamespace(
-            flow_client=flow_client,
-            get_all_tokens=AsyncMock(return_value=[existing]),
+            get_all_tokens=AsyncMock(return_value=[]),
             update_token=AsyncMock(),
         )
         routes.generation_handler = SimpleNamespace(token_manager=token_manager)
 
         request = routes.PluginAccountImportRequest(
-            session_token="st-with-revoked-at",
             google_cookies="[]",
         )
 
-        with self.assertRaises(HTTPException) as error:
-            await routes.import_current_browser_account(request, api_key="test")
-
-        self.assertEqual(error.exception.status_code, 400)
-        self.assertIn("Access Token 验证失败", error.exception.detail)
-        token_manager.update_token.assert_not_awaited()
+        with patch("src.services.protocol_login.protocol_loginer.login", AsyncMock(return_value={
+            "success": False,
+            "error": "缺少 Flow 会话 Cookie",
+        })):
+            res = await routes.import_current_browser_account(request, api_key="test")
+            self.assertFalse(res["success"])
+            self.assertIn("缺少 Flow 会话 Cookie", res["message"])
 
 
 if __name__ == "__main__":

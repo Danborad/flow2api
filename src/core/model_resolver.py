@@ -794,10 +794,12 @@ def _extract_generation_params(request, raw_request=None) -> Tuple[Optional[str]
         if not image_size and size_val:
             image_size = _normalize_image_size(size_val)
 
-        if not image_size:
-            image_size = _image_size_from_openai_quality(
-                _read_value(image_config, "quality", "imageQuality", "image_quality")
-            )
+        quality_size = _image_size_from_openai_quality(
+            _read_value(image_config, "quality", "imageQuality", "image_quality")
+        )
+        if quality_size in ("4k", "2k") or not image_size:
+            if quality_size:
+                image_size = quality_size
 
         return aspect_ratio, image_size
 
@@ -904,8 +906,10 @@ def _extract_generation_params(request, raw_request=None) -> Tuple[Optional[str]
             size_val = target_dict.get("size") or getattr(request, "size", None)
             if size_val:
                 image_size = _normalize_image_size(size_val)
-        if image_size is None:
-            image_size = _image_size_from_openai_quality(target_dict.get("quality") or getattr(request, "quality", None))
+        quality_size = _image_size_from_openai_quality(target_dict.get("quality") or getattr(request, "quality", None))
+        if quality_size in ("4k", "2k") or image_size is None:
+            if quality_size:
+                image_size = quality_size
         if duration_seconds is None:
             duration_seconds = _normalize_duration(
                 target_dict.get("durationSeconds") or target_dict.get("duration_seconds") or target_dict.get("duration") or getattr(request, "durationSeconds", None) or getattr(request, "duration", None)

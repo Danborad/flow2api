@@ -1049,45 +1049,207 @@ function connectWS() {
     return pending;
 }
 
+async function physicalPressEnter(tabId) {
+    if (!tabId) return false;
+    const debugTarget = { tabId };
+    try {
+        await chrome.debugger.attach(debugTarget, "1.3");
+        try {
+            // 聚焦输入框
+            await chrome.debugger.sendCommand(debugTarget, "Runtime.evaluate", {
+                expression: `(() => {
+                    const el = document.querySelector('flow-prompt-box .ProseMirror') || document.querySelector('.ProseMirror');
+                    if (el) el.focus();
+                })()`
+            });
+            // 派发真实的物理回车键
+            await chrome.debugger.sendCommand(debugTarget, "Input.dispatchKeyEvent", {
+                type: "rawKeyDown", windowsVirtualKeyCode: 13, unmodifiedText: "\r", text: "\r", key: "Enter", code: "Enter"
+            });
+            await chrome.debugger.sendCommand(debugTarget, "Input.dispatchKeyEvent", {
+                type: "keyUp", windowsVirtualKeyCode: 13, key: "Enter", code: "Enter"
+            });
+            console.log("[Flow2API] 物理回车键成功派发");
+            return true;
+        } finally {
+            await chrome.debugger.detach(debugTarget).catch(() => {});
+        }
+    } catch (e) {
+        console.warn("[Flow2API] physicalPressEnter error:", e);
+    }
+    return false;
+}
+
+async function physicalClickButton(tabId) {
+    if (!tabId) return false;
+    const debugTarget = { tabId };
+    try {
+        await chrome.debugger.attach(debugTarget, "1.3");
+        try {
+            const btnRes = await chrome.debugger.sendCommand(debugTarget, "Runtime.evaluate", {
+                expression: `(() => {
+                    const b = document.querySelector('flow-prompt-box button.generate-icon-button') || document.querySelector('button.generate-icon-button');
+                    if (!b) return null;
+                    const r = b.getBoundingClientRect();
+                    return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+                })()`,
+                returnByValue: true
+            });
+            const coords = btnRes && btnRes.result && btnRes.result.value;
+            if (coords) {
+                await chrome.debugger.sendCommand(debugTarget, "Input.dispatchMouseEvent", {
+                    type: "mousePressed", x: coords.x, y: coords.y, button: "left", clickCount: 1
+                });
+                await chrome.debugger.sendCommand(debugTarget, "Input.dispatchMouseEvent", {
+                    type: "mouseReleased", x: coords.x, y: coords.y, button: "left", clickCount: 1
+                });
+                console.log("[Flow2API] 物理点击成功派发:", coords);
+                return true;
+            }
+        } finally {
+            await chrome.debugger.detach(debugTarget).catch(() => {});
+        }
+    } catch (e) {
+        console.warn("[Flow2API] physicalClickButton fallback error:", e);
+    }
+    return false;
+}
+
 async function handleFlowGenerateInTab(data, socket) {
     const reqId = data.req_id;
     try {
         let tabs = await new Promise(r => chrome.tabs.query({}, r));
-        let flowTab = tabs.find(t => (t.url || "").includes("flow.google.com/project"));
-        if (!flowTab) {
-            flowTab = tabs.find(t => (t.url || "").includes("flow.google.com"));
-        }
 
-        let targetUrl = data.project_id ? `https://flow.google.com/project/${data.project_id}` : "https://flow.google.com/";
+        // 1. 查找当前浏览器中正常打开的 Flow 项目标签页 (优先使用当前活动的标签页，排除 404 页面)
+        let activeProjectTab = tabs.find(t => t.active && (t.url || "").includes("flow.google.com/project") && !(t.url || "").includes("404"));
+        let validProjectTab = activeProjectTab || tabs.find(t => (t.url || "").includes("flow.google.com/project") && !(t.url || "").includes("404"));
         let tabId = null;
 
-        if (flowTab && flowTab.id) {
-            tabId = flowTab.id;
-            if (data.project_id && !(flowTab.url || "").includes(data.project_id)) {
-                await chrome.tabs.update(tabId, { url: targetUrl });
-                await waitForTabReady(tabId);
-                await sleep(1500);
-            }
+        if (validProjectTab && validProjectTab.id) {
+            // 当前浏览器已有正常打开的 Flow 项目页，直接在该页面上生成，避免更新到可能 404 的无效 project_id
+            tabId = validProjectTab.id;
+            await chrome.tabs.update(tabId, { active: true });
         } else {
-            const newTab = await chrome.tabs.create({ url: targetUrl, active: true });
-            tabId = newTab.id;
-            await waitForTabReady(tabId);
-            await sleep(2000);
+            // 没有打开的有效项目页，先检查是否有任何 flow.google.com 页面
+            let anyFlowTab = tabs.find(t => (t.url || "").includes("flow.google.com"));
+            if (anyFlowTab && anyFlowTab.id) {
+                tabId = anyFlowTab.id;
+                await chrome.tabs.update(tabId, { active: true });
+            } else {
+                const newTab = await chrome.tabs.create({ url: "https://flow.google.com/", active: true });
+                tabId = newTab.id;
+                await waitForTabReady(tabId);
+                await sleep(2500);
+            }
+
+            // 检查当前 tab 的 URL，如果是 404 或者首页，自动导航到有效项目
+            const currentTab = await new Promise(r => chrome.tabs.get(tabId, r));
+            if ((currentTab.url || "").includes("404") || !(currentTab.url || "").includes("/project/")) {
+                if ((currentTab.url || "").includes("404")) {
+                    await chrome.tabs.update(tabId, { url: "https://flow.google.com/" });
+                    await waitForTabReady(tabId);
+                    await sleep(2500);
+                }
+
+                // 从首页提取账号拥有的第一个有效项目链接
+                const projResults = await chrome.scripting.executeScript({
+                    target: { tabId },
+                    func: () => {
+                        const links = Array.from(document.querySelectorAll('a[href*="/project/"]')).map(a => a.href);
+                        return links.filter(l => !l.includes('404'))[0] || null;
+                    }
+                }).catch(() => null);
+
+                const validUrl = projResults && projResults[0] && projResults[0].result;
+                if (validUrl) {
+                    await chrome.tabs.update(tabId, { url: validUrl });
+                    await waitForTabReady(tabId);
+                    await sleep(3000);
+                } else if (data.project_id) {
+                    await chrome.tabs.update(tabId, { url: `https://flow.google.com/project/${data.project_id}` });
+                    await waitForTabReady(tabId);
+                    await sleep(3000);
+                }
+            }
         }
 
-        const response = await new Promise((resolve, reject) => {
-            chrome.tabs.sendMessage(tabId, {
-                type: "execute_flow_generate",
-                prompt: data.prompt,
-                model: data.model
-            }, (res) => {
-                if (chrome.runtime.lastError) {
-                    reject(new Error(chrome.runtime.lastError.message));
-                } else {
-                    resolve(res);
-                }
+        // 确保目标标签页已挂载最新的 content.js
+        try {
+            await chrome.scripting.executeScript({
+                target: { tabId },
+                files: ["content.js"]
             });
-        });
+        } catch (_) {}
+
+        let response = null;
+
+        // 优先使用分离协作模式: 输入提示词 -> 物理回车/点击 -> 监听新图
+        try {
+            console.log("[Flow2API] 开始向 tabId 执行分离输入流程:", tabId);
+            const inputRes = await new Promise((resolve, reject) => {
+                chrome.tabs.sendMessage(tabId, {
+                    type: "input_flow_prompt",
+                    prompt: data.prompt
+                }, (res) => {
+                    if (chrome.runtime.lastError) reject(new Error(chrome.runtime.lastError.message));
+                    else resolve(res);
+                });
+            });
+
+            if (inputRes && inputRes.status === "success" && inputRes.result) {
+                const initialPaths = inputRes.result.initialCleanPaths || [];
+                const initialCount = inputRes.result.initialCount || 0;
+
+                // 物理派发回车与点击
+                await sleep(350);
+                await physicalPressEnter(tabId);
+                await sleep(300);
+                await physicalClickButton(tabId);
+
+                // 轮询监听图片生成
+                const waitRes = await new Promise((resolve, reject) => {
+                    chrome.tabs.sendMessage(tabId, {
+                        type: "wait_flow_image",
+                        initialCleanPaths: initialPaths,
+                        initialCount: initialCount,
+                        timeout_seconds: 90
+                    }, (res) => {
+                        if (chrome.runtime.lastError) reject(new Error(chrome.runtime.lastError.message));
+                        else resolve(res);
+                    });
+                });
+
+                if (waitRes && waitRes.status === "success" && waitRes.result && waitRes.result.url) {
+                    response = waitRes;
+                }
+            }
+        } catch (collabErr) {
+            console.warn("[Flow2API] 分离流程执行异常，尝试单体兼容模式:", collabErr);
+        }
+
+        // 若分离模式未返回结果，走单体 execute_flow_generate 兜底
+        if (!response) {
+            for (let sendAttempt = 0; sendAttempt < 2; sendAttempt++) {
+                try {
+                    response = await new Promise((resolve, reject) => {
+                        chrome.tabs.sendMessage(tabId, {
+                            type: "execute_flow_generate",
+                            prompt: data.prompt,
+                            model: data.model
+                        }, (res) => {
+                            if (chrome.runtime.lastError) {
+                                reject(new Error(chrome.runtime.lastError.message));
+                            } else {
+                                resolve(res);
+                            }
+                        });
+                    });
+                    break;
+                } catch (err) {
+                    await sleep(1500);
+                }
+            }
+        }
 
         if (response && response.status === "success" && response.result && response.result.url) {
             logExtensionEvent("flow_generate_success", { req_id: reqId, url: response.result.url });
@@ -1250,6 +1412,16 @@ chrome.runtime.onStartup.addListener(() => {
 });
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+    if (message && message.type === "do_physical_enter") {
+        const tabId = (sender && sender.tab && sender.tab.id) || message.tabId;
+        physicalPressEnter(tabId).then(ok => sendResponse({ success: ok }));
+        return true;
+    }
+    if (message && message.type === "do_physical_click") {
+        const tabId = (sender && sender.tab && sender.tab.id) || message.tabId;
+        physicalClickButton(tabId).then(ok => sendResponse({ success: ok }));
+        return true;
+    }
     if (message && message.type === "auto_login_completed") {
         console.log("[Flow2API] 收到前台自动登录完成通知，准备同步最新凭据...");
         logExtensionEvent("auto_login_completed_notification_received");

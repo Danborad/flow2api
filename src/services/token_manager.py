@@ -509,7 +509,19 @@ class TokenManager:
     # ========== AT自动刷新逻辑 (核心) ==========
 
     def _should_refresh_at(self, token: Token) -> bool:
-        """根据当前 token 快照判断是否需要刷新 AT。"""
+        """根据当前 token 快照判断是否需要刷新。Cookie 模式依据 refresh_interval_minutes。"""
+        if getattr(token, "google_cookies", "") or self._normalize_protocol_mode(getattr(token, "protocol_mode", "")) == "protocol":
+            if not getattr(token, "auto_refresh_enabled", True):
+                return False
+            last_st = getattr(token, "last_st_refresh_at", None)
+            if not last_st:
+                return True
+            now = datetime.now(timezone.utc)
+            if last_st.tzinfo is None:
+                last_st = last_st.replace(tzinfo=timezone.utc)
+            minutes = getattr(token, "refresh_interval_minutes", 120) or 120
+            return (now - last_st).total_seconds() >= minutes * 60
+
         if not token.at:
             debug_logger.log_info(f"[AT_CHECK] Token {token.id}: AT不存在,需要刷新")
             return True
@@ -540,27 +552,55 @@ class TokenManager:
             return True
         return self._should_refresh_at(token)
 
+    async def _refresh_protocol_token_cookie(self, token: Token) -> bool:
+        """通过 nzlxg RPC 刷新 Cookie 模式账号的余额与轮换 Cookie，并使用 CAS 写回。"""
+        import hashlib
+        try:
+            credits_info, rotated_cookies = await self.flow_client.get_credits_rpc(token)
+            updates: Dict[str, Any] = {
+                "credits": credits_info.get("credits", 0),
+                "user_paygate_tier": credits_info.get("userPaygateTier"),
+                "last_st_refresh_at": datetime.now(timezone.utc),
+                "last_st_refresh_result": "success",
+            }
+            if rotated_cookies and rotated_cookies != token.google_cookies:
+                updates["google_cookies"] = rotated_cookies
+                updates["st"] = "frontend-" + hashlib.sha256(rotated_cookies.encode("utf-8")).hexdigest()[:32]
+                updates["at"] = "flow-frontend-cookie"
+                updates["at_expires"] = datetime.now(timezone.utc) + timedelta(days=365)
+                await self.db.update_token_if_cookie_matches(
+                    token.id,
+                    expected_cookies=token.google_cookies,
+                    **updates,
+                )
+            else:
+                await self.db.update_token(token.id, **updates)
+            self._mark_at_valid(token.id)
+            return True
+        except Exception as e:
+            debug_logger.log_warning(f"[TOKEN_REFRESH] Token {token.id} Cookie 轮换刷新失败: {e}")
+            await self.db.update_token(
+                token.id,
+                last_st_refresh_at=datetime.now(timezone.utc),
+                last_st_refresh_result=f"failed: {str(e)[:120]}",
+            )
+            return False
+
     async def ensure_valid_token(self, token: Optional[Token]) -> Optional[Token]:
-        """确保 token 的 AT 可用，并在必要时返回刷新后的最新对象。"""
+        """确保 token 的凭据可用，并在必要时返回刷新后的最新对象。"""
         if not token:
             return None
 
+        is_protocol = self._normalize_protocol_mode(token.protocol_mode) == "protocol" or bool(token.google_cookies)
+
+        if is_protocol:
+            # Cookie 模式：根据 refresh_interval 判断是否需要通过 nzlxg 刷新与轮换
+            if self._should_refresh_at(token):
+                await self._refresh_protocol_token_cookie(token)
+            return await self.db.get_token(token.id) or token
+
         if not self._should_refresh_at(token):
-            if self._has_recent_at_validation(token.id):
-                return token
-            try:
-                credits_result = await self._get_credits_for_token(token, token.at)
-                await self.db.update_token(
-                    token.id,
-                    credits=credits_result.get("credits", 0),
-                    user_paygate_tier=credits_result.get("userPaygateTier"),
-                )
-                self._mark_at_valid(token.id)
-                return await self.db.get_token(token.id) or token
-            except Exception as e:
-                debug_logger.log_warning(
-                    f"[AT_CHECK] Token {token.id}: 本地判定未过期，但上游校验失败，准备刷新 AT/ST - {e}"
-                )
+            return token
 
         if not await self._refresh_at(token.id):
             return None
