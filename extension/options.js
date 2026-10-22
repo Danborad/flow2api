@@ -214,7 +214,7 @@ async function saveSettings() {
 async function importCurrentAccount() {
   const importBtn = $("importBtn");
   importBtn.disabled = true;
-  setStatus("正在导入当前浏览器账号（如检测到凭据过期将自动开启授权页完成自动续期）...");
+  setStatus("正在读取当前 Flow 页面与 Google 登录凭据并导入...");
 
   try {
     const stored = await new Promise((resolve) => chrome.storage.local.get(DEFAULT_SETTINGS, resolve));

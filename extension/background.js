@@ -464,15 +464,25 @@ async function refreshLabsSessionCookie(force = false) {
     return freshToken || "";
 }
 
+async function purgeDeprecatedLabsCookies() {
+    try {
+        const labsCookies = await getCookies({ domain: "labs.google" });
+        for (const c of labsCookies) {
+            chrome.cookies.remove({ url: `https://labs.google${c.path || "/"}`, name: c.name });
+        }
+    } catch (e) {}
+}
+
 async function getGoogleCookies() {
     const cookieMap = new Map();
     const cookieQueries = [
         { domain: "google.com" },
+        { domain: "flow.google.com" },
         { url: "https://accounts.google.com/" },
         { url: "https://www.google.com/" },
         { url: "https://google.com/" },
         { url: "https://ogs.google.com/" },
-        { url: "https://labs.google/" }
+        { url: "https://flow.google.com/" }
     ];
 
     for (const query of cookieQueries) {
@@ -508,21 +518,8 @@ async function importCurrentAccount(reason = "manual") {
     try {
         if (!settings.apiKey) throw new Error("Flow2API API Key is empty");
 
-    await refreshLabsSessionCookie();
-        let sessionToken = await getLabsSessionToken();
-        if (!sessionToken) {
-            // 自动打开前台授权页面，Google 已登录时通常秒级完成自动登录
-            logExtensionEvent("session_token_missing_opening_auth_page");
-            chrome.tabs.create({ url: "https://flow.google.com/", active: true });
-            throw new Error("正在自动打开 Google Flow 页面（https://flow.google.com/）。页面加载完成后会自动同步凭据，请稍候几秒后再次点击导入。");
-        }
-
-        const googleCookies = await getGoogleCookies();
-        const foundNames = new Set(googleCookies.map(cookie => cookie.name));
-        const hasUsableCookieGroup = GOOGLE_AUTH_COOKIE_GROUPS.some(group => group.every(name => foundNames.has(name)));
-        if (!hasUsableCookieGroup) {
-            throw new Error(`Google login cookies are incomplete. Found: ${Array.from(foundNames).join(", ") || "none"}. Open accounts.google.com and labs.google in this Chrome profile, then import again.`);
-        }
+        // 彻底清理旧版 labs.google 的残留废弃 Cookie，避免死 Cookie 干扰
+        await purgeDeprecatedLabsCookies();
 
         let projectLookup = await getCurrentFlowProject();
         if (!projectLookup.project) {
@@ -530,6 +527,37 @@ async function importCurrentAccount(reason = "manual") {
             projectLookup = await createFlowProject();
         }
         const currentProject = projectLookup.project;
+
+        // 从已打开的 Flow 页面中提取当前登录的账号邮箱
+        let currentEmail = "";
+        for (const tab of projectLookup.flowTabs) {
+            if (!tab.id) continue;
+            try {
+                const res = await chrome.scripting.executeScript({
+                    target: { tabId: tab.id },
+                    func: () => {
+                        const labels = Array.from(document.querySelectorAll('*')).map(el => el.getAttribute('aria-label') || '').filter(Boolean);
+                        const emailMatch = labels.join(' ').match(/[\w\.-]+@[\w\.-]+\.\w+/);
+                        return emailMatch ? emailMatch[0].toLowerCase() : null;
+                    }
+                });
+                if (res && res[0] && res[0].result) {
+                    currentEmail = res[0].result;
+                    break;
+                }
+            } catch (e) {}
+        }
+        if (!currentEmail) {
+            const storedData = await new Promise(r => chrome.storage.local.get(["lastImportEmail", "targetLoginEmail"], r));
+            currentEmail = (storedData.targetLoginEmail || storedData.lastImportEmail || "").trim().toLowerCase();
+        }
+
+        const googleCookies = await getGoogleCookies();
+        const foundNames = new Set(googleCookies.map(cookie => cookie.name));
+        const hasUsableCookieGroup = GOOGLE_AUTH_COOKIE_GROUPS.some(group => group.every(name => foundNames.has(name)));
+        if (!hasUsableCookieGroup) {
+            throw new Error(`Google 登录 Cookies 不完整 (已找到: ${Array.from(foundNames).join(", ") || "无"})。请在浏览器中登录 Google 账号并打开 flow.google.com 后重试。`);
+        }
 
         const baseUrl = getBackendBaseUrl(settings.serverUrl);
         let response = await fetch(`${baseUrl}/api/plugin/import-current-account`, {
@@ -539,7 +567,7 @@ async function importCurrentAccount(reason = "manual") {
                 "Authorization": `Bearer ${settings.apiKey}`
             },
             body: JSON.stringify({
-                session_token: sessionToken,
+                email: currentEmail,
                 google_cookies: JSON.stringify(googleCookies),
                 project_id: currentProject ? currentProject.projectId : null,
                 project_name: currentProject ? currentProject.projectName : null,
@@ -548,36 +576,6 @@ async function importCurrentAccount(reason = "manual") {
             })
         });
         let payload = await response.json().catch(() => null);
-
-        // 如果后端报告 Session Token 已过期或无效，自动开启页面换取新 Token 并自动重试
-        if (!response.ok && payload && (
-            String(payload.detail || "").includes("过期") ||
-            String(payload.detail || "").includes("失效") ||
-            String(payload.detail || "").includes("access_token")
-        )) {
-            console.log("[Flow2API] Backend reported token expired. Automatically opening auth page and retrying...");
-            logExtensionEvent("token_expired_auto_refresh_retry", { detail: payload.detail });
-
-            sessionToken = await refreshLabsSessionCookie(true);
-            if (sessionToken) {
-                response = await fetch(`${baseUrl}/api/plugin/import-current-account`, {
-                    method: "POST",
-                    headers: {
-                        "Content-Type": "application/json",
-                        "Authorization": `Bearer ${settings.apiKey}`
-                    },
-                    body: JSON.stringify({
-                        session_token: sessionToken,
-                        google_cookies: JSON.stringify(googleCookies),
-                        project_id: currentProject ? currentProject.projectId : null,
-                        project_name: currentProject ? currentProject.projectName : null,
-                        extension_route_key: settings.routeKey,
-                        refresh_interval_minutes: parseInt(settings.refreshIntervalMinutes, 10) || 120
-                    })
-                });
-                payload = await response.json().catch(() => null);
-            }
-        }
 
         if (!response.ok || !payload || payload.success !== true) {
             const detail = payload && (payload.detail || payload.message);
@@ -594,13 +592,13 @@ async function importCurrentAccount(reason = "manual") {
         chrome.storage.local.set({
             lastAutoImportAt: new Date().toISOString(),
             lastAutoImportStatus: "success",
-            lastAutoImportMessage: `${reason}: ${payload.email || "unknown"}`,
+            lastAutoImportMessage: `${reason}: ${payload.email || currentEmail || "success"}`,
             lastImportExpires: payload.expires || "",
-            lastImportEmail: payload.email || "unknown"
+            lastImportEmail: payload.email || currentEmail || "unknown"
         });
         logExtensionEvent("account_import_success", {
             reason,
-            email: payload.email || "unknown",
+            email: payload.email || currentEmail || "unknown",
             added: payload.added || 0,
             updated: payload.updated || 0,
             expires: payload.expires || "",

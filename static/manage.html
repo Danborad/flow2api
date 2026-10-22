@@ -796,7 +796,7 @@
                         <div class="bg-white dark:bg-[#121214] rounded-xl p-5 border border-slate-200/80 dark:border-[#27272a] shadow-sm flex flex-col justify-between lg:col-span-2">
                             <div>
                                 <div class="flex items-center justify-between border-b border-slate-100 dark:border-[#27272a] pb-3 mb-3">
-                                    <h3 class="text-sm font-bold text-slate-900 dark:text-slate-100">验证码与浏览器扩展配置 (当前版本: v1.1.39)</h3>
+                                    <h3 class="text-sm font-bold text-slate-900 dark:text-slate-100">验证码与浏览器扩展配置 (当前版本: v1.1.40)</h3>
                                     <div class="flex items-center gap-2">
                                         <a href="/api/plugin/download" download class="px-2.5 py-1 text-xs border border-slate-200 dark:border-slate-700 rounded-lg text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors inline-flex items-center gap-1 font-medium">
                                             <svg class="w-3.5 h-3.5 text-slate-500 dark:text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
@@ -1897,7 +1897,7 @@
             try {
                 const res = await apiRequest('/api/proxy/test', {
                     method: 'POST',
-                    body: JSON.stringify({ proxy_url: url, test_url: 'https://labs.google/' })
+                    body: JSON.stringify({ proxy_url: url, test_url: 'https://flow.google.com/' })
                 });
                 if (!res) return;
                 const d = await res.json();

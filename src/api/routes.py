@@ -81,7 +81,8 @@ generation_handler: GenerationHandler = None
 class PluginAccountImportRequest(BaseModel):
     """Current browser account credentials imported by the local extension."""
 
-    session_token: str
+    session_token: Optional[str] = ""
+    email: Optional[str] = None
     google_cookies: str = ""
     project_id: Optional[str] = None
     project_name: Optional[str] = None
@@ -854,45 +855,59 @@ async def import_current_browser_account(
     a schedule without storing the admin password.
     """
     handler = _ensure_generation_handler()
-    session_token = (request.session_token or "").strip()
-    if not session_token:
-        raise HTTPException(status_code=400, detail="session_token is required")
-
     try:
-        result = await handler.token_manager.flow_client.st_to_at(session_token)
-        if not isinstance(result, dict) or not result.get("access_token"):
-            debug_logger.log_warning(f"[PLUGIN_IMPORT] st_to_at 返回无效响应: {result}")
-            raise HTTPException(
-                status_code=400,
-                detail="Session Token 无效或未登录（未返回 access_token），请在当前浏览器中登录或刷新 Flow 页面"
-            )
-        access_token = result["access_token"]
-        user_info = result.get("user", {}) or {}
-        email = user_info.get("email") or ""
-        expires = result.get("expires")
-        if not email:
-            raise HTTPException(status_code=400, detail="无法从 Session Token 获取邮箱")
-
+        session_token = (request.session_token or "").strip()
+        email = (request.email or "").strip().lower()
+        access_token = None
         at_expires = None
-        if expires:
-            try:
-                at_expires = datetime.fromisoformat(str(expires).replace("Z", "+00:00"))
-            except Exception:
-                at_expires = None
-        if at_expires:
-            now = datetime.now(timezone.utc)
-            aware_expires = at_expires if at_expires.tzinfo else at_expires.replace(tzinfo=timezone.utc)
-            if aware_expires <= now:
-                # 容错验证：若 access_token 实测依然可正常调用 get_credits，则不阻断
-                try:
-                    await handler.token_manager.flow_client.get_credits(access_token)
-                except Exception:
-                    raise HTTPException(status_code=400, detail="导入的 Labs Session Token 已过期，请重新打开 Flow 页面后再导入")
+        expires = None
 
+        # 如果传了 session_token，尝试通过旧接口换取 AT；若遇到 410 (Labs 端点已下线废弃) 优雅降级，不阻断导入流程
+        if session_token:
+            try:
+                result = await handler.token_manager.flow_client.st_to_at(session_token)
+                if isinstance(result, dict) and result.get("access_token"):
+                    access_token = result["access_token"]
+                    user_info = result.get("user", {}) or {}
+                    if not email:
+                        email = (user_info.get("email") or "").lower()
+                    expires = result.get("expires")
+                    if expires:
+                        try:
+                            at_expires = datetime.fromisoformat(str(expires).replace("Z", "+00:00"))
+                        except Exception:
+                            at_expires = None
+            except Exception as e:
+                debug_logger.log_warning(f"[PLUGIN_IMPORT] st_to_at 接口不可用或已废弃 (Labs 端点已下线): {e}")
+
+        # 获取数据库现有 Token
         existing_by_email = {}
         for existing_token in await handler.token_manager.get_all_tokens():
-            if existing_token.email and existing_token.email not in existing_by_email:
-                existing_by_email[existing_token.email] = existing_token
+            if existing_token.email and existing_token.email.lower() not in existing_by_email:
+                existing_by_email[existing_token.email.lower()] = existing_token
+
+        # 尝试从 google_cookies 中解析 email
+        if not email and request.google_cookies:
+            try:
+                import json, urllib.parse
+                parsed_cookies = json.loads(request.google_cookies) if request.google_cookies.startswith("[") else []
+                for c in parsed_cookies:
+                    name = c.get("name", "")
+                    val = urllib.parse.unquote(c.get("value", ""))
+                    if ("email" in name.lower() or "@" in val) and "@" in val:
+                        m = re.search(r"[\w\.-]+@[\w\.-]+\.\w+", val)
+                        if m:
+                            email = m.group(0).lower()
+                            break
+            except Exception:
+                pass
+
+        # 如果依然没有 email，若系统仅有唯一 Token 则自动绑定，否则提示在 Flow 页面中登录
+        if not email:
+            if len(existing_by_email) == 1:
+                email = list(existing_by_email.keys())[0]
+            else:
+                raise HTTPException(status_code=400, detail="未能识别当前 Google 账号邮箱，请确保在 Flow 页面中已登录账号")
 
         existing = existing_by_email.get(email)
         project_id = (request.project_id or "").strip() or None
@@ -902,19 +917,27 @@ async def import_current_browser_account(
             project_id,
         ):
             raise HTTPException(status_code=400, detail="Flow 项目 ID 格式无效")
+
         if not existing and not project_id:
             raise HTTPException(
                 status_code=400,
                 detail="首次导入前请先在 flow.google.com 打开一个 Flow 项目页，再点击导入",
             )
 
-        try:
-            credits_result = await handler.token_manager.flow_client.get_credits(access_token)
-        except Exception as credit_error:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Access Token 验证失败: {credit_error}",
-            )
+        # 如果本次没有拿到新 access_token，且数据库已有账号存在有效 access_token，则继承原有有效凭据
+        if not access_token and existing and existing.at:
+            access_token = existing.at
+            at_expires = existing.at_expires
+
+        credits_val = 0
+        tier_val = None
+        if access_token:
+            try:
+                credits_result = await handler.token_manager.flow_client.get_credits(access_token)
+                credits_val = credits_result.get("credits", 0)
+                tier_val = credits_result.get("userPaygateTier")
+            except Exception as e:
+                debug_logger.log_info(f"[PLUGIN_IMPORT] 验证已有 AT 余额跳过: {e}")
 
         common_kwargs = dict(
             extension_route_key=(request.extension_route_key or "").strip() or None,
@@ -930,7 +953,7 @@ async def import_current_browser_account(
         if existing:
             await handler.token_manager.update_token(
                 token_id=existing.id,
-                st=session_token,
+                st=session_token or existing.st,
                 at=access_token,
                 at_expires=at_expires,
                 **common_kwargs,
@@ -952,10 +975,12 @@ async def import_current_browser_account(
             added = 1
 
         update_fields: Dict[str, Any] = {
-            "last_st_refresh_result": "插件已导入当前浏览器账号信息",
+            "last_st_refresh_result": "插件已成功同步当前 Flow 账号凭据",
         }
-        update_fields["credits"] = credits_result.get("credits", 0)
-        update_fields["user_paygate_tier"] = credits_result.get("userPaygateTier")
+        if credits_val:
+            update_fields["credits"] = credits_val
+        if tier_val:
+            update_fields["user_paygate_tier"] = tier_val
 
         if token_id is not None:
             await handler.token_manager.db.update_token(token_id, **update_fields)
@@ -972,7 +997,7 @@ async def import_current_browser_account(
             "email": email,
             "token_id": token_id,
             "expires": expires,
-            "message": f"导入完成: 新增 {added} 个, 更新 {updated} 个",
+            "message": f"导入完成: {email} (新增 {added} 个, 更新 {updated} 个)",
         }
     except HTTPException:
         raise
@@ -985,7 +1010,7 @@ async def import_current_browser_account(
 async def get_plugin_version():
     """Get latest extension version information."""
     manifest_path = Path(__file__).parent.parent.parent / "extension" / "manifest.json"
-    version = "1.1.39"
+    version = "1.1.40"
     if manifest_path.exists():
         try:
             with open(manifest_path, "r", encoding="utf-8") as f:
