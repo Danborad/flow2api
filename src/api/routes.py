@@ -948,6 +948,10 @@ async def import_current_browser_account(
             access_token = existing.at
             at_expires = existing.at_expires
 
+        now_utc = datetime.now(timezone.utc)
+        if not at_expires or (at_expires and at_expires <= now_utc):
+            at_expires = now_utc + timedelta(hours=24)
+
         credits_val = 0
         tier_val = None
         if access_token:

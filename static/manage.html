@@ -1431,8 +1431,8 @@
                 return;
             }
             tbody.innerHTML = tokens.map(t => {
-                const expText = formatTokenExpiry(t.at_expires);
                 const isProtocol = t.protocol_mode === 'protocol';
+                const expText = formatTokenExpiry(t.at_expires, isProtocol, t.is_active);
                 const emailText = formatTokenEmail(t.email);
                 return `
                     <tr class="hover:bg-slate-50/60 dark:hover:bg-zinc-800/40 transition-colors">
@@ -1497,7 +1497,7 @@
                             </div>
                             <div>
                                 <span class="text-slate-400 dark:text-zinc-400 block text-[10px] mb-0.5">AT 过期时间</span>
-                                <span class="text-slate-700 dark:text-zinc-200 font-mono text-[10px]">${formatTokenExpiry(t.at_expires)}</span>
+                                <span class="text-slate-700 dark:text-zinc-200 font-mono text-[10px]">${formatTokenExpiry(t.at_expires, t.protocol_mode === 'protocol', t.is_active)}</span>
                             </div>
                             <div>
                                 <span class="text-slate-400 dark:text-zinc-400 block text-[10px] mb-0.5">运行模式</span>
@@ -1520,7 +1520,18 @@
             }).join('');
         }
 
-        function formatTokenExpiry(exp) {
+        function formatTokenExpiry(exp, isProtocol, isActive) {
+            if (isProtocol && isActive) {
+                if (!exp) return '<span class="text-emerald-600 dark:text-emerald-400 font-medium">协议正常</span>';
+                const d = new Date(exp);
+                const now = new Date();
+                const diff = d - now;
+                if (diff < 0) return '<span class="text-emerald-600 dark:text-emerald-400 font-medium">协议就绪</span>';
+                const hours = Math.floor(diff / 36e5);
+                if (hours < 1) return `剩余 ${Math.floor(diff / 6e4)}分钟`;
+                if (hours < 24) return `剩余 ${hours}小时`;
+                return `剩余 ${Math.floor(diff / 864e5)}天`;
+            }
             if (!exp) return '-';
             const d = new Date(exp);
             const now = new Date();
