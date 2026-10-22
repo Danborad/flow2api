@@ -185,8 +185,18 @@ class LoadBalancer:
         available_tokens = []
         filtered_reasons = {}
         required_tier = get_required_paygate_tier_for_model(model)
+        from datetime import datetime, timezone
+        now_utc = datetime.now(timezone.utc)
 
         for token in active_tokens:
+            # 过滤已失效的旧账号 (无有效 Cookie 且旧 AT 已过期)
+            is_cookie_mode = bool(token.google_cookies and ("OSID" in token.google_cookies or "__Secure-OSID" in token.google_cookies))
+            if not is_cookie_mode and token.at_expires:
+                exp_dt = token.at_expires if getattr(token.at_expires, "tzinfo", None) else token.at_expires.replace(tzinfo=timezone.utc)
+                if exp_dt <= now_utc:
+                    filtered_reasons[token.id] = "旧凭据已过期 (需重新同步)"
+                    continue
+
             normalized_tier = normalize_user_paygate_tier(token.user_paygate_tier)
             if model and not supports_model_for_tier(model, normalized_tier):
                 filtered_reasons[token.id] = '账号等级不足，需要 ' + get_paygate_tier_label(required_tier)

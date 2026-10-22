@@ -828,53 +828,77 @@ async def get_tokens(token: str = Depends(verify_admin_token)):
             return value.replace(tzinfo=timezone.utc)
         return value.astimezone(timezone.utc)
 
-    return [{
-        "id": row.get("id"),
-        "st": row.get("st"),  # Session Token for editing
-        "at": row.get("at"),  # Access Token for editing (从ST转换而来)
-        "at_expires": to_iso(row.get("at_expires")) if row.get("at_expires") else None,  # 🆕 AT过期时间
-        "at_expired": bool(normalize_dt(row.get("at_expires")) and normalize_dt(row.get("at_expires")) <= now),
-        "at_expiring_within_1h": bool(
-            normalize_dt(row.get("at_expires"))
-            and normalize_dt(row.get("at_expires")) > now
-            and (normalize_dt(row.get("at_expires")) - now).total_seconds() < 3600
-        ),
-        "token": row.get("at"),  # 兼容前端 token.token 的访问方式
-        "email": row.get("email"),
-        "name": row.get("name"),
-        "remark": row.get("remark"),
-        "is_active": bool(row.get("is_active")),
-        "created_at": to_iso(row.get("created_at")) if row.get("created_at") else None,
-        "last_used_at": to_iso(row.get("last_used_at")) if row.get("last_used_at") else None,
-        "use_count": row.get("use_count"),
-        "credits": row.get("credits"),  # 🆕 余额
-        "user_paygate_tier": row.get("user_paygate_tier"),
-        "current_project_id": row.get("current_project_id"),  # 🆕 项目ID
-        "current_project_name": row.get("current_project_name"),  # 🆕 项目名称
-        "captcha_proxy_url": row.get("captcha_proxy_url") or "",
-        "extension_route_key": row.get("extension_route_key") or "",
-        "protocol_mode": row.get("protocol_mode") or "session",
-        "google_cookies": row.get("google_cookies") or "",
-        "login_account": row.get("login_account") or "",
-        "login_password": row.get("login_password") or "",
-        "proxy_url": row.get("proxy_url") or "",
-        "auto_refresh_enabled": bool(row.get("auto_refresh_enabled", True)),
-        "refresh_interval_minutes": row.get("refresh_interval_minutes") or 120,
-        "last_st_refresh_at": to_iso(row.get("last_st_refresh_at")) if row.get("last_st_refresh_at") else None,
-        "last_st_refresh_result": row.get("last_st_refresh_result") or "",
-        "image_enabled": bool(row.get("image_enabled")),
-        "video_enabled": bool(row.get("video_enabled")),
-        "image_concurrency": row.get("image_concurrency"),
-        "video_concurrency": row.get("video_concurrency"),
-        "image_count": row.get("image_count", 0),
-        "video_count": row.get("video_count", 0),
-        "error_count": row.get("error_count", 0),
-        "today_error_count": row.get("today_error_count", 0),
-        "consecutive_error_count": row.get("consecutive_error_count", 0),
-        "last_error_at": to_iso(row.get("last_error_at")) if row.get("last_error_at") else None,
-        "ban_reason": row.get("ban_reason"),
-        "banned_at": to_iso(row.get("banned_at")) if row.get("banned_at") else None,
-    } for row in token_rows]  # 直接返回数组,兼容前端
+    res_list = []
+    from ..services.browser_cookie_utils import cookie_pairs_for_url
+    for row in token_rows:
+        raw_cookies = row.get("google_cookies") or ""
+        has_osid = False
+        has_sid = False
+        if raw_cookies:
+            try:
+                pairs = cookie_pairs_for_url(raw_cookies, "https://flow.google.com/projects")
+                c_names = {p[0] for p in pairs}
+                has_osid = bool(c_names & {"OSID", "__Secure-OSID"})
+                has_sid = bool(c_names & {"SID", "HSID", "SSID", "APISID", "SAPISID", "__Secure-1PSID", "__Secure-3PSID"})
+            except Exception:
+                pass
+
+        has_valid_cookie = bool(has_osid and has_sid)
+        at_val = row.get("at") or ""
+        is_cookie_auth = bool(has_valid_cookie and (at_val == "flow-frontend-cookie" or row.get("protocol_mode") == "protocol"))
+
+        item = {
+            "id": row.get("id"),
+            "st": row.get("st"),
+            "at": row.get("at"),
+            "at_expires": to_iso(row.get("at_expires")) if row.get("at_expires") else None,
+            "at_expired": bool(normalize_dt(row.get("at_expires")) and normalize_dt(row.get("at_expires")) <= now),
+            "at_expiring_within_1h": bool(
+                normalize_dt(row.get("at_expires"))
+                and normalize_dt(row.get("at_expires")) > now
+                and (normalize_dt(row.get("at_expires")) - now).total_seconds() < 3600
+            ),
+            "token": row.get("at"),
+            "email": row.get("email"),
+            "name": row.get("name"),
+            "remark": row.get("remark"),
+            "is_active": bool(row.get("is_active")),
+            "created_at": to_iso(row.get("created_at")) if row.get("created_at") else None,
+            "last_used_at": to_iso(row.get("last_used_at")) if row.get("last_used_at") else None,
+            "use_count": row.get("use_count"),
+            "credits": row.get("credits"),
+            "user_paygate_tier": row.get("user_paygate_tier"),
+            "current_project_id": row.get("current_project_id"),
+            "current_project_name": row.get("current_project_name"),
+            "captcha_proxy_url": row.get("captcha_proxy_url") or "",
+            "extension_route_key": row.get("extension_route_key") or "",
+            "protocol_mode": row.get("protocol_mode") or "session",
+            "google_cookies": row.get("google_cookies") or "",
+            "login_account": row.get("login_account") or "",
+            "login_password": row.get("login_password") or "",
+            "proxy_url": row.get("proxy_url") or "",
+            "auto_refresh_enabled": bool(row.get("auto_refresh_enabled", True)),
+            "refresh_interval_minutes": row.get("refresh_interval_minutes") or 120,
+            "last_st_refresh_at": to_iso(row.get("last_st_refresh_at")) if row.get("last_st_refresh_at") else None,
+            "last_st_refresh_result": row.get("last_st_refresh_result") or "",
+            "image_enabled": bool(row.get("image_enabled")),
+            "video_enabled": bool(row.get("video_enabled")),
+            "image_concurrency": row.get("image_concurrency"),
+            "video_concurrency": row.get("video_concurrency"),
+            "image_count": row.get("image_count", 0),
+            "video_count": row.get("video_count", 0),
+            "error_count": row.get("error_count", 0),
+            "today_error_count": row.get("today_error_count", 0),
+            "consecutive_error_count": row.get("consecutive_error_count", 0),
+            "last_error_at": to_iso(row.get("last_error_at")) if row.get("last_error_at") else None,
+            "ban_reason": row.get("ban_reason"),
+            "banned_at": to_iso(row.get("banned_at")) if row.get("banned_at") else None,
+            "has_valid_cookie": has_valid_cookie,
+            "is_cookie_auth": is_cookie_auth,
+        }
+        res_list.append(item)
+
+    return res_list
 
 
 @router.post("/api/tokens")
