@@ -56,7 +56,71 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             .catch(err => sendResponse({status: "error", error: err.message}));
         return true; 
     }
+    if (message.type === "execute_flow_generate") {
+        console.log("[Flow2API] 收到原生生成任务:", message.prompt);
+        executeFlowGeneration(message)
+            .then(res => sendResponse({ status: "success", result: res }))
+            .catch(err => sendResponse({ status: "error", error: err.message || String(err) }));
+        return true;
+    }
 });
+
+// ==================== 原生 Flow 页面驱动生成 ====================
+async function executeFlowGeneration(data) {
+    const prompt = data.prompt || "";
+    if (!prompt) throw new Error("提示词不能为空");
+
+    showFloatingBanner(`⚡ Flow2API: 正在执行原生生成: ${prompt.slice(0, 20)}...`, 4000);
+
+    // 1. 查找输入框
+    const inputEl = document.querySelector('flow-prompt-box div[contenteditable="true"]');
+    if (!inputEl) {
+        throw new Error("未能定位到 Flow 提示词输入框 (flow-prompt-box)");
+    }
+
+    // 记录生成前的已有图片集合，便于精准比对出最新生成的图片
+    const existingImages = new Set(Array.from(document.querySelectorAll('img[src*="flow-content.google"]')).map(i => i.src));
+
+    // 2. 聚焦并清空输入
+    inputEl.focus();
+    document.execCommand('selectAll', false, null);
+    document.execCommand('delete', false, null);
+    document.execCommand('insertText', false, prompt);
+    inputEl.dispatchEvent(new Event('input', { bubbles: true }));
+
+    // 3. 等待生成按钮变为启用状态（最多等 3 秒）
+    let genBtn = null;
+    const deadline = Date.now() + 3000;
+    while (Date.now() < deadline) {
+        await new Promise(r => setTimeout(r, 150));
+        genBtn = document.querySelector('flow-prompt-box button.generate-icon-button');
+        if (genBtn && !genBtn.disabled) break;
+    }
+
+    if (!genBtn || genBtn.disabled) {
+        throw new Error("生成按钮未激活或处于禁用状态");
+    }
+
+    // 4. 安全触发生成按钮
+    safeClick(genBtn);
+    console.log("[Flow2API] 已成功点击生成按钮，等待生成结果...");
+
+    // 5. 监听最新生成的图片出现（最多等待 60 秒）
+    const waitDeadline = Date.now() + 60000;
+    while (Date.now() < waitDeadline) {
+        await new Promise(r => setTimeout(r, 600));
+        const currentImgs = Array.from(document.querySelectorAll('img[src*="flow-content.google"]')).map(i => i.src);
+        for (const src of currentImgs) {
+            if (!existingImages.has(src) && src.includes('flow-content.google/image/')) {
+                console.log("[Flow2API] 成功捕获到新生成的图片:", src);
+                showFloatingBanner("✅ Flow2API: 图片生成成功！", 3000);
+                return { success: true, url: src };
+            }
+        }
+    }
+
+    throw new Error("等待 Flow 生成超时 (60s)");
+}
 
 // ==================== 2. 通用交互辅助函数 ====================
 function safeClick(element) {

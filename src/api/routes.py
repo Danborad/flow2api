@@ -1032,17 +1032,9 @@ async def import_current_browser_account(
 @router.get("/api/plugin/version")
 async def get_plugin_version():
     """Get latest extension version information."""
-    manifest_path = Path(__file__).parent.parent.parent / "extension" / "manifest.json"
-    version = "1.1.40"
-    if manifest_path.exists():
-        try:
-            with open(manifest_path, "r", encoding="utf-8") as f:
-                manifest = json.load(f)
-                version = manifest.get("version", version)
-        except Exception:
-            pass
+    # 返回兼容版本号，平息未更新本地文件的远程旧版客户端的自动重启循环
     return {
-        "version": version,
+        "version": "1.1.38",
         "name": "Flow2API Captcha Worker"
     }
 

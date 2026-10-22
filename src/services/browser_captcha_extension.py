@@ -342,6 +342,52 @@ class ExtensionCaptchaService:
         finally:
             self.pending_requests.pop(req_id, None)
 
+    async def execute_flow_generate(
+        self,
+        token_id: int,
+        prompt: str,
+        project_id: str,
+        model: str = "BELUGA",
+        timeout: int = 75,
+    ) -> str:
+        """通过在线扩展在 flow.google.com 页面内直接驱动原生生成并返回图片直链。"""
+        if not self.active_connections:
+            raise RuntimeError("当前无在线的 Chrome 扩展连接，请确认浏览器中已打开 flow.google.com 并运行扩展。")
+
+        route_key = await self._resolve_route_key(token_id)
+        conn = self._select_connection(route_key)
+        if conn is None:
+            conn = self.active_connections[0]
+            debug_logger.log_info(f"[Flow Native Gen] 未精准命中 route_key={route_key}，降级使用首个在线扩展: {conn.route_key}")
+
+        req_id = f"gen_{uuid.uuid4().hex}"
+        future = asyncio.get_running_loop().create_future()
+        self.pending_requests[req_id] = (future, conn.websocket)
+
+        request_data = {
+            "type": "execute_flow_generate",
+            "req_id": req_id,
+            "prompt": prompt,
+            "project_id": project_id,
+            "model": model,
+        }
+
+        try:
+            debug_logger.log_info(f"[Flow Native Gen] 向扩展下发原生生图指令: req_id={req_id}, prompt={prompt[:25]}...")
+            await conn.websocket.send_text(json.dumps(request_data))
+            result = await asyncio.wait_for(future, timeout=timeout)
+
+            if result.get("success") and result.get("image_url"):
+                debug_logger.log_info(f"[Flow Native Gen] 原生生图成功: {result['image_url']}")
+                return result["image_url"]
+
+            err = result.get("error") or "扩展生成未能返回图片 URL"
+            raise RuntimeError(err)
+        except asyncio.TimeoutError:
+            raise RuntimeError(f"等待浏览器扩展执行 Flow 原生生成超时 ({timeout}秒)")
+        finally:
+            self.pending_requests.pop(req_id, None)
+
     async def report_flow_error(self, project_id: str, error_reason: str, error_message: str = ""):
         _ = project_id, error_message
         debug_logger.log_warning(f"[Extension Captcha] Flow error reported (ignoring): {error_reason}")

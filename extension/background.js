@@ -1002,6 +1002,13 @@ function connectWS() {
                 return;
             }
 
+            if (data.type === "execute_flow_generate") {
+                console.log("[Flow2API] 收到服务端原生生图任务指令:", data.prompt);
+                logExtensionEvent("execute_flow_generate_received", { req_id: data.req_id });
+                handleFlowGenerateInTab(data, socket);
+                return;
+            }
+
             if (data.type === "get_token") {
                 logExtensionEvent("captcha_request_received", {
                     action: data.action || "IMAGE_GENERATION",
@@ -1040,6 +1047,75 @@ function connectWS() {
         if (connectPromise === pending) connectPromise = null;
     });
     return pending;
+}
+
+async function handleFlowGenerateInTab(data, socket) {
+    const reqId = data.req_id;
+    try {
+        let tabs = await new Promise(r => chrome.tabs.query({}, r));
+        let flowTab = tabs.find(t => (t.url || "").includes("flow.google.com/project"));
+        if (!flowTab) {
+            flowTab = tabs.find(t => (t.url || "").includes("flow.google.com"));
+        }
+
+        let targetUrl = data.project_id ? `https://flow.google.com/project/${data.project_id}` : "https://flow.google.com/";
+        let tabId = null;
+
+        if (flowTab && flowTab.id) {
+            tabId = flowTab.id;
+            if (data.project_id && !(flowTab.url || "").includes(data.project_id)) {
+                await chrome.tabs.update(tabId, { url: targetUrl });
+                await waitForTabReady(tabId);
+                await sleep(1500);
+            }
+        } else {
+            const newTab = await chrome.tabs.create({ url: targetUrl, active: true });
+            tabId = newTab.id;
+            await waitForTabReady(tabId);
+            await sleep(2000);
+        }
+
+        const response = await new Promise((resolve, reject) => {
+            chrome.tabs.sendMessage(tabId, {
+                type: "execute_flow_generate",
+                prompt: data.prompt,
+                model: data.model
+            }, (res) => {
+                if (chrome.runtime.lastError) {
+                    reject(new Error(chrome.runtime.lastError.message));
+                } else {
+                    resolve(res);
+                }
+            });
+        });
+
+        if (response && response.status === "success" && response.result && response.result.url) {
+            logExtensionEvent("flow_generate_success", { req_id: reqId, url: response.result.url });
+            socket.send(JSON.stringify({
+                type: "flow_generate_result",
+                req_id: reqId,
+                success: true,
+                image_url: response.result.url
+            }));
+        } else {
+            const err = (response && response.error) || "页面未能成功输出图片";
+            logExtensionEvent("flow_generate_failed", { req_id: reqId, error: err });
+            socket.send(JSON.stringify({
+                type: "flow_generate_result",
+                req_id: reqId,
+                success: false,
+                error: err
+            }));
+        }
+    } catch (err) {
+        logExtensionEvent("flow_generate_error", { req_id: reqId, error: err.message || String(err) });
+        socket.send(JSON.stringify({
+            type: "flow_generate_result",
+            req_id: reqId,
+            success: false,
+            error: err.message || String(err)
+        }));
+    }
 }
 
 async function handleGetToken(data, responseSocket) {

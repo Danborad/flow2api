@@ -1731,6 +1731,44 @@ class FlowClient:
                 perf_trace["final_success_attempt"] = retry_attempt + 1
                 return result, session_id, perf_trace
             except Exception as e:
+                err_str = str(e).lower()
+                # 若遇到 401 (旧 OAuth AT 失效) 且当前连接了扩展，自动无缝切换到 Flow 原生直交通道
+                if ("401" in err_str or "unauthenticated" in err_str or "invalid authentication" in err_str) and config.captcha_method == "extension":
+                    debug_logger.log_info(f"[IMAGE] 上游返回 401 鉴权失效，准备自动通过在线扩展调用 Flow 原生生成通道...")
+                    try:
+                        ext_service = await ExtensionCaptchaService.get_instance(self.db)
+                        if ext_service.active_connections:
+                            if progress_callback is not None:
+                                await progress_callback("flow_native_generating", 60)
+                            native_img_url = await ext_service.execute_flow_generate(
+                                token_id=token_id or 0,
+                                prompt=prompt,
+                                project_id=project_id,
+                                model=model_name
+                            )
+                            if native_img_url:
+                                native_result = {
+                                    "imagePanels": [
+                                        {
+                                            "generatedImages": [
+                                                {
+                                                    "encodedImage": native_img_url,
+                                                    "fifeUrl": native_img_url,
+                                                    "media": {"name": str(uuid.uuid4())}
+                                                }
+                                            ]
+                                        }
+                                    ],
+                                    "url": native_img_url
+                                }
+                                attempt_trace["success"] = True
+                                attempt_trace["duration_ms"] = int((time.time() - attempt_started_at) * 1000)
+                                perf_trace["generation_attempts"].append(attempt_trace)
+                                perf_trace["final_success_attempt"] = retry_attempt + 1
+                                return native_result, session_id, perf_trace
+                    except Exception as fallback_err:
+                        debug_logger.log_warning(f"[IMAGE] Flow 原生生成降级失败: {fallback_err}")
+
                 last_error = e
                 attempt_trace["success"] = False
                 attempt_trace["error"] = str(e)[:240]
