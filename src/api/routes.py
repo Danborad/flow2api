@@ -902,6 +902,7 @@ async def import_current_browser_account(
             except Exception:
                 pass
 
+        existing = None
         route_key = (request.extension_route_key or "").strip()
         # 优先通过插件唯一的 extension_route_key 绑定到对应的账号 Token
         if not email and route_key:
@@ -911,17 +912,25 @@ async def import_current_browser_account(
                     email = existing_token.email
                     break
 
+        if email and not existing:
+            existing = existing_by_email.get(email.lower())
+
         # 如果依然没有 email，若系统仅有唯一 Token 则自动绑定，否则提示在 Flow 页面中登录
         if not email:
             if len(existing_by_email) == 1:
                 email = list(existing_by_email.keys())[0]
+                existing = existing_by_email.get(email)
             else:
                 raise HTTPException(status_code=400, detail="未能识别当前 Google 账号邮箱，请确保在 Flow 页面中已登录账号")
 
-        if not existing:
-            existing = existing_by_email.get(email)
+        if existing is None and email:
+            existing = existing_by_email.get(email.lower())
+
         project_id = (request.project_id or "").strip() or None
         project_name = (request.project_name or "").strip() or None
+        if not project_id and existing and existing.current_project_id:
+            project_id = existing.current_project_id
+            project_name = existing.current_project_name
         if project_id and not re.fullmatch(
             r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}",
             project_id,
