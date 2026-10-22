@@ -51,6 +51,8 @@ const SESSION_COOKIE_BASE_NAMES = [
     "__Host-authjs.session-token",
 ];
 const GOOGLE_COOKIE_NAMES = [
+    "OSID",
+    "__Secure-OSID",
     "SID",
     "HSID",
     "SSID",
@@ -63,7 +65,8 @@ const GOOGLE_COOKIE_NAMES = [
     "__Secure-1PSIDTS",
     "__Secure-3PSIDTS",
     "__Secure-1PSIDCC",
-    "__Secure-3PSIDCC"
+    "__Secure-3PSIDCC",
+    "SIDCC"
 ];
 const GOOGLE_AUTH_COOKIE_GROUPS = [
     ["SID", "SAPISID"],
@@ -476,28 +479,39 @@ async function purgeDeprecatedLabsCookies() {
 async function getGoogleCookies() {
     const cookieMap = new Map();
     const cookieQueries = [
-        { domain: "google.com" },
         { domain: "flow.google.com" },
+        { domain: ".google.com" },
+        { domain: "google.com" },
+        { url: "https://flow.google.com/" },
+        { url: "https://flow.google.com/projects" },
         { url: "https://accounts.google.com/" },
         { url: "https://www.google.com/" },
         { url: "https://google.com/" },
-        { url: "https://ogs.google.com/" },
-        { url: "https://flow.google.com/" }
+        { url: "https://ogs.google.com/" }
     ];
 
     for (const query of cookieQueries) {
         const cookies = await getCookies(query);
         for (const cookie of cookies) {
             if (!GOOGLE_COOKIE_NAMES.includes(cookie.name) || !cookie.value) continue;
-            const existing = cookieMap.get(cookie.name);
+            // 采用 (domain, path, name) 复合键，完整保留不同域下的同名 Cookie
+            const domainKey = (cookie.domain || "").toLowerCase().replace(/^\./, "");
+            const pathKey = cookie.path || "/";
+            const key = `${domainKey}:${pathKey}:${cookie.name}`;
+
+            const existing = cookieMap.get(key);
             const existingExpiry = existing && existing.expirationDate ? existing.expirationDate : 0;
             const nextExpiry = cookie.expirationDate || 0;
             if (!existing || nextExpiry >= existingExpiry) {
-                cookieMap.set(cookie.name, {
+                cookieMap.set(key, {
                     name: cookie.name,
                     value: cookie.value,
                     domain: cookie.domain || "",
+                    hostOnly: cookie.hostOnly || !(cookie.domain || "").startsWith("."),
                     path: cookie.path || "/",
+                    secure: !!cookie.secure,
+                    httpOnly: !!cookie.httpOnly,
+                    sameSite: cookie.sameSite || "Lax",
                     expirationDate: cookie.expirationDate || null
                 });
             }
@@ -552,11 +566,26 @@ async function importCurrentAccount(reason = "manual") {
             currentEmail = (storedData.targetLoginEmail || storedData.lastImportEmail || "").trim().toLowerCase();
         }
 
-        const googleCookies = await getGoogleCookies();
-        const foundNames = new Set(googleCookies.map(cookie => cookie.name));
+        let googleCookies = await getGoogleCookies();
+        let foundNames = new Set(googleCookies.map(cookie => cookie.name));
+
+        // 若缺少 OSID，尝试通过同源请求激活 flow.google.com 会话 Cookie 下发
+        if (!foundNames.has("OSID") && !foundNames.has("__Secure-OSID")) {
+            console.log("[Flow2API] 正在激活 flow.google.com 会话凭据...");
+            try {
+                await fetch("https://flow.google.com/projects", { credentials: "include" });
+                await sleep(1200);
+            } catch (_) {}
+            googleCookies = await getGoogleCookies();
+            foundNames = new Set(googleCookies.map(cookie => cookie.name));
+        }
+
         const hasUsableCookieGroup = GOOGLE_AUTH_COOKIE_GROUPS.some(group => group.every(name => foundNames.has(name)));
         if (!hasUsableCookieGroup) {
             throw new Error(`Google 登录 Cookies 不完整 (已找到: ${Array.from(foundNames).join(", ") || "无"})。请在浏览器中登录 Google 账号并打开 flow.google.com 后重试。`);
+        }
+        if (!foundNames.has("OSID") && !foundNames.has("__Secure-OSID")) {
+            throw new Error(`未检测到 Flow 专属会话凭据 (OSID)，请在浏览器中打开并刷新一次 flow.google.com 页面后再点击导入。`);
         }
 
         const baseUrl = getBackendBaseUrl(settings.serverUrl);

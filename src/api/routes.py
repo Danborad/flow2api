@@ -1053,7 +1053,7 @@ async def get_plugin_version():
     """Get latest extension version information."""
     # 固定返回 1.1.38 兼容版本号，避免未更新文件的远程客户端陷入重启死循环
     return {
-        "version": "1.1.47",
+        "version": "1.1.48",
         "name": "Flow2API Captcha Worker"
     }
 
