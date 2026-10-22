@@ -1,7 +1,7 @@
 """API routes for OpenAI-compatible and Gemini generateContent endpoints."""
 
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 import logging
 from typing import Any, Dict, List, Optional
 import base64
