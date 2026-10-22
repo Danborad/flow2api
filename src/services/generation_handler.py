@@ -1629,6 +1629,7 @@ class GenerationHandler:
         stream: bool = False,
         base_url_override: Optional[str] = None,
         video_media_id: Optional[str] = None,
+        target_token_id: Optional[int] = None,
     ) -> AsyncGenerator:
         """统一生成入口
 
@@ -1715,26 +1716,44 @@ class GenerationHandler:
                 role="assistant"
             )
 
-        # 2. 选择Token
-        debug_logger.log_info(f"[GENERATION] 正在选择可用Token...")
+        # 2. 选择Token (支持指定账号测试)
+        debug_logger.log_info(f"[GENERATION] 正在选择可用Token (target_token_id={target_token_id})...")
         token_select_started_at = time.time()
 
-        if generation_type == "image":
-            token = await self.load_balancer.select_token(
-                for_image_generation=True,
-                model=model,
-                reserve=False,
-                enforce_concurrency_filter=False,
-                track_pending=True,
-            )
+        if target_token_id:
+            token = await self.token_manager.get_token(target_token_id)
+            if not token:
+                error_msg = f"指定的测试账号 (ID: {target_token_id}) 不存在"
+                debug_logger.log_error(f"[GENERATION] {error_msg}")
+                if stream:
+                    yield self._create_stream_chunk(f"错误: {error_msg}\n")
+                yield self._create_error_response(error_msg, status_code=400)
+                return
+            if not token.is_active:
+                error_msg = f"指定的测试账号 ({token.email}) 已被禁用"
+                debug_logger.log_error(f"[GENERATION] {error_msg}")
+                if stream:
+                    yield self._create_stream_chunk(f"错误: {error_msg}\n")
+                yield self._create_error_response(error_msg, status_code=400)
+                return
+            debug_logger.log_info(f"[GENERATION] ✅ 已指定账号测试: ID={token.id}, Email={token.email}")
         else:
-            token = await self.load_balancer.select_token(
-                for_video_generation=True,
-                model=model,
-                reserve=False,
-                enforce_concurrency_filter=False,
-                track_pending=True,
-            )
+            if generation_type == "image":
+                token = await self.load_balancer.select_token(
+                    for_image_generation=True,
+                    model=model,
+                    reserve=False,
+                    enforce_concurrency_filter=False,
+                    track_pending=True,
+                )
+            else:
+                token = await self.load_balancer.select_token(
+                    for_video_generation=True,
+                    model=model,
+                    reserve=False,
+                    enforce_concurrency_filter=False,
+                    track_pending=True,
+                )
         perf_trace["token_select_ms"] = int((time.time() - token_select_started_at) * 1000)
 
         if not token:
@@ -1844,6 +1863,8 @@ class GenerationHandler:
                 attempted_token_ids = {primary_token_id}
                 fallback_attempt = 0
                 fallback_log_state = None
+                if target_token_id:
+                    image_fallback_attempts = 0
                 while True:
                     generation_result = self._create_generation_result()
                     response_state = self._create_response_state()

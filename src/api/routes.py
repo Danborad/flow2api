@@ -99,6 +99,7 @@ class NormalizedGenerationRequest:
     images: List[bytes]
     messages: Optional[List[ChatMessage]] = None
     video_media_id: Optional[str] = None
+    target_token_id: Optional[int] = None
 
 
 def set_generation_handler(handler: GenerationHandler):
@@ -476,6 +477,15 @@ async def _normalize_openai_request(
     request: ChatCompletionRequest,
     raw_request: Optional[Request] = None,
 ) -> NormalizedGenerationRequest:
+    target_token_id = None
+    if raw_request:
+        raw_tid = raw_request.headers.get("x-target-token-id") or raw_request.query_params.get("token_id")
+        if raw_tid:
+            try:
+                target_token_id = int(raw_tid)
+            except Exception:
+                pass
+
     if request.messages:
         prompt, images, video_media_id = await _extract_prompt_and_images_from_openai_messages(
             request.messages
@@ -493,6 +503,7 @@ async def _normalize_openai_request(
             images=images,
             messages=request.messages,
             video_media_id=video_media_id,
+            target_token_id=target_token_id,
         )
 
     if request.contents:
@@ -545,6 +556,7 @@ async def _collect_non_stream_result(
     images: List[bytes],
     base_url_override: Optional[str] = None,
     video_media_id: Optional[str] = None,
+    target_token_id: Optional[int] = None,
 ) -> str:
     handler = _ensure_generation_handler()
     result = None
@@ -555,6 +567,7 @@ async def _collect_non_stream_result(
         stream=False,
         base_url_override=base_url_override,
         video_media_id=video_media_id,
+        target_token_id=target_token_id,
     ):
         result = chunk
 
@@ -784,6 +797,7 @@ async def _iterate_openai_stream(
         stream=True,
         base_url_override=base_url_override,
         video_media_id=normalized.video_media_id,
+        target_token_id=normalized.target_token_id,
     ):
         if chunk.startswith("data: "):
             yield chunk
@@ -1295,6 +1309,7 @@ async def create_chat_completion(
                     normalized.images,
                     base_url_override=request_base_url,
                     video_media_id=normalized.video_media_id,
+                    target_token_id=normalized.target_token_id,
                 )
             )
         )
@@ -1330,6 +1345,7 @@ async def generate_content(
                     normalized.images,
                     base_url_override=request_base_url,
                     video_media_id=normalized.video_media_id,
+                    target_token_id=normalized.target_token_id,
                 )
             )
         )
