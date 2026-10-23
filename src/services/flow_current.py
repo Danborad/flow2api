@@ -6,6 +6,7 @@ Implements all current flow.google.com RPCs based on the cookie-first migration 
 from __future__ import annotations
 
 import base64
+import hashlib
 import json
 import random
 import re
@@ -140,21 +141,23 @@ class CurrentFlowClientMixin:
     ) -> Tuple[Dict[str, Any], str]:
         """通过 as29s 获取媒体详细信息 (图片 / 视频 URL)。"""
         jar = self._get_token_cookie_jar(token_obj)
-        argument = [media_name]
+        proj = project_id or getattr(token_obj, "current_project_id", None)
+        argument = [media_name, [None, None, None, None, None, proj]] if proj else [media_name]
         payload, rotated_cookies = await self.frontend_transport.execute_rpc(
             cookie_jar=jar,
             rpc_id="as29s",
             argument=argument,
-            project_id=project_id,
+            project_id=proj,
             proxy=proxy or getattr(token_obj, "proxy_url", None),
         )
 
         payload_str = json.dumps(payload)
-        m_url = re.search(r'https://flow-content\.google/[^\s"\'\\]+', payload_str)
-        media_url = m_url.group(0) if m_url else ""
+        m_vid = re.search(r'https://flow-content\.google/video/[^\s"\'\\]+', payload_str)
+        m_any = re.search(r'https://flow-content\.google/[^\s"\'\\]+', payload_str)
+        raw_url = (m_vid.group(0) if m_vid else (m_any.group(0) if m_any else "")).replace("\\u0026", "&").replace("\\", "")
         return {
             "name": media_name,
-            "url": media_url,
+            "url": raw_url,
             "raw": payload,
         }, rotated_cookies
 
@@ -421,6 +424,23 @@ class CurrentFlowClientMixin:
 
     # ==================== 7. 视频生成与轮询 ====================
 
+    def _derive_media_id_from_seed(self, seed_str: str) -> str:
+        """根据前端 _.QWa 算法由大写 UUID seed 确定性派生小写 UUID v4 media_id。"""
+        h = hashlib.sha256(seed_str[:64].encode("utf-8")).hexdigest()[:32]
+        chars = list(h)
+        chars[12] = "4"
+        chars[16] = format((int(chars[16], 16) & 3) | 8, "x")
+        s = "".join(chars)
+        return f"{s[:8]}-{s[8:12]}-{s[12:16]}-{s[16:20]}-{s[20:32]}"
+
+    def _map_video_aspect_ratio_enum(self, aspect_ratio: str) -> int:
+        ar = (aspect_ratio or "").upper()
+        if "SQUARE" in ar or ar == "1:1":
+            return 0
+        if "PORTRAIT" in ar or "9:16" in ar or "9_16" in ar or "3:4" in ar or "3_4" in ar:
+            return 1
+        return 2
+
     async def submit_video_generation_rpc(
         self,
         token_obj: Any,
@@ -442,17 +462,52 @@ class CurrentFlowClientMixin:
         }
         rpc_id = rpc_map.get(mode, "YhhmEf")
         prompt = params.get("prompt", "")
+        model_key = params.get("model_key", "veo_3_1_t2v_fast")
+        aspect_ratio = params.get("aspect_ratio", "VIDEO_ASPECT_RATIO_LANDSCAPE")
+        aspect_enum = self._map_video_aspect_ratio_enum(aspect_ratio)
 
+        seed1 = str(uuid.uuid4()).upper()
+        seed2 = str(uuid.uuid4()).upper()
+        batch_uuid = str(uuid.uuid4()).upper()
+        derived_media_id = self._derive_media_id_from_seed(seed1)
+
+        h = [None, None, [[[prompt]]]]
+        metadata = [None, None, None, None, seed1, seed2]
         context_header = [
             None, 22, None, None, None, project_id, None, None, None, None,
             [recaptcha_token, 1]
         ]
+        batch_info = [batch_uuid, 1]
 
-        argument = [
-            prompt,
-            context_header,
-            params.get("raw_params", None),
-        ]
+        if mode == "start":
+            start_id = params.get("start_media_id", "")
+            inner_item = [h, model_key, aspect_enum, None, [None, start_id], metadata]
+        elif mode == "start_end":
+            start_id = params.get("start_media_id", "")
+            end_id = params.get("end_media_id", "")
+            inner_item = [h, model_key, aspect_enum, None, [None, start_id], [None, end_id], metadata]
+        elif mode == "references":
+            ref_ids = params.get("reference_media_ids", [])
+            ref_list = [[None, r_id] for r_id in ref_ids if r_id]
+            inner_item = [h, ref_list, model_key, aspect_enum, None, metadata]
+        elif mode == "extend":
+            vid_id = params.get("video_media_id", "")
+            inner_item = [[None, vid_id], h, model_key, aspect_enum, None, metadata]
+        elif mode == "upsample":
+            vid_id = params.get("video_media_id", "")
+            resolution = str(params.get("resolution", ""))
+            res_enum = 2 if "4K" in resolution.upper() else 1
+            inner_item = [None] * 32
+            inner_item[0] = [None, vid_id]
+            inner_item[2] = aspect_enum
+            inner_item[3] = random.randint(1, 99999)
+            inner_item[4] = metadata
+            inner_item[6] = res_enum
+            inner_item[31] = model_key
+        else:
+            inner_item = [h, model_key, aspect_enum, None, metadata]
+
+        argument = [[inner_item], context_header, batch_info]
 
         payload, rotated_cookies = await self.frontend_transport.execute_rpc(
             cookie_jar=jar,
@@ -463,19 +518,29 @@ class CurrentFlowClientMixin:
             timeout=75,
         )
 
-        resp_text = json.dumps(payload)
-        m_ops = re.findall(r'operations/[0-9a-zA-Z_-]+', resp_text)
-        op_id = m_ops[0] if m_ops else f"operations/{uuid.uuid4().hex}"
-        media_id = str(uuid.uuid4())
+        # 提取返回的 media_id 和 workflow_id
+        media_id = derived_media_id
+        scene_id = str(uuid.uuid4())
+        try:
+            if isinstance(payload, list) and len(payload) > 3 and isinstance(payload[3], list) and payload[3]:
+                first_media = payload[3][0]
+                if isinstance(first_media, list) and len(first_media) >= 3:
+                    media_id = str(first_media[0] or derived_media_id)
+                    scene_id = str(first_media[2] or scene_id)
+        except Exception:
+            pass
 
         operations = [
             {
-                "operation": {"name": op_id},
-                "name": op_id,
+                "operation": {"name": media_id},
+                "name": media_id,
                 "mediaName": media_id,
                 "projectId": project_id,
+                "sceneId": scene_id,
+                "status": "MEDIA_GENERATION_STATUS_PENDING",
             }
         ]
+        debug_logger.log_info(f"[RPC {rpc_id}] 视频任务提交成功: media_id={media_id}, model={model_key}")
         return operations, rotated_cookies
 
     async def check_video_status_rpc(
@@ -485,25 +550,94 @@ class CurrentFlowClientMixin:
         project_id: Optional[str] = None,
         proxy: Optional[str] = None,
     ) -> Tuple[Dict[str, Any], str]:
-        """通过 jwpduf 轮询视频生成状态。"""
+        """通过 jwpduf 轮询视频生成状态，成功时自动调用 as29s 补齐视频直链。"""
         jar = self._get_token_cookie_jar(token_obj)
-        op_names = [op.get("name") or op.get("operation", {}).get("name") for op in operations if op]
-        argument = [op_names]
+        media_ids = []
+        proj = project_id or getattr(token_obj, "current_project_id", None)
+        for op in operations or []:
+            if not isinstance(op, dict):
+                continue
+            m_id = op.get("mediaName") or op.get("name") or (op.get("operation") or {}).get("name")
+            if m_id:
+                media_ids.append(str(m_id))
+            if not proj and op.get("projectId"):
+                proj = str(op.get("projectId"))
+
+        if not media_ids:
+            raise ValueError("check_video_status_rpc 缺少有效的 media_id")
+
+        argument = [None, None, [[m_id] for m_id in media_ids]]
 
         payload, rotated_cookies = await self.frontend_transport.execute_rpc(
             cookie_jar=jar,
             rpc_id="jwpduf",
             argument=argument,
-            project_id=project_id,
+            project_id=proj,
             proxy=proxy or getattr(token_obj, "proxy_url", None),
         )
 
-        resp_text = json.dumps(payload)
-        is_done = ("SUCCESS" in resp_text or "COMPLETED" in resp_text or "DONE" in resp_text)
-        video_urls = re.findall(r"https://flow-content\.google/[^\s\"\'\\]+", resp_text)
+        # 解析 jwpduf 返回的媒体列表 payload[2]
+        media_items = []
+        if isinstance(payload, list) and len(payload) > 2 and isinstance(payload[2], list):
+            media_items = payload[2]
+
+        normalized_media_list = []
+        for idx, m_id in enumerate(media_ids):
+            item = media_items[idx] if idx < len(media_items) else (media_items[0] if media_items else None)
+            status_str = "MEDIA_GENERATION_STATUS_PROCESSING"
+            video_url = ""
+            item_proj = proj or ""
+
+            if isinstance(item, list) and len(item) > 5:
+                m_id = str(item[0] or m_id)
+                item_proj = str(item[1] or item_proj)
+                meta_block = item[5]
+                if isinstance(meta_block, list) and len(meta_block) > 8:
+                    st_arr = meta_block[8]
+                    code = st_arr[0] if isinstance(st_arr, list) and st_arr else st_arr
+                    if code == 3:
+                        status_str = "MEDIA_GENERATION_STATUS_SUCCESSFUL"
+                    elif code in (4, 5, 7):
+                        status_str = "MEDIA_GENERATION_STATUS_FAILED"
+                    else:
+                        status_str = "MEDIA_GENERATION_STATUS_PROCESSING"
+
+                item_str = json.dumps(item)
+                m_vurl = re.search(r'https://flow-content\.google/video/[^\s"\'\\]+', item_str)
+                if m_vurl:
+                    video_url = m_vurl.group(0).replace("\\u0026", "&").replace("\\", "")
+
+            if status_str == "MEDIA_GENERATION_STATUS_SUCCESSFUL" and not video_url:
+                try:
+                    media_detail, rot2 = await self.get_media_rpc(
+                        token_obj=token_obj,
+                        media_name=m_id,
+                        project_id=item_proj or proj,
+                        proxy=proxy,
+                    )
+                    if rot2:
+                        rotated_cookies = rot2
+                    video_url = media_detail.get("url") or ""
+                except Exception as me:
+                    debug_logger.log_warning(f"[RPC as29s] 补取视频直链异常: {me}")
+
+            normalized_media_list.append({
+                "name": m_id,
+                "projectId": item_proj,
+                "mediaMetadata": {
+                    "mediaStatus": {
+                        "mediaGenerationStatus": status_str,
+                    }
+                },
+                "video": {
+                    "fifeUrl": video_url,
+                    "url": video_url,
+                    "generatedVideo": {
+                        "aspectRatio": "VIDEO_ASPECT_RATIO_LANDSCAPE",
+                    }
+                }
+            })
 
         return {
-            "done": is_done,
-            "operations": payload,
-            "video_url": video_urls[0] if video_urls else None,
+            "media": normalized_media_list,
         }, rotated_cookies

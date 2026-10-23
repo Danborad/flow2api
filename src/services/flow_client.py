@@ -992,6 +992,42 @@ class FlowClient(CurrentFlowClientMixin):
             return f"chrome{max(lower_or_equal)}"
         return fallback
 
+    async def _resolve_cookie_token_obj(
+        self,
+        token_id: Optional[int] = None,
+        project_id: Optional[str] = None,
+    ) -> Optional[Any]:
+        if not self.db:
+            return None
+        try:
+            if token_id:
+                t = await self.db.get_token(token_id)
+                if t:
+                    return t
+            if project_id:
+                all_tokens = await self.db.get_all_tokens()
+                for t in all_tokens:
+                    if t.current_project_id == project_id:
+                        return t
+                for t in all_tokens:
+                    projs = await self.db.get_projects_by_token(t.id)
+                    if any(p.project_id == project_id for p in projs):
+                        return t
+        except Exception:
+            pass
+        return None
+
+    def _extract_prompt_from_video_request(self, req0: Dict[str, Any]) -> str:
+        ti = req0.get("textInput") or {}
+        if isinstance(ti, dict):
+            if ti.get("prompt"):
+                return str(ti["prompt"])
+            sp = ti.get("structuredPrompt") or {}
+            parts = sp.get("parts") or []
+            if parts and isinstance(parts[0], dict):
+                return str(parts[0].get("text") or "")
+        return ""
+
     async def _make_video_api_request(
         self,
         url: str,
@@ -1002,7 +1038,102 @@ class FlowClient(CurrentFlowClientMixin):
         token_id: Optional[int] = None,
         action: str = "VIDEO_GENERATION",
     ) -> Dict[str, Any]:
-        """视频 API 加硬截止，避免 curl_cffi 底层偶发卡住导致整条请求悬挂。"""
+        """视频 API 加硬截止，Cookie-first 账号自动路由至 flow.google.com 原生 batchexecute RPC。"""
+        # 1. 解析 project_id 与 token_obj
+        eff_proj = project_id
+        if not eff_proj and isinstance(json_data, dict):
+            eff_proj = (json_data.get("clientContext") or {}).get("projectId")
+            if not eff_proj and isinstance(json_data.get("media"), list) and json_data["media"]:
+                eff_proj = json_data["media"][0].get("projectId")
+
+        token_obj = await self._resolve_cookie_token_obj(token_id=token_id, project_id=eff_proj)
+        is_cookie_mode = bool(
+            (not at or at == "flow-frontend-cookie")
+            or (token_obj and (getattr(token_obj, "protocol_mode", "") == "protocol" or getattr(token_obj, "google_cookies", "")))
+        )
+
+        if is_cookie_mode and token_obj:
+            # A. 视频状态轮询: jwpduf
+            if "batchCheckAsyncVideoGenerationStatus" in url:
+                res, rotated_cookies = await self.check_video_status_rpc(
+                    token_obj=token_obj,
+                    operations=json_data.get("media") or [],
+                    project_id=eff_proj,
+                )
+                if self.db and rotated_cookies and rotated_cookies != getattr(token_obj, "google_cookies", ""):
+                    await self.db.update_token_if_cookie_matches(
+                        token_obj.id,
+                        expected_cookies=token_obj.google_cookies,
+                        google_cookies=rotated_cookies,
+                    )
+                return res
+
+            # B. 视频生成提交: YhhmEf / eb1hJf / nprQif / MZZa6b / fZytfe / p0UkFb
+            req0 = (json_data.get("requests") or [{}])[0]
+            recaptcha_token = ((json_data.get("clientContext") or {}).get("recaptchaContext") or {}).get("token", "")
+            prompt_str = self._extract_prompt_from_video_request(req0)
+            model_key = req0.get("videoModelKey") or "veo_3_1_t2v_fast"
+            aspect_ratio = req0.get("aspectRatio") or "VIDEO_ASPECT_RATIO_LANDSCAPE"
+
+            if "StartAndEndImage" in url:
+                mode = "start_end"
+            elif "StartImage" in url:
+                mode = "start"
+            elif "ReferenceImages" in url:
+                mode = "references"
+            elif "ExtendVideo" in url:
+                mode = "extend"
+            elif "UpsampleVideo" in url:
+                mode = "upsample"
+            else:
+                mode = "text"
+
+            params: Dict[str, Any] = {
+                "prompt": prompt_str,
+                "model_key": model_key,
+                "aspect_ratio": aspect_ratio,
+                "start_media_id": (req0.get("startImage") or {}).get("mediaId", ""),
+                "end_media_id": (req0.get("endImage") or {}).get("mediaId", ""),
+                "reference_media_ids": [
+                    r.get("mediaId") for r in (req0.get("referenceImages") or []) if isinstance(r, dict) and r.get("mediaId")
+                ],
+                "video_media_id": (req0.get("videoInput") or {}).get("mediaId", ""),
+                "resolution": req0.get("resolution", ""),
+            }
+
+            try:
+                ops, rotated_cookies = await self.submit_video_generation_rpc(
+                    token_obj=token_obj,
+                    project_id=eff_proj or getattr(token_obj, "current_project_id", ""),
+                    mode=mode,
+                    params=params,
+                    recaptcha_token=recaptcha_token,
+                )
+            except Exception as vid_err:
+                if "UNUSUAL_ACTIVITY" in str(vid_err) or "SNlM0e" in str(vid_err):
+                    debug_logger.log_warning(f"[VIDEO RPC] 首次提交遇到 {vid_err}，尝试通过本地纯净 CDP 换取验证码重试...")
+                    from .local_cdp_generator import mint_clean_recaptcha_via_local_cdp
+                    clean_bundle = await mint_clean_recaptcha_via_local_cdp("VIDEO_GENERATION")
+                    if clean_bundle and clean_bundle.get("token"):
+                        recaptcha_token = clean_bundle["token"]
+                    ops, rotated_cookies = await self.submit_video_generation_rpc(
+                        token_obj=token_obj,
+                        project_id=eff_proj or getattr(token_obj, "current_project_id", ""),
+                        mode=mode,
+                        params=params,
+                        recaptcha_token=recaptcha_token,
+                    )
+                else:
+                    raise
+
+            if self.db and rotated_cookies and rotated_cookies != getattr(token_obj, "google_cookies", ""):
+                await self.db.update_token_if_cookie_matches(
+                    token_obj.id,
+                    expected_cookies=token_obj.google_cookies,
+                    google_cookies=rotated_cookies,
+                )
+            return {"operations": ops}
+
         raw_body = json.dumps(json_data, ensure_ascii=False, separators=(",", ":"))
         headers = self._build_realistic_video_submit_headers()
         headers.update(self._build_labs_request_context_headers(project_id))
@@ -2458,69 +2589,8 @@ class FlowClient(CurrentFlowClientMixin):
         aspect_ratio: str,
     ) -> None:
         """按当前上游真实页面顺序补齐视频提交前的最小首方初始化/telemetry链路。"""
-        account_id = at[:16] if at else None
-        page_url = self._build_flow_project_page_url(project_id)
-        session_create_time = time.strftime("%Y-%m-%dT%H:%M:%S.000Z", time.gmtime())
-
-        st = await self._get_token_st_by_id(token_id)
-        if st:
-            null_meta_input = self._encode_trpc_input({
-                "json": None,
-                "meta": {"values": ["undefined"]},
-            })
-            labs_get_paths = [
-                f"general.fetchUserPreferences?input={null_meta_input}",
-                f"videoFx.getFlowAppConfig?input={null_meta_input}",
-                f"videoFx.getUserSettings?input={null_meta_input}",
-            ]
-            for path_with_query in labs_get_paths:
-                try:
-                    await self._labs_trpc_get_with_st(path_with_query, st=st, project_id=project_id)
-                except Exception as e:
-                    debug_logger.log_warning(f"[VIDEO WARMUP] Labs GET 失败 ({path_with_query}): {e}")
-
-            labs_batch_log_payload = {
-                "json": {
-                    "appEvents": [{
-                        "event": "PAGE_VIEW",
-                        "eventProperties": [
-                            {"key": "URL", "stringValue": page_url},
-                            {"key": "USER_AGENT", "stringValue": self._get_effective_request_user_agent(st[:16])},
-                            {"key": "IS_DESKTOP"},
-                        ],
-                        "activeExperiments": [],
-                        "eventMetadata": {"sessionId": session_id},
-                        "eventTime": session_create_time,
-                    }]
-                }
-            }
-            try:
-                await self._labs_trpc_post_with_st(
-                    "general.submitBatchLog",
-                    payload=labs_batch_log_payload,
-                    st=st,
-                    project_id=project_id,
-                )
-            except Exception as e:
-                debug_logger.log_warning(f"[VIDEO WARMUP] Labs submitBatchLog 失败: {e}")
-
-        try:
-            await self._aisandbox_request(
-                "POST",
-                ":checkAppAvailability",
-                at=None,
-                raw_body=self._compact_json_dumps({"clientContext": {"tool": "PINHOLE"}}),
-                api_key=self.FLOW_PUBLIC_API_KEY,
-                account_id=account_id,
-            )
-        except Exception as e:
-            debug_logger.log_warning(f"[VIDEO WARMUP] checkAppAvailability 失败: {e}")
-
-        debug_logger.log_info(
-            f"[VIDEO WARMUP] 当前视频最小初始化链路已补齐: project_id={project_id}, "
-            f"session_id={session_id}, model_key={model_key}, aspect_ratio={aspect_ratio}, "
-            f"user_paygate_tier={user_paygate_tier}, prompt_len={len(prompt or '')}"
-        )
+        # Cookie-first 模式下，旧 Labs tRPC 接口已退役，直接跳过预热
+        return
 
     def _video_aspect_ratio_to_agent_aspect_ratio(self, aspect_ratio: str) -> str:
         mapping = {
@@ -4023,10 +4093,37 @@ class FlowClient(CurrentFlowClientMixin):
         media_name: str,
         media_url_type: str = "MEDIA_URL_TYPE_FULL_MEDIA",
     ) -> Optional[str]:
-        """通过 trpc media.getMediaUrlRedirect 获取媒体实际访问 URL。"""
+        """获取媒体实际访问 URL (Cookie-first 优先调用 as29s RPC)。"""
         normalized_media_name = str(media_name or "").strip()
         if not normalized_media_name:
             return None
+
+        if self.db:
+            try:
+                all_tokens = await self.db.get_all_tokens()
+                target_tok = None
+                for t in all_tokens:
+                    if st and t.st == st:
+                        target_tok = t
+                        break
+                if not target_tok and all_tokens:
+                    target_tok = all_tokens[0]
+                if target_tok and (getattr(target_tok, "protocol_mode", "") == "protocol" or getattr(target_tok, "google_cookies", "")):
+                    detail, rotated_cookies = await self.get_media_rpc(
+                        token_obj=target_tok,
+                        media_name=normalized_media_name,
+                        project_id=target_tok.current_project_id,
+                    )
+                    if rotated_cookies and rotated_cookies != getattr(target_tok, "google_cookies", ""):
+                        await self.db.update_token_if_cookie_matches(
+                            target_tok.id,
+                            expected_cookies=target_tok.google_cookies,
+                            google_cookies=rotated_cookies,
+                        )
+                    if detail and detail.get("url"):
+                        return detail["url"]
+            except Exception as e:
+                debug_logger.log_warning(f"[as29s Redirect] 获取媒体直链异常: {e}")
 
         url = (
             f"{self.labs_base_url}/trpc/media.getMediaUrlRedirect"

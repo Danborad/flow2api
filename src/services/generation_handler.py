@@ -1533,13 +1533,19 @@ class GenerationHandler:
             or (operation.get("operation") or {}).get("name")
         )
 
-        video_url = ""
-        if media_name and getattr(token, "st", None):
-            video_url = await self.flow_client.get_media_url_redirect(
-                token.st,
-                media_name,
-                media_url_type="MEDIA_URL_TYPE_FULL_MEDIA",
-            ) or ""
+        video_url = str(video_info.get("fifeUrl") or video_info.get("url") or "").strip()
+        if (not video_url or not getattr(token, "google_cookies", None)) and media_name and getattr(token, "st", None):
+            try:
+                redirected = await self.flow_client.get_media_url_redirect(
+                    token.st,
+                    media_name,
+                    media_url_type="MEDIA_URL_TYPE_FULL_MEDIA",
+                ) or ""
+                if redirected:
+                    video_url = redirected
+            except Exception:
+                if not video_url:
+                    raise
 
         import re as _re
         uuid_match = _re.search(r"/video/([0-9a-f-]{36})", video_url or "")
