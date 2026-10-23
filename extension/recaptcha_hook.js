@@ -1,4 +1,13 @@
 (() => {
+    // 拦截并剥离 Google Flow 前端 kUa 埋下的 extension_hijack_detected 毒丸
+    if (!window.__origObjectAssign) {
+        window.__origObjectAssign = Object.assign;
+        Object.assign = function(target, ...sources) {
+            const cleanSources = sources.map(s => (s && typeof s === "object" && s.action === "extension_hijack_detected") ? {} : s);
+            return window.__origObjectAssign.call(this, target, ...cleanSources);
+        };
+    }
+
     const slot = "__flow2apiRealRecaptchaExecute";
     if (Object.prototype.hasOwnProperty.call(window, slot)) return;
 

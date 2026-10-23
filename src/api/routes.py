@@ -940,6 +940,10 @@ async def _reconcile_browser_account_core(
         last_st_refresh_result="success",
         extension_route_key=route_key or (existing.extension_route_key if existing else None),
     )
+    if project_id:
+        common_kwargs["current_project_id"] = project_id
+    if project_name:
+        common_kwargs["current_project_name"] = project_name
     if request.proxy_url:
         common_kwargs["proxy_url"] = request.proxy_url
 
@@ -959,6 +963,22 @@ async def _reconcile_browser_account_core(
                 await handler.token_manager.db.update_token(existing.id, **common_kwargs)
         else:
             await handler.token_manager.db.update_token(existing.id, **common_kwargs)
+
+        if project_id and hasattr(handler.token_manager.db, "get_projects_by_token"):
+            try:
+                from ..core.models import Project
+                existing_projs = await handler.token_manager.db.get_projects_by_token(existing.id)
+                if not any(p.project_id == project_id for p in existing_projs):
+                    await handler.token_manager.db.add_project(
+                        Project(
+                            token_id=existing.id,
+                            project_id=project_id,
+                            project_name=project_name or "Flow Project",
+                            is_active=True,
+                        )
+                    )
+            except Exception as pe:
+                debug_logger.log_warning(f"[RECONCILE] 同步项目记录跳过: {pe}")
     else:
         new_token = await handler.token_manager.add_token(
             project_id=project_id,

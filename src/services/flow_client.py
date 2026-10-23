@@ -1381,13 +1381,41 @@ class FlowClient(CurrentFlowClientMixin):
         token_obj: Optional[Any] = None,
     ) -> str:
         """上传图片,返回mediaId (Cookie-first 优先)"""
+        if token_obj is None and self.db and project_id:
+            try:
+                all_tokens = await self.db.get_all_tokens()
+                for t in all_tokens:
+                    if t.current_project_id == project_id:
+                        token_obj = t
+                        break
+                if token_obj is None:
+                    for t in all_tokens:
+                        projs = await self.db.get_projects_by_token(t.id)
+                        if any(p.project_id == project_id for p in projs):
+                            token_obj = t
+                            break
+            except Exception:
+                pass
+
         if token_obj and (getattr(token_obj, "protocol_mode", "") == "protocol" or at == "flow-frontend-cookie" or getattr(token_obj, "google_cookies", "")):
             recaptcha_token, _ = await self._get_recaptcha_token(
                 project_id or "", action="UPLOAD_IMAGE", token_id=getattr(token_obj, "id", None)
             )
-            res, rotated_cookies = await self.upload_image_rpc(
-                token_obj, image_bytes, project_id or "", recaptcha_token=recaptcha_token or ""
-            )
+            try:
+                res, rotated_cookies = await self.upload_image_rpc(
+                    token_obj, image_bytes, project_id or "", recaptcha_token=recaptcha_token or ""
+                )
+            except Exception as up_err:
+                if "UNUSUAL_ACTIVITY" in str(up_err):
+                    from .local_cdp_generator import mint_clean_recaptcha_via_local_cdp
+                    clean_bundle = await mint_clean_recaptcha_via_local_cdp("UPLOAD_IMAGE")
+                    if clean_bundle and clean_bundle.get("token"):
+                        recaptcha_token = clean_bundle["token"]
+                    res, rotated_cookies = await self.upload_image_rpc(
+                        token_obj, image_bytes, project_id or "", recaptcha_token=recaptcha_token or ""
+                    )
+                else:
+                    raise
             if self.db and rotated_cookies and rotated_cookies != getattr(token_obj, "google_cookies", ""):
                 await self.db.update_token_if_cookie_matches(
                     token_obj.id,
@@ -1690,19 +1718,47 @@ class FlowClient(CurrentFlowClientMixin):
                             recaptcha_token=recaptcha_token,
                             image_inputs=image_inputs,
                         )
-                        if self.db and rotated_cookies and rotated_cookies != getattr(token_obj, "google_cookies", ""):
-                            await self.db.update_token_if_cookie_matches(
-                                token_obj.id,
-                                expected_cookies=token_obj.google_cookies,
-                                google_cookies=rotated_cookies,
-                            )
-                        attempt_trace["success"] = True
-                        attempt_trace["duration_ms"] = int((time.time() - attempt_started_at) * 1000)
-                        perf_trace["generation_attempts"].append(attempt_trace)
-                        perf_trace["final_success_attempt"] = retry_attempt + 1
-                        return result, session_id, perf_trace
                     except Exception as rpc_err:
-                        debug_logger.log_warning(f"[IMAGE] ogiZ0b 原生 RPC 异常: {rpc_err}，尝试自动化降级...")
+                        err_msg = str(rpc_err)
+                        # 如果遇到 UNUSUAL_ACTIVITY，说明扩展返回的 recaptcha_token 带有毒丸，尝试使用本地纯净 CDP 换取新 token 重试
+                        if "UNUSUAL_ACTIVITY" in err_msg or "SNlM0e" in err_msg:
+                            debug_logger.log_warning(f"[IMAGE] ogiZ0b 首次调用遇到 {err_msg}，尝试净化重试...")
+                            from .local_cdp_generator import mint_clean_recaptcha_via_local_cdp
+                            clean_bundle = await mint_clean_recaptcha_via_local_cdp("IMAGE_GENERATION")
+                            if clean_bundle and clean_bundle.get("token"):
+                                recaptcha_token = clean_bundle["token"]
+                            if "SNlM0e" in err_msg and token_id:
+                                try:
+                                    from .browser_captcha_extension import ExtensionCaptchaService
+                                    ext_svc = await ExtensionCaptchaService.get_instance(self.db)
+                                    await ext_svc.request_account_sync(token_id, reason="snlm0e_missing")
+                                    await asyncio.sleep(1.5)
+                                    token_obj = await self.db.get_token(token_id) or token_obj
+                                except Exception:
+                                    pass
+                            result, session_id, rotated_cookies = await self.generate_image_rpc(
+                                token_obj=token_obj,
+                                project_id=project_id,
+                                prompt=prompt,
+                                model_name=model_name,
+                                aspect_ratio=aspect_ratio,
+                                recaptcha_token=recaptcha_token,
+                                image_inputs=image_inputs,
+                            )
+                        else:
+                            raise
+
+                    if self.db and rotated_cookies and rotated_cookies != getattr(token_obj, "google_cookies", ""):
+                        await self.db.update_token_if_cookie_matches(
+                            token_obj.id,
+                            expected_cookies=token_obj.google_cookies,
+                            google_cookies=rotated_cookies,
+                        )
+                    attempt_trace["success"] = True
+                    attempt_trace["duration_ms"] = int((time.time() - attempt_started_at) * 1000)
+                    perf_trace["generation_attempts"].append(attempt_trace)
+                    perf_trace["final_success_attempt"] = retry_attempt + 1
+                    return result, session_id, perf_trace
 
                 if not at or at == "flow-frontend-cookie":
                     raise Exception("HTTP Error 401: No OAuth Access Token for protocol token")
@@ -1721,123 +1777,6 @@ class FlowClient(CurrentFlowClientMixin):
                 perf_trace["final_success_attempt"] = retry_attempt + 1
                 return result, session_id, perf_trace
             except Exception as e:
-                err_str = str(e).lower()
-                # 若遇到 401 (旧 OAuth AT 失效) 且当前连接了扩展，自动无缝切换到 Flow 原生通道
-                if ("401" in err_str or "unauthenticated" in err_str or "invalid authentication" in err_str or "上游响应异常" in err_str or "no oauth" in err_str):
-                    debug_logger.log_info(f"[IMAGE] 鉴权失效或上游未返回，准备尝试本地 CDP 及扩展原生通道...")
-
-                    # 二级降级：优先尝试本地活跃 CDP 实例直连生成 (9224 / 9222)
-                    for cdp_port in (9224, 9222):
-                        try:
-                            from .local_cdp_generator import execute_local_cdp_generate
-                            cdp_img_url = await execute_local_cdp_generate(prompt=prompt, port=cdp_port, timeout=75)
-                            if cdp_img_url:
-                                m_name = str(uuid.uuid4())
-                                native_result = {
-                                    "media": [
-                                        {
-                                            "name": m_name,
-                                            "image": {
-                                                "generatedImage": {
-                                                    "fifeUrl": cdp_img_url,
-                                                    "url": cdp_img_url,
-                                                }
-                                            }
-                                        }
-                                    ],
-                                    "imagePanels": [
-                                        {
-                                            "generatedImages": [
-                                                {
-                                                    "encodedImage": cdp_img_url,
-                                                    "fifeUrl": cdp_img_url,
-                                                    "media": {"name": m_name}
-                                                }
-                                            ]
-                                        }
-                                    ],
-                                    "url": cdp_img_url
-                                }
-                                attempt_trace["success"] = True
-                                attempt_trace["duration_ms"] = int((time.time() - attempt_started_at) * 1000)
-                                perf_trace["generation_attempts"].append(attempt_trace)
-                                perf_trace["final_success_attempt"] = retry_attempt + 1
-                                return native_result, session_id, perf_trace
-                        except Exception as cdp_err:
-                            debug_logger.log_info(f"[IMAGE] 本地 CDP 端口 {cdp_port} 跳过: {cdp_err}")
-
-                    # 三级降级：通过在线 Chrome 扩展生成
-                    try:
-                        from .browser_captcha_extension import ExtensionCaptchaService
-                        ext_service = await ExtensionCaptchaService.get_instance(self.db)
-                        if ext_service.active_connections:
-                            if progress_callback is not None:
-                                await progress_callback("flow_native_generating", 60)
-                            native_img_url = await ext_service.execute_flow_generate(
-                                token_id=token_id or 0,
-                                prompt=prompt,
-                                project_id=project_id,
-                                model=model_name
-                            )
-                            if native_img_url:
-                                m_name = str(uuid.uuid4())
-                                native_result = {
-                                    "media": [
-                                        {
-                                            "name": m_name,
-                                            "image": {
-                                                "generatedImage": {
-                                                    "fifeUrl": native_img_url,
-                                                    "url": native_img_url,
-                                                }
-                                            }
-                                        }
-                                    ],
-                                    "imagePanels": [
-                                        {
-                                            "generatedImages": [
-                                                {
-                                                    "encodedImage": native_img_url,
-                                                    "fifeUrl": native_img_url,
-                                                    "media": {"name": m_name}
-                                                }
-                                            ]
-                                        }
-                                    ],
-                                    "url": native_img_url
-                                }
-                                attempt_trace["success"] = True
-                                attempt_trace["duration_ms"] = int((time.time() - attempt_started_at) * 1000)
-                                perf_trace["generation_attempts"].append(attempt_trace)
-                                perf_trace["final_success_attempt"] = retry_attempt + 1
-                                return native_result, session_id, perf_trace
-                    except Exception as fallback_err:
-                        print(f"[IMAGE_DEBUG] Flow 扩展原生生成降级失败: {fallback_err}")
-                        debug_logger.log_warning(f"[IMAGE] Flow 扩展原生生成降级失败: {fallback_err}")
-                    try:
-                        token_obj = await self.db.get_token(token_id)
-                        if token_obj and token_obj.google_cookies:
-                            debug_logger.log_info(f"[IMAGE] 准备通过 FlowBatchExecuteClient 协议生成...")
-                            from .flow_batchexecute import FlowBatchExecuteClient
-                            batch_client = FlowBatchExecuteClient()
-                            batch_result = await batch_client.generate_image(
-                                raw_cookies=token_obj.google_cookies,
-                                project_id=project_id,
-                                prompt=prompt,
-                                model_name=model_name,
-                                aspect_ratio=aspect_ratio,
-                                recaptcha_token=recaptcha_token or ""
-                            )
-                            if batch_result and batch_result.get("url"):
-                                attempt_trace["success"] = True
-                                attempt_trace["duration_ms"] = int((time.time() - attempt_started_at) * 1000)
-                                perf_trace["generation_attempts"].append(attempt_trace)
-                                perf_trace["final_success_attempt"] = retry_attempt + 1
-                                return batch_result, session_id, perf_trace
-                    except Exception as batch_err:
-                        print(f"[IMAGE_DEBUG] FlowBatchExecute 协议生成降级失败: {batch_err}")
-                        debug_logger.log_warning(f"[IMAGE] FlowBatchExecute 协议生成降级失败: {batch_err}")
-
                 last_error = e
                 attempt_trace["success"] = False
                 attempt_trace["error"] = str(e)[:240]
@@ -4677,6 +4616,27 @@ class FlowClient(CurrentFlowClientMixin):
                     next_fingerprint = dict(fingerprint)
                     next_fingerprint["project_id"] = project_id
                     self._set_request_fingerprint(next_fingerprint)
+
+                    # 如果扩展实时捎带了最新 google_cookies 和 wiz_at，立即同步
+                    fresh_cookies = next_fingerprint.get("google_cookies")
+                    if fresh_cookies and token_id and self.db and "OSID" in fresh_cookies:
+                        try:
+                            await self.db.update_token(token_id, google_cookies=fresh_cookies)
+                        except Exception:
+                            pass
+                        wiz_at = next_fingerprint.get("wiz_at")
+                        if wiz_at:
+                            try:
+                                from .flow_cookies import FlowCookieJar
+                                self.frontend_transport.seed_bootstrap(
+                                    FlowCookieJar(fresh_cookies),
+                                    bl=next_fingerprint.get("wiz_bl") or "",
+                                    f_sid=next_fingerprint.get("wiz_sid") or "",
+                                    xsrf_at=wiz_at,
+                                    project_id=project_id,
+                                )
+                            except Exception:
+                                pass
                 else:
                     self._set_request_fingerprint(None)
                 if token:

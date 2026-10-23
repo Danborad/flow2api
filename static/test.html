@@ -244,6 +244,14 @@
                                 <option value="10">时长: 10 秒</option>
                             </select>
                         </div>
+
+                        <!-- 生成数量 (1~4张并发) -->
+                        <select id="chatSelectCount" class="bg-white dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700 rounded px-2.5 py-1 text-xs font-semibold text-slate-700 dark:text-zinc-300 focus:outline-none cursor-pointer" title="单次并发生成的图片数量 (1~4张)">
+                            <option value="1">×1 张</option>
+                            <option value="2">×2 张 (并发)</option>
+                            <option value="3">×3 张 (并发)</option>
+                            <option value="4">×4 张 (并发)</option>
+                        </select>
                     </div>
 
                     <button onclick="handleChatSend()" id="btnChatSend" class="px-4 py-1.5 rounded-lg bg-slate-900 dark:bg-zinc-100 text-white dark:text-zinc-900 text-xs font-medium hover:bg-slate-800 dark:hover:bg-zinc-200 transition-colors shrink-0 ml-auto shadow-sm">
@@ -450,22 +458,37 @@
                     `;
                 } else {
                     const isVid = m.mediaType === 'video';
+                    const urls = Array.isArray(m.urls) && m.urls.length ? m.urls : (m.url ? [m.url] : []);
+                    const isMulti = urls.length > 1;
                     return `
                         <div class="flex items-start gap-2.5 chat-bubble-enter">
-                            <div class="max-w-[95%] sm:max-w-xl bg-white border border-slate-200/90 rounded-2xl p-3 shadow-sm space-y-2.5">
-                                <div class="relative rounded-xl overflow-hidden bg-black">
-                                    ${isVid ? `
-                                        <video src="${m.url}" controls class="w-full max-h-[380px] object-cover"></video>
-                                    ` : `
-                                        <img src="${m.url}" class="w-full max-h-[380px] object-cover cursor-pointer hover:opacity-95" onclick="openMediaPreview('${m.url}', 'image')">
-                                    `}
+                            <div class="max-w-[95%] sm:max-w-2xl bg-white dark:bg-[#121214] border border-slate-200/90 dark:border-[#27272a] rounded-2xl p-3 shadow-sm space-y-2.5">
+                                <div class="${isMulti ? 'grid grid-cols-1 sm:grid-cols-2 gap-2.5' : ''}">
+                                    ${urls.map((u, idx) => `
+                                        <div class="relative rounded-xl overflow-hidden bg-black group border border-slate-100 dark:border-zinc-800">
+                                            ${isVid ? `
+                                                <video src="${u}" controls class="w-full max-h-[380px] object-cover"></video>
+                                            ` : `
+                                                <img src="${u}" class="w-full ${isMulti ? 'h-52' : 'max-h-[380px]'} object-cover cursor-pointer hover:opacity-95" onclick="openMediaPreview('${u}', 'image')">
+                                            `}
+                                            ${isMulti ? `
+                                                <span class="absolute top-2 left-2 px-1.5 py-0.5 rounded bg-black/70 text-white font-mono text-[10px]">#${idx + 1}</span>
+                                                <div class="absolute bottom-2 right-2 flex items-center gap-1 opacity-90 group-hover:opacity-100">
+                                                    <button onclick="copyToClipboard('${u}')" class="px-2 py-0.5 rounded bg-black/75 text-white text-[10px] hover:bg-black">复制</button>
+                                                    <a href="${u}" download class="px-2 py-0.5 rounded bg-white/90 text-slate-900 text-[10px] font-semibold hover:bg-white">下载</a>
+                                                </div>
+                                            ` : ''}
+                                        </div>
+                                    `).join('')}
                                 </div>
                                 <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs pt-1">
-                                    <span class="text-[11px] text-emerald-600 font-medium">✅ 生成成功 · 耗时 ${m.duration || 0}s</span>
+                                    <span class="text-[11px] text-emerald-600 dark:text-emerald-400 font-medium">✅ 生成成功 (${urls.length} 张) · 耗时 ${m.duration || 0}s</span>
                                     <div class="flex items-center gap-1.5 self-end sm:self-auto">
-                                        <button onclick="quotePrompt('${escapeHtml(m.prompt || '')}')" class="px-2.5 py-1 rounded border border-slate-200 hover:bg-slate-50 text-slate-600 text-xs">引用</button>
-                                        <button onclick="copyToClipboard('${m.url}')" class="px-2.5 py-1 rounded border border-slate-200 hover:bg-slate-50 text-slate-600 text-xs">复制链接</button>
-                                        <a href="${m.url}" download class="px-3 py-1 rounded bg-slate-900 text-white text-xs font-medium inline-block">下载</a>
+                                        <button onclick="quotePrompt('${escapeHtml(m.prompt || '')}')" class="px-2.5 py-1 rounded border border-slate-200 dark:border-zinc-700 hover:bg-slate-50 dark:hover:bg-zinc-800 text-slate-600 dark:text-zinc-300 text-xs">引用</button>
+                                        ${!isMulti && urls[0] ? `
+                                            <button onclick="copyToClipboard('${urls[0]}')" class="px-2.5 py-1 rounded border border-slate-200 dark:border-zinc-700 hover:bg-slate-50 dark:hover:bg-zinc-800 text-slate-600 dark:text-zinc-300 text-xs">复制链接</button>
+                                            <a href="${urls[0]}" download class="px-3 py-1 rounded bg-slate-900 dark:bg-zinc-100 text-white dark:text-zinc-900 text-xs font-medium inline-block">下载</a>
+                                        ` : ''}
                                     </div>
                                 </div>
                             </div>
@@ -485,6 +508,7 @@
             const aspect = $('chatSelectAspect').value;
             const size = $('chatSelectSize').value;
             const duration = $('chatSelectDuration').value;
+            const count = parseInt($('chatSelectCount')?.value || '1', 10) || 1;
             const isVideo = model.includes('Omni');
 
             const s = chatSessions.find(x => x.id === activeChatSessionId);
@@ -495,7 +519,8 @@
 
             const targetTokenId = $('chatSelectToken') ? $('chatSelectToken').value : '';
             const selectedTokenName = targetTokenId ? ($('chatSelectToken').selectedOptions[0]?.text || '') : '';
-            const metaStr = `${aspect} · ${size.toUpperCase()} · ${model}${selectedTokenName ? ' · ' + selectedTokenName : ''}`;
+            const countLabel = count > 1 ? ` · ×${count}张并发` : '';
+            const metaStr = `${aspect} · ${size.toUpperCase()} · ${model}${countLabel}${selectedTokenName ? ' · ' + selectedTokenName : ''}`;
             s.messages = s.messages || [];
             s.messages.push({ role: 'user', content: prompt, meta: metaStr });
             input.value = '';
@@ -506,32 +531,37 @@
             loadingBubble.className = "flex items-start gap-2.5 chat-bubble-enter";
             loadingBubble.id = "chatLoadingBubble";
             loadingBubble.innerHTML = `
-                <div class="max-w-md bg-white border border-slate-200 rounded-xl p-3 shadow-sm flex items-center gap-2.5 text-xs text-slate-600">
-                    <div class="w-4 h-4 border-2 border-slate-900 border-t-transparent rounded-full animate-spin"></div>
-                    <span>正在获取 Token 并提交上游生成中...</span>
+                <div class="max-w-md bg-white dark:bg-[#121214] border border-slate-200 dark:border-[#27272a] rounded-xl p-3 shadow-sm flex items-center gap-2.5 text-xs text-slate-600 dark:text-zinc-300">
+                    <div class="w-4 h-4 border-2 border-slate-900 dark:border-zinc-100 border-t-transparent rounded-full animate-spin"></div>
+                    <span>正在并发提交 ${count} 个生成任务...</span>
                 </div>
             `;
             container.appendChild(loadingBubble);
             container.scrollTop = container.scrollHeight;
 
             $('btnChatSend').disabled = true;
-            $('btnChatSend').textContent = '生成中...';
+            $('btnChatSend').textContent = count > 1 ? `并发生成中(${count})...` : '生成中...';
 
             const startTime = Date.now();
+            const currentRefImg = attachedImageBase64;
             try {
                 let targetModel = model;
-                const requestBody = {
-                    model: targetModel,
-                    messages: [{ role: 'user', content: prompt }],
-                    stream: false,
-                    size: size
+                const buildRequestBody = () => {
+                    const body = {
+                        model: targetModel,
+                        messages: [{ role: 'user', content: prompt }],
+                        stream: false,
+                        size: size,
+                        aspect_ratio: aspect
+                    };
+                    if (currentRefImg) {
+                        body.messages[0].content = [
+                            { type: 'text', text: prompt },
+                            { type: 'image_url', image_url: { url: currentRefImg } }
+                        ];
+                    }
+                    return body;
                 };
-                if (attachedImageBase64) {
-                    requestBody.messages[0].content = [
-                        { type: 'text', text: prompt },
-                        { type: 'image_url', image_url: { url: attachedImageBase64 } }
-                    ];
-                }
 
                 const headers = { 'Content-Type': 'application/json' };
                 if (adminApiKey) {
@@ -541,41 +571,52 @@
                     headers['X-Target-Token-Id'] = targetTokenId;
                 }
 
-                const res = await fetch('/v1/chat/completions', {
-                    method: 'POST',
-                    headers,
-                    body: JSON.stringify(requestBody),
-                    credentials: 'include'
-                });
+                const tasks = Array.from({ length: count }, () =>
+                    fetch('/v1/chat/completions', {
+                        method: 'POST',
+                        headers,
+                        body: JSON.stringify(buildRequestBody()),
+                        credentials: 'include'
+                    }).then(async (res) => {
+                        if (!res.ok) {
+                            const err = await res.json().catch(() => ({}));
+                            throw new Error(err.error?.message || err.detail || res.statusText);
+                        }
+                        const data = await res.json();
+                        const choice = (data.choices && data.choices[0]) || {};
+                        const msgContent = choice.message?.content || '';
+                        const url = data.url || extractUrl(msgContent);
+                        if (!url) throw new Error('未能提取生成的文件 URL');
+                        return url;
+                    })
+                );
 
+                const results = await Promise.allSettled(tasks);
                 const durationSec = ((Date.now() - startTime) / 1000).toFixed(1);
                 loadingBubble.remove();
 
-                if (!res.ok) {
-                    const err = await res.json().catch(() => ({}));
-                    showToast('生成失败: ' + (err.error?.message || err.detail || res.statusText), 'error');
-                    return;
-                }
+                const successUrls = results.filter(r => r.status === 'fulfilled').map(r => r.value);
+                const failedErrors = results.filter(r => r.status === 'rejected').map(r => r.reason?.message || '未知错误');
 
-                const data = await res.json();
-                const choice = (data.choices && data.choices[0]) || {};
-                const msgContent = choice.message?.content || '';
-                const url = data.url || extractUrl(msgContent);
-
-                if (url) {
+                if (successUrls.length > 0) {
                     s.messages.push({
                         role: 'assistant',
                         mediaType: isVideo ? 'video' : 'image',
-                        url: url,
+                        url: successUrls[0],
+                        urls: successUrls,
                         prompt: prompt,
                         duration: durationSec
                     });
                     saveChatSessions();
                     renderCurrentChatMessages();
                     renderChatSessionList();
-                    showToast('生成成功！', 'success');
+                    if (failedErrors.length > 0) {
+                        showToast(`成功 ${successUrls.length} 张，失败 ${failedErrors.length} 张: ${failedErrors[0]}`, 'info', 3500);
+                    } else {
+                        showToast(`成功生成 ${successUrls.length} 张画面！`, 'success');
+                    }
                 } else {
-                    showToast('未能提取生成的文件 URL: ' + msgContent, 'error');
+                    showToast('生成失败: ' + (failedErrors[0] || '请求失败'), 'error');
                 }
             } catch (err) {
                 loadingBubble.remove();

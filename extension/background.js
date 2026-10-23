@@ -66,7 +66,11 @@ const GOOGLE_COOKIE_NAMES = [
     "__Secure-3PSIDTS",
     "__Secure-1PSIDCC",
     "__Secure-3PSIDCC",
-    "SIDCC"
+    "SIDCC",
+    "AEC",
+    "__Secure-BUCKET",
+    "SEARCH_SAMESITE",
+    "NID"
 ];
 const GOOGLE_AUTH_COOKIE_GROUPS = [
     ["SID", "SAPISID"],
@@ -863,11 +867,23 @@ async function mintRecaptchaToken(tabId, action, timeoutMs) {
                         : (navigator.platform && navigator.platform.toLowerCase().includes("linux") ? '"Linux"' : ""),
                     origin: location.origin,
                     referer: location.href,
+                    wiz_at: (window.WIZ_global_data && window.WIZ_global_data.SNlM0e) || "",
+                    wiz_sid: (window.WIZ_global_data && window.WIZ_global_data.FdrFJe) || "",
+                    wiz_bl: (window.WIZ_global_data && window.WIZ_global_data.cfb2h) || "",
                 },
             });
             const wait = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
             try {
+                // 注入 Object.assign 净化补丁，剥离 Google 前端 kUa 埋下的 extension_hijack_detected 毒丸
+                if (!window.__origObjectAssign) {
+                    window.__origObjectAssign = Object.assign;
+                    Object.assign = function(target, ...sources) {
+                        const cleanSources = sources.map(s => (s && typeof s === "object" && s.action === "extension_hijack_detected") ? {} : s);
+                        return window.__origObjectAssign.call(this, target, ...cleanSources);
+                    };
+                }
+
                 if (!(window.grecaptcha && window.grecaptcha.enterprise)) {
                     let trustedScriptUrl = scriptUrlArg;
                     if (window.trustedTypes && window.trustedTypes.createPolicy) {
@@ -907,10 +923,7 @@ async function mintRecaptchaToken(tabId, action, timeoutMs) {
                     new Promise((_, reject) => setTimeout(() => reject(new Error("enterprise.ready timeout")), timeoutArg)),
                 ]);
 
-                const realExecute = window.__flow2apiRealRecaptchaExecute;
-                const tokenPromise = realExecute
-                    ? realExecute(siteKeyArg, { action: actionArg })
-                    : enterprise.execute(siteKeyArg, { action: actionArg });
+                const tokenPromise = enterprise.execute(siteKeyArg, { action: actionArg });
                 const token = await Promise.race([
                     tokenPromise,
                     new Promise((_, reject) => setTimeout(() => reject(new Error("enterprise.execute timeout")), timeoutArg)),
@@ -1328,10 +1341,17 @@ async function handleGetToken(data, responseSocket) {
                     scriptTimeoutMs,
                 );
                 if (scriptResult && scriptResult.ok && scriptResult.token) {
+                    const fp = scriptResult.fingerprint || {};
+                    try {
+                        const latestCookies = await getGoogleCookies();
+                        if (latestCookies && latestCookies.length) {
+                            fp.google_cookies = JSON.stringify(latestCookies);
+                        }
+                    } catch (_) {}
                     successResponse = {
                         status: "success",
                         token: scriptResult.token,
-                        fingerprint: scriptResult.fingerprint || null,
+                        fingerprint: fp,
                     };
                     logExtensionEvent("captcha_mint_success", {
                         attempt,

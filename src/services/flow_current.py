@@ -199,19 +199,22 @@ class CurrentFlowClientMixin:
         elif image_bytes.startswith(b"RIFF") and b"WEBP" in image_bytes[:16]:
             mime = "image/webp"
 
-        data_url = f"data:{mime};base64,{b64_data}"
-        media_uuid = str(uuid.uuid4()).upper()
-
         argument = [
-            data_url,
-            media_uuid,
             [
                 None, 22, None, None, None, project_id, None, None, None, None,
                 [recaptcha_token, 1]
             ],
+            b64_data,
+            mime,
+            True,
+            None,
+            None,
+            None,
+            False,
             filename or f"upload_{int(time.time())}.jpg",
             None,
-            mime,
+            str(uuid.uuid4()).upper(),
+            str(uuid.uuid4()).upper(),
         ]
 
         payload, rotated_cookies = await self.frontend_transport.execute_rpc(
@@ -224,7 +227,7 @@ class CurrentFlowClientMixin:
 
         payload_str = json.dumps(payload)
         m_uuid = re.search(r'[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}', payload_str)
-        media_id = m_uuid.group(0) if m_uuid else media_uuid
+        media_id = m_uuid.group(0) if m_uuid else str(uuid.uuid4())
 
         m_url = re.search(r'https://flow-content\.google/[^\s"\'\\]+', payload_str)
         media_url = m_url.group(0) if m_url else ""
@@ -237,6 +240,18 @@ class CurrentFlowClientMixin:
         }, rotated_cookies
 
     # ==================== 5. 图片生成 (ogiZ0b) ====================
+
+    def _map_aspect_ratio_enum(self, aspect_ratio: str) -> int:
+        ar = (aspect_ratio or "").upper()
+        if "SQUARE" in ar or ar == "1:1":
+            return 1
+        if "PORTRAIT_THREE_FOUR" in ar or "THREE_FOUR" in ar or "3:4" in ar or "3_4" in ar:
+            return 4
+        if "LANDSCAPE_FOUR_THREE" in ar or "FOUR_THREE" in ar or "4:3" in ar or "4_3" in ar:
+            return 5
+        if "PORTRAIT" in ar or "9:16" in ar or "9_16" in ar:
+            return 2
+        return 3
 
     async def generate_image_rpc(
         self,
@@ -260,33 +275,42 @@ class CurrentFlowClientMixin:
         elif model_code in ("nano-banana-pro", "GEM_PIX_2", "GEM_PIX"):
             model_code = "GEM_PIX_2"
 
+        aspect_enum = self._map_aspect_ratio_enum(aspect_ratio)
         job_id = random.randint(1000000000, 2147483647)
         uuid1 = str(uuid.uuid4()).upper()
         uuid2 = str(uuid.uuid4()).upper()
         batch_uuid = str(uuid.uuid4()).upper()
         session_id = f"gen-{int(time.time()*1000)}-{random.randint(1000, 9999)}"
 
-        # 处理参考图
+        # 处理参考图 (protobuf field 3 -> index 2: [[media_id, None, None, None, 1], ...])
         ref_payload = None
         if image_inputs:
             ref_items = []
             for item in image_inputs:
                 m_name = item.get("name") or item.get("media_id") or ""
                 if m_name:
-                    ref_items.append([None, None, m_name])
+                    ref_items.append([m_name, None, None, None, 1])
             if ref_items:
                 ref_payload = ref_items
 
         inner_item = [
-            None, None, None, job_id, 3, model_code, None,
+            None,
+            None,
+            ref_payload,
+            job_id,
+            aspect_enum,
+            model_code,
+            None,
             [
                 None, 22, None, None, None, project_id, None, None, None, None,
                 [recaptcha_token, 1]
             ],
             [[[prompt]]],
-            ref_payload,
-            None, None,
-            uuid1, uuid2
+            None,
+            None,
+            None,
+            uuid1,
+            uuid2,
         ]
 
         argument = [

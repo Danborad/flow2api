@@ -1,171 +1,104 @@
-"""Direct Chrome DevTools Protocol automation for Google Flow native generation.
+"""Clean reCAPTCHA Enterprise token minting & live cookie sync via local Chrome CDP.
 
-Used for local Chrome instances with --remote-debugging-port (e.g. 9222, 9224).
-Provides trusted physical key and mouse events directly to Google Flow canvas.
+Bypasses Google Flow frontend's kUa extension_hijack_detected poison pill by patching
+Object.assign before invoking grecaptcha.enterprise.execute.
+Does NOT click DOM or scrape DOM images — all generation goes through pure HTTP RPC.
 """
 
-import asyncio
+from __future__ import annotations
+
 import json
-import time
-from typing import Optional
+from typing import Any, Dict, List, Optional
 import urllib.request
 import websockets
 
 from ..core.logger import debug_logger
 
 
-async def execute_local_cdp_generate(
-    prompt: str,
-    port: int = 9224,
-    timeout: int = 75,
-) -> Optional[str]:
-    """通过本地 Chrome CDP 端口直接驱动 Google Flow 页面原生生成并返回图片直链。"""
-    try:
-        req = urllib.request.urlopen(f"http://127.0.0.1:{port}/json/list", timeout=2)
-        tabs = json.loads(req.read().decode("utf-8"))
-    except Exception as e:
-        debug_logger.log_info(f"[Local CDP] 端口 {port} 不可用或未启动: {e}")
-        return None
+async def mint_clean_recaptcha_via_local_cdp(
+    action: str = "IMAGE_GENERATION",
+    ports: tuple[int, ...] = (9222, 9224),
+) -> Optional[Dict[str, Any]]:
+    """通过本地 Chrome CDP 端口注入毒丸净化补丁并获取 100% 纯净的 reCAPTCHA Enterprise Token。"""
+    site_key = "6LdsFiUsAAAAAIjVDZcuLhaHiDn5nnHVXVRQGeMV"
+    for port in ports:
+        try:
+            req = urllib.request.urlopen(f"http://127.0.0.1:{port}/json/list", timeout=1.5)
+            tabs = json.loads(req.read().decode("utf-8"))
+        except Exception:
+            continue
 
-    target = None
-    for t in tabs:
-        url = t.get("url", "")
-        if "flow.google.com/project" in url and "404" not in url:
-            target = t
-            break
-
-    if not target:
+        target = None
         for t in tabs:
             url = t.get("url", "")
-            if "flow.google.com" in url and "404" not in url:
+            if "flow.google.com/project" in url and "404" not in url:
                 target = t
                 break
+        if not target:
+            for t in tabs:
+                url = t.get("url", "")
+                if "flow.google.com" in url and "404" not in url:
+                    target = t
+                    break
 
-    if not target or not target.get("webSocketDebuggerUrl"):
-        debug_logger.log_info(f"[Local CDP] 端口 {port} 未找到打开的 Flow 页面")
-        return None
+        if not target or not target.get("webSocketDebuggerUrl"):
+            continue
 
-    ws_url = target["webSocketDebuggerUrl"]
-    debug_logger.log_info(f"[Local CDP] 连接端口 {port} 页面 {target['id']}: {target.get('title')}")
-
-    try:
-        async with websockets.connect(ws_url, max_size=10 * 1024 * 1024) as ws:
-            # 1. 获取已有图片路径
-            msg = {
-                "id": 1,
-                "method": "Runtime.evaluate",
-                "params": {
-                    "expression": """
-                    (() => {
-                        const imgs = Array.from(document.querySelectorAll('img[src*="flow-content.google/image/"]')).map(i => i.src.split('?')[0]);
-                        return Array.from(new Set(imgs));
-                    })()
-                    """,
-                    "returnByValue": True,
-                },
-            }
-            await ws.send(json.dumps(msg))
-            res = json.loads(await ws.recv())
-            existing = set(res.get("result", {}).get("result", {}).get("value") or [])
-
-            # 2. 定位输入框坐标并物理点击聚焦
-            msg = {
-                "id": 2,
-                "method": "Runtime.evaluate",
-                "params": {
-                    "expression": """
-                    (() => {
-                        const el = document.querySelector('flow-prompt-box .ProseMirror') || document.querySelector('.ProseMirror');
-                        if (!el) return null;
-                        const r = el.getBoundingClientRect();
-                        return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
-                    })()
-                    """,
-                    "returnByValue": True,
-                },
-            }
-            await ws.send(json.dumps(msg))
-            res = json.loads(await ws.recv())
-            coords = res.get("result", {}).get("result", {}).get("value")
-            if not coords:
-                debug_logger.log_warning("[Local CDP] 未能定位到 ProseMirror 输入框坐标")
-                return None
-
-            # 物理点击聚焦
-            await ws.send(json.dumps({
-                "id": 3,
-                "method": "Input.dispatchMouseEvent",
-                "params": {"type": "mousePressed", "x": coords["x"], "y": coords["y"], "button": "left", "clickCount": 1},
-            }))
-            await ws.recv()
-            await ws.send(json.dumps({
-                "id": 4,
-                "method": "Input.dispatchMouseEvent",
-                "params": {"type": "mouseReleased", "x": coords["x"], "y": coords["y"], "button": "left", "clickCount": 1},
-            }))
-            await ws.recv()
-
-            # 3. 物理键盘逐字输入
-            for ch in prompt:
+        ws_url = target["webSocketDebuggerUrl"]
+        try:
+            async with websockets.connect(ws_url, max_size=10 * 1024 * 1024) as ws:
+                js_code = f"""
+                (async () => {{
+                    if (!window.__origObjectAssign) {{
+                        window.__origObjectAssign = Object.assign;
+                        Object.assign = function(target, ...sources) {{
+                            const cleanSources = sources.map(s => (s && typeof s === "object" && s.action === "extension_hijack_detected") ? {{}} : s);
+                            return window.__origObjectAssign.call(this, target, ...cleanSources);
+                        }};
+                    }}
+                    if (!(window.grecaptcha && window.grecaptcha.enterprise)) {{
+                        return null;
+                    }}
+                    const token = await window.grecaptcha.enterprise.execute("{site_key}", {{ action: "{action}" }});
+                    const wiz = window.WIZ_global_data || {{}};
+                    return {{
+                        token: token || "",
+                        user_agent: navigator.userAgent || "",
+                        wiz_at: wiz.SNlM0e || "",
+                        wiz_sid: wiz.FdrFJe || "",
+                        wiz_bl: wiz.cfb2h || "",
+                        email: wiz.oPEP7c || "",
+                    }};
+                }})()
+                """
                 await ws.send(json.dumps({
-                    "id": 5,
-                    "method": "Input.dispatchKeyEvent",
-                    "params": {"type": "keyDown", "text": ch, "unmodifiedText": ch},
-                }))
-                await ws.recv()
-                await ws.send(json.dumps({
-                    "id": 6,
-                    "method": "Input.dispatchKeyEvent",
-                    "params": {"type": "keyUp", "text": ch, "unmodifiedText": ch},
-                }))
-                await ws.recv()
-                await asyncio.sleep(0.015)
-
-            await asyncio.sleep(0.3)
-
-            # 4. 物理回车
-            await ws.send(json.dumps({
-                "id": 7,
-                "method": "Input.dispatchKeyEvent",
-                "params": {"type": "rawKeyDown", "windowsVirtualKeyCode": 13, "unmodifiedText": "\r", "text": "\r", "key": "Enter", "code": "Enter"},
-            }))
-            await ws.recv()
-            await ws.send(json.dumps({
-                "id": 8,
-                "method": "Input.dispatchKeyEvent",
-                "params": {"type": "keyUp", "windowsVirtualKeyCode": 13, "key": "Enter", "code": "Enter"},
-            }))
-            await ws.recv()
-            debug_logger.log_info(f"[Local CDP] 物理回车已发送，开始监听图片生成...")
-
-            # 5. 轮询等待新图片
-            deadline = time.time() + timeout
-            while time.time() < deadline:
-                await asyncio.sleep(1.0)
-                msg = {
-                    "id": 9,
+                    "id": 1,
                     "method": "Runtime.evaluate",
                     "params": {
-                        "expression": """
-                        (() => {
-                            const imgs = Array.from(document.querySelectorAll('img[src*="flow-content.google/image/"]')).map(i => i.src);
-                            return imgs;
-                        })()
-                        """,
+                        "expression": js_code,
+                        "awaitPromise": True,
                         "returnByValue": True,
                     },
-                }
-                await ws.send(json.dumps(msg))
+                }))
                 res = json.loads(await ws.recv())
-                current = res.get("result", {}).get("result", {}).get("value") or []
-                for src in current:
-                    clean = src.split("?")[0]
-                    if clean not in existing:
-                        debug_logger.log_info(f"[Local CDP] 捕获到新生成的图片: {src}")
-                        return src
+                val = res.get("result", {}).get("result", {}).get("value")
+                if isinstance(val, dict) and val.get("token"):
+                    # 顺便获取该浏览器最新的 cookies
+                    try:
+                        await ws.send(json.dumps({
+                            "id": 2,
+                            "method": "Network.getCookies",
+                            "params": {"urls": ["https://flow.google.com/", "https://google.com/"]},
+                        }))
+                        c_res = json.loads(await ws.recv())
+                        cookies = c_res.get("result", {}).get("cookies")
+                        if cookies:
+                            val["google_cookies"] = json.dumps(cookies, ensure_ascii=False, separators=(",", ":"))
+                    except Exception:
+                        pass
+                    return val
+        except Exception as e:
+            debug_logger.log_info(f"[Clean CDP Captcha] Port {port} 跳过: {e}")
+            continue
 
-            debug_logger.log_warning(f"[Local CDP] 等待生成超时 ({timeout}s)")
-            return None
-    except Exception as e:
-        debug_logger.log_warning(f"[Local CDP] 执行异常: {e}")
-        return None
+    return None

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
 import random
 import re
@@ -24,6 +25,37 @@ class FlowFrontendTransport:
         self._bootstrap_cache: Dict[str, Tuple[str, str, str, float]] = {}
         self._lock = asyncio.Lock()
 
+    def _cookie_hash(self, cookie_jar: FlowCookieJar) -> str:
+        raw = cookie_jar.export_storage()
+        return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:32]
+
+    def seed_bootstrap(
+        self,
+        cookie_jar: FlowCookieJar,
+        bl: str,
+        f_sid: str,
+        xsrf_at: str,
+        project_id: Optional[str] = None,
+    ) -> None:
+        if not xsrf_at:
+            return
+        now = time.time()
+        exp = now + 600
+        storage_prefix = self._cookie_hash(cookie_jar)
+        self._bootstrap_cache[f"/projects:{storage_prefix}"] = (
+            bl or "boq_labs-ai-sandbox-frontend_20261021.00_p0",
+            f_sid or "",
+            xsrf_at,
+            exp,
+        )
+        if project_id:
+            self._bootstrap_cache[f"/project/{project_id}:{storage_prefix}"] = (
+                bl or "boq_labs-ai-sandbox-frontend_20261021.00_p0",
+                f_sid or "",
+                xsrf_at,
+                exp,
+            )
+
     async def get_bootstrap_data(
         self,
         cookie_jar: FlowCookieJar,
@@ -44,59 +76,65 @@ class FlowFrontendTransport:
             source_path = "/projects"
             target_url = "https://flow.google.com/projects"
 
-        cache_key = f"{source_path}:{cookie_jar.export_storage()[:32]}"
+        storage_prefix = self._cookie_hash(cookie_jar)
+        cache_key = f"{source_path}:{storage_prefix}"
+        fallback_key = f"/projects:{storage_prefix}"
+
         if not force_refresh:
-            cached = self._bootstrap_cache.get(cache_key)
+            cached = self._bootstrap_cache.get(cache_key) or self._bootstrap_cache.get(fallback_key)
             if cached and cached[3] > now:
                 return cached[0], cached[1], cached[2], source_path
 
         async with self._lock:
             if not force_refresh:
-                cached = self._bootstrap_cache.get(cache_key)
+                cached = self._bootstrap_cache.get(cache_key) or self._bootstrap_cache.get(fallback_key)
                 if cached and cached[3] > now:
                     return cached[0], cached[1], cached[2], source_path
 
-            headers = {
-                "Cookie": cookie_jar.get_cookie_header_for_url(target_url),
-                "Referer": "https://flow.google.com/",
-                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
-                "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8",
-                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-            }
+            urls_to_try = [target_url]
+            if target_url != "https://flow.google.com/projects":
+                urls_to_try.append("https://flow.google.com/projects")
 
             loop = asyncio.get_event_loop()
-            kwargs = {
-                "headers": headers,
-                "timeout": 15,
-                "impersonate": "chrome124",
-                "allow_redirects": True,
-            }
-            if proxy:
-                kwargs["proxies"] = {"http": proxy, "https": proxy}
+            m_at = None
+            m_sid = None
+            m_bl = None
 
-            def _fetch():
-                return requests.get(target_url, **kwargs)
+            for try_url in urls_to_try:
+                headers = {
+                    "Cookie": cookie_jar.get_cookie_header_for_url(try_url),
+                    "Referer": "https://flow.google.com/",
+                }
+                kwargs = {
+                    "headers": headers,
+                    "timeout": 15,
+                    "impersonate": "chrome124",
+                    "allow_redirects": True,
+                }
+                if proxy:
+                    kwargs["proxies"] = {"http": proxy, "https": proxy}
 
-            resp = await loop.run_in_executor(None, _fetch)
+                def _fetch(u=try_url, kw=kwargs):
+                    return requests.get(u, **kw)
 
-            # 更新响应中的 Set-Cookie
-            set_cookies = resp.headers.get_list("set-cookie") if hasattr(resp.headers, "get_list") else (resp.headers.get("set-cookie") or [])
-            if set_cookies:
-                cookie_jar.apply_set_cookie(set_cookies, target_url)
+                resp = await loop.run_in_executor(None, _fetch)
 
-            final_url = resp.url or target_url
-            if resp.status_code != 200 or "accounts.google.com" in final_url:
-                raise RuntimeError(f"加载 Flow 页面失败 (HTTP {resp.status_code}, 最终地址: {final_url})")
+                set_cookies = resp.headers.get_list("set-cookie") if hasattr(resp.headers, "get_list") else (resp.headers.get("set-cookie") or [])
+                if set_cookies:
+                    cookie_jar.apply_set_cookie(set_cookies, try_url)
 
-            html = resp.text
+                final_url = resp.url or try_url
+                if resp.status_code != 200 or "accounts.google.com" in final_url:
+                    continue
 
-            m_bl = re.search(r'boq_labs-ai-sandbox-frontend_[A-Za-z0-9_.-]+', html)
-            m_sid = re.search(r'"FdrFJe"\s*:\s*"(-?[0-9]+)"', html)
-            m_at = re.search(r'"SNlM0e"\s*:\s*"([^"\\]+)"', html)
-
-            if not m_at:
-                # 尝试从 WIZ_global_data 查找
-                m_at = re.search(r'\["SNlM0e",\s*"([^"\\]+)"', html)
+                html = resp.text
+                m_bl = re.search(r'boq_labs-ai-sandbox-frontend_[A-Za-z0-9_.-]+', html)
+                m_sid = re.search(r'"FdrFJe"\s*:\s*"(-?[0-9]+)"', html)
+                m_at = re.search(r'"SNlM0e"\s*:\s*"([^"\\]+)"', html)
+                if not m_at:
+                    m_at = re.search(r'\["SNlM0e",\s*"([^"\\]+)"', html)
+                if m_at:
+                    break
 
             if not m_at:
                 raise RuntimeError("未能从 Flow 页面中提取到动态 XSRF Token (SNlM0e)，账号可能已失效")
@@ -105,7 +143,9 @@ class FlowFrontendTransport:
             sid_val = m_sid.group(1) if m_sid else ""
             bl_val = m_bl.group(0) if m_bl else "boq_labs-ai-sandbox-frontend_20261021.00_p0"
 
-            self._bootstrap_cache[cache_key] = (bl_val, sid_val, xsrf_val, now + 600)
+            new_prefix = self._cookie_hash(cookie_jar)
+            self._bootstrap_cache[f"{source_path}:{new_prefix}"] = (bl_val, sid_val, xsrf_val, now + 600)
+            self._bootstrap_cache[f"/projects:{new_prefix}"] = (bl_val, sid_val, xsrf_val, now + 600)
             return bl_val, sid_val, xsrf_val, source_path
 
     async def execute_rpc(
@@ -137,17 +177,11 @@ class FlowFrontendTransport:
             )
 
             headers = {
-                "Accept": "*/*",
-                "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8",
                 "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8",
                 "Cookie": cookie_jar.get_cookie_header_for_url(url),
                 "Origin": "https://flow.google.com",
                 "Referer": "https://flow.google.com/",
-                "sec-fetch-dest": "empty",
-                "sec-fetch-mode": "cors",
-                "sec-fetch-site": "same-origin",
                 "x-same-domain": "1",
-                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
             }
 
             f_req = json.dumps(
@@ -182,6 +216,12 @@ class FlowFrontendTransport:
 
             if resp.status_code == 401:
                 raise RuntimeError("Flow RPC 返回 HTTP 401: Google 账号 Cookie 已失效，请在浏览器中重新登录并同步")
+            if resp.status_code == 400 and attempt == 0:
+                debug_logger.log_info(f"[RPC] {rpc_id} 返回 HTTP 400，刷新 Bootstrap XSRF 后重试...")
+                bl, sid, xsrf_at, source_path = await self.get_bootstrap_data(
+                    cookie_jar, project_id=project_id, media_id=media_id, proxy=proxy, force_refresh=True
+                )
+                continue
             if resp.status_code != 200:
                 raise RuntimeError(f"Flow RPC HTTP {resp.status_code}: {resp.text[:200]}")
 
