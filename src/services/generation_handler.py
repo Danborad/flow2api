@@ -1201,15 +1201,54 @@ class GenerationHandler:
         )
 
     async def submit_gemini_video(self, model: str, prompt: str, images: List[bytes]) -> str:
+        start_time = time.time()
         model_config = MODEL_CONFIG[model]
-        token = await self.load_balancer.select_token(
-            for_video_generation=True, model=model, reserve=False,
-            enforce_concurrency_filter=False, track_pending=True,
+        request_payload = {
+            "model": model,
+            "prompt": prompt,
+            "has_images": bool(images),
+            "protocol": "gemini_predictLongRunning",
+        }
+        request_log_state: Dict[str, Any] = {
+            "id": None,
+            "operation": "generate_video",
+            "request_data": request_payload,
+            "start_time": start_time,
+            "token_id": None,
+            "progress": 0,
+        }
+        request_log_state["id"] = await self._log_request(
+            token_id=None,
+            operation="generate_video",
+            request_data=request_payload,
+            response_data={"status": "processing", "status_text": "已接收请求", "progress": 0},
+            status_code=102,
+            duration=0.0,
+            status_text="已接收请求",
+            progress=0,
         )
-        if not token:
-            raise ValueError("No available video token")
-        token_id = token.id
+
+        token_id: Optional[int] = None
         try:
+            await self._update_request_log_progress(
+                request_log_state,
+                status_text="正在选择账号",
+                progress=3,
+            )
+            token = await self.load_balancer.select_token(
+                for_video_generation=True, model=model, reserve=False,
+                enforce_concurrency_filter=False, track_pending=True,
+            )
+            if not token:
+                raise ValueError("No available video token")
+            token_id = token.id
+            await self._update_request_log_progress(
+                request_log_state,
+                token_id=token_id,
+                status_text="校验账号与项目",
+                progress=8,
+                response_extra={"token_email": token.email},
+            )
             token = await self.token_manager.ensure_valid_token(token)
             if not token:
                 raise ValueError("Video access token is invalid")
@@ -1232,12 +1271,24 @@ class GenerationHandler:
                 image_count = len(images)
                 if model_config.get("video_type") not in {"i2v", "omni"} or not 1 <= image_count <= model_config.get("max_images", 0):
                     raise ValueError("Model does not support this number of input images")
+                await self._update_request_log_progress(
+                    request_log_state,
+                    token_id=token.id,
+                    status_text=f"正在上传参考图({image_count}张)",
+                    progress=12,
+                )
                 media_ids = [
                     await self.flow_client.upload_image(
                         token.at, image, model_config["aspect_ratio"], project_id=project_id,
                     )
                     for image in images
                 ]
+                await self._update_request_log_progress(
+                    request_log_state,
+                    token_id=token.id,
+                    status_text="获取验证码并提交",
+                    progress=18,
+                )
                 if image_count == 2:
                     if model_config["video_type"] == "omni":
                         model_key = model_config.get("start_end_model_key", "abra_i2v_8s")
@@ -1258,6 +1309,12 @@ class GenerationHandler:
             else:
                 if model_config.get("video_type") not in {"t2v", "omni"}:
                     raise ValueError("Model requires an input image")
+                await self._update_request_log_progress(
+                    request_log_state,
+                    token_id=token.id,
+                    status_text="获取验证码并提交",
+                    progress=18,
+                )
                 result = await self.flow_client.generate_video_text(
                     **kwargs, model_key=model_key,
                     use_v2_model_config=bool(model_config.get("use_v2_model_config", False)),
@@ -1270,13 +1327,7 @@ class GenerationHandler:
             if not operation_id:
                 raise RuntimeError("Video submission returned no operation ID")
 
-            request_payload = {
-                "model": model,
-                "prompt": prompt,
-                "has_images": bool(images),
-                "protocol": "gemini_predictLongRunning",
-                "operation_name": f"operations/{operation_id}",
-            }
+            request_payload["operation_name"] = f"operations/{operation_id}"
             response_payload = {
                 "status": "processing",
                 "status_text": "video_submitting",
@@ -1289,7 +1340,8 @@ class GenerationHandler:
                 request_data=request_payload,
                 response_data=response_payload,
                 status_code=102,
-                duration=0.0,
+                duration=time.time() - start_time,
+                log_id=request_log_state.get("id"),
                 status_text="video_submitting",
                 progress=25,
             )
@@ -1301,8 +1353,26 @@ class GenerationHandler:
                 request_log_id=log_id,
             ))
             return f"operations/{operation_id}"
+        except Exception as exc:
+            try:
+                err_code = 503 if isinstance(exc, ValueError) else 502
+                await self._log_request(
+                    token_id=token_id,
+                    operation="generate_video",
+                    request_data=request_payload,
+                    response_data={"error": str(exc)},
+                    status_code=err_code,
+                    duration=time.time() - start_time,
+                    log_id=request_log_state.get("id"),
+                    status_text="failed",
+                    progress=request_log_state.get("progress", 0),
+                )
+            except Exception as log_err:
+                debug_logger.log_warning(f"[GEMINI VIDEO] 记录提交失败日志失败: {log_err}")
+            raise
         finally:
-            await self.load_balancer.release_pending(token_id, for_video_generation=True)
+            if token_id is not None:
+                await self.load_balancer.release_pending(token_id, for_video_generation=True)
 
     async def get_gemini_video_operation(self, name: str) -> Optional[Dict[str, Any]]:
         operation_id = name.removeprefix("operations/")

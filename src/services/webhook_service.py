@@ -11,6 +11,9 @@ from src.core.database import Database
 from src.core.logger import debug_logger
 
 
+ACCOUNT_EXPIRED_GRACE_PERIOD_SECONDS = 40 * 60  # 账号失效 40 分钟未恢复再通知 (2400 秒)
+
+
 class WebhookService:
     _instance: Optional["WebhookService"] = None
 
@@ -21,6 +24,8 @@ class WebhookService:
         self._last_daily_report_date: str = ""
         # 缓存已通知过失效的 token: token_id -> (timestamp, reason)
         self._notified_expired_tokens: Dict[int, tuple[float, str]] = {}
+        # 记录账号初次检测到失效的信息: token_id -> {"first_failed_ts": float, "reason": str}
+        self._failed_token_tracker: Dict[int, Dict[str, Any]] = {}
 
     @classmethod
     def get_instance(cls, db: Optional[Database] = None) -> "WebhookService":
@@ -132,13 +137,19 @@ class WebhookService:
         return await self.send_wecom_message(markdown, content_text=text, custom_url=custom_url, custom_msg_type=custom_msg_type)
 
     def mark_token_recovered(self, token_id: int):
-        """当账号恢复正常（重新导入/启用/刷新成功）时，清除失效通知标记"""
+        """当账号恢复正常（重新导入/启用/刷新成功）时，清除失效状态与通知标记"""
+        had_state = False
+        if token_id in self._failed_token_tracker:
+            self._failed_token_tracker.pop(token_id, None)
+            had_state = True
         if token_id in self._notified_expired_tokens:
-            debug_logger.log_info(f"[WEBHOOK] Token {token_id} 已恢复正常，清除失效通知标记")
             self._notified_expired_tokens.pop(token_id, None)
+            had_state = True
+        if had_state:
+            debug_logger.log_info(f"[WEBHOOK] Token {token_id} 已恢复正常，已清除失效持续计时与通知标记")
 
     async def notify_token_expired(self, token_id: int, reason: str, token_obj: Optional[Any] = None) -> bool:
-        """当 Token 失效/过期/禁用时，发送企业微信实时告警通知（每个账号失效期间只发一次，绝不重复轰炸）"""
+        """当 Token 失效/过期/禁用时，先等待 40 分钟缓冲期（避免插件定时同步期间误报），若 40 分钟后仍未恢复则发送单次企业微信告警"""
         try:
             cfg = await self.db.get_webhook_config()
             if not cfg.enabled or not cfg.notify_on_expired or not cfg.wecom_webhook_url:
@@ -151,51 +162,96 @@ class WebhookService:
             is_active = bool(getattr(token, "is_active", False))
             at_expires = getattr(token, "at_expires", None)
 
+            now_utc = datetime.now(timezone.utc)
             # 防误报过滤：如果账号依然处于启用状态且 AT 尚未过期，说明账号完全可用，清除记录并不发送告警
             if is_active and at_expires:
-                now_utc = datetime.now(timezone.utc)
                 at_exp = at_expires if at_expires.tzinfo else at_expires.replace(tzinfo=timezone.utc)
                 if at_exp > now_utc:
                     self.mark_token_recovered(token_id)
                     return False
 
+            import time
+            now_ts = time.time()
+
+            # 推断或记录初次失效时间
+            if token_id not in self._failed_token_tracker:
+                inferred_ts = now_ts
+                if not is_active and getattr(token, "banned_at", None):
+                    b_at = token.banned_at
+                    b_ts = (b_at if b_at.tzinfo else b_at.replace(tzinfo=timezone.utc)).timestamp()
+                    if b_ts <= now_ts:
+                        inferred_ts = b_ts
+                elif is_active and at_expires:
+                    at_exp = at_expires if at_expires.tzinfo else at_expires.replace(tzinfo=timezone.utc)
+                    if at_exp <= now_utc:
+                        inferred_ts = at_exp.timestamp()
+                first_failed_ts = min(inferred_ts, now_ts)
+                self._failed_token_tracker[token_id] = {
+                    "first_failed_ts": first_failed_ts,
+                    "reason": reason,
+                }
+            else:
+                first_failed_ts = self._failed_token_tracker[token_id]["first_failed_ts"]
+                self._failed_token_tracker[token_id]["reason"] = reason
+
+            failed_duration = max(0.0, now_ts - first_failed_ts)
+            email = getattr(token, "email", None) or f"Token ID: {token_id}"
+
+            # 40 分钟缓冲期检查：若失效持续时间小于 40 分钟，暂不发送通知，等待插件自动恢复
+            if failed_duration < ACCOUNT_EXPIRED_GRACE_PERIOD_SECONDS:
+                elapsed_minutes = int(failed_duration / 60)
+                remaining_minutes = int((ACCOUNT_EXPIRED_GRACE_PERIOD_SECONDS - failed_duration) / 60) + 1
+                debug_logger.log_info(
+                    f"[WEBHOOK] Token {token_id} ({email}) 处于失效状态（{reason}），已持续 {elapsed_minutes} 分钟，"
+                    f"未满 40 分钟缓冲期（还剩约 {remaining_minutes} 分钟），等待插件定时同步自动恢复，暂不报警"
+                )
+                return False
+
             # 单次告警限制：只要该账号已发送过失效告警且尚未恢复正常，坚决不再重复发送
             if token_id in self._notified_expired_tokens:
                 return False
 
-            import time
-            now_ts = time.time()
-
-            email = getattr(token, "email", None) or f"Token ID: {token_id}"
-            credits = getattr(token, "credits", 0) or 0
-            status_text = "已禁用" if not is_active else "已过期"
-
+            # 达到 40 分钟仍未恢复，触发企业微信告警通知
+            elapsed_minutes = int(failed_duration / 60)
             now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-            markdown = f"""### 🚨 Flow2API 账号失效告警
+            # 查询当前可用账号数量（扣除当前失效账号）
+            all_tokens = await self.db.get_all_tokens()
+            active_count = sum(1 for t in all_tokens if getattr(t, "is_active", False) and t.id != token_id)
+            total_count = len(all_tokens)
+            avail_str = f"剩余 {active_count}/{total_count} 个可用" if active_count > 0 else f"⚠️ 0/{total_count} 可用 (全部失效)"
 
-> **告警时间**：{now_str}
-> **账号邮箱**：<font color="warning">{email}</font>
-> **当前状态**：{status_text}
-> **剩余积分**：{credits} 点
-> **失效原因**：<font color="warning">{reason}</font>
-
-💡 **处理建议**：请在对应电脑浏览器中打开 Flow（`https://flow.google.com/`）确认登录状态，并在插件中点击“导入当前 Google 账号”进行恢复。"""
+            # 简明原因提取
+            clean_reason = reason
+            if "401" in clean_reason or "Cookie" in clean_reason:
+                clean_reason = "Google Cookie 已失效或被退出"
+            elif "连续错误" in clean_reason:
+                clean_reason = "连续调用错误超限"
+            elif "429" in clean_reason:
+                clean_reason = "官方频率限制 (429 Rate Limit)"
 
             text = f"""【🚨 Flow2API 账号失效告警】
-
+失效账号：{email}
+失效原因：{clean_reason}
+持续时长：已持续 {elapsed_minutes} 分钟未恢复（超过 40 分钟缓冲期）
+当前状态：{avail_str}
 告警时间：{now_str}
-账号邮箱：{email}
-当前状态：{status_text}
-剩余积分：{credits} 点
-失效原因：{reason}
 
-💡 处理建议：请在对应电脑浏览器中打开 Flow（https://flow.google.com/）确认登录状态，并在插件中点击“导入当前 Google 账号”进行恢复。"""
+💡 处理建议：插件自动同步未成功恢复该账号，请在对应电脑浏览器中打开 Flow（https://flow.google.com/）确认登录状态，并在插件中点击“导入当前 Google 账号”进行恢复。"""
+
+            markdown = f"""### 🚨 Flow2API 账号失效告警
+> **失效账号**：{email}
+> **失效原因**：<font color="warning">{clean_reason}</font>
+> **持续时长**：已持续 <font color="warning">{elapsed_minutes} 分钟</font> 未恢复（超过 40 分钟缓冲期）
+> **当前状态**：**{avail_str}**
+> **告警时间**：{now_str}
+
+💡 **处理建议**：插件自动同步未成功恢复该账号，请在对应电脑浏览器中打开 Flow（`https://flow.google.com/`）确认登录状态，并在插件中点击“导入当前 Google 账号”进行恢复。"""
 
             success, msg = await self.send_wecom_message(markdown, content_text=text)
             if success:
                 self._notified_expired_tokens[token_id] = (now_ts, reason)
-                debug_logger.log_info(f"[WEBHOOK] 成功推送账号失效单次告警: {email} - {reason}")
+                debug_logger.log_info(f"[WEBHOOK] 成功推送账号失效告警（已持续 {elapsed_minutes} 分钟未恢复）: {email} - {reason}")
             else:
                 debug_logger.log_warning(f"[WEBHOOK] 推送账号失效告警失败: {msg}")
             return success
@@ -403,8 +459,8 @@ class WebhookService:
                         else:
                             debug_logger.log_warning(f"[WEBHOOK] 定时每日汇报发送失败: {msg}")
 
-                # 2. 定期巡检账号健康（每 5 分钟巡检一次）
-                if time.time() - last_check_time >= 300:
+                # 2. 定期巡检账号健康（每 60 秒巡检一次，确保满 40 分钟缓冲期后及时发送告警）
+                if time.time() - last_check_time >= 60:
                     last_check_time = time.time()
                     if cfg.notify_on_expired:
                         await self.check_all_tokens_health()

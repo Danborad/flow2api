@@ -1008,6 +1008,17 @@ async def _reconcile_browser_account_core(
     except Exception as e:
         debug_logger.log_info(f"[RECONCILE] 读取最新余额跳过: {e}")
 
+    # 插件同步成功：自动清除 Webhook 账号失效计时与通知标记，若曾被禁用则一并解禁并重置错误数
+    try:
+        from ..services.webhook_service import get_webhook_service
+        get_webhook_service(handler.token_manager.db).mark_token_recovered(token_id)
+        if existing and not getattr(existing, "is_active", True):
+            await handler.token_manager.db.update_token(token_id, is_active=True, ban_reason=None, banned_at=None)
+            await handler.token_manager.db.reset_error_count(token_id)
+            debug_logger.log_info(f"[RECONCILE] Token {token_id} 原为禁用状态，插件同步成功后自动解禁")
+    except Exception as we:
+        debug_logger.log_warning(f"[RECONCILE] 清除失效状态异常: {we}")
+
     fingerprint = hashlib.sha256(rotated_cookies.encode("utf-8")).hexdigest()[:16]
     debug_logger.log_info(f"[RECONCILE] 账号协调同步成功: id={token_id}, email={validated_email}, action={action}")
 
